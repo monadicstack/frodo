@@ -44,19 +44,20 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/robsignorelli/respond"
 	"github.com/robsignorelli/expose/binding"
+	"github.com/robsignorelli/expose/gateway"
 )
 
 {{ $ctx := . }}
 {{ range .Services }}
-func New{{ .Name }}Gateway(service {{ .Name }}) *{{ .Name }}Gateway {
+func New{{ .Name }}Gateway(service {{ .Name }}, options ...gateway.Option) *{{ .Name }}Gateway {
 	gw := &{{.Name}}Gateway{
-		service: service,
-		router:  httprouter.New(),
+		HTTPGateway: gateway.New(options...),
+		Service: service,
 	}
 
 	{{ $service := . }}
 	{{ range $service.Methods }}
-	gw.router.{{ .GatewayMethod }}("{{ .GatewayPath }}", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	gw.Router.{{ .GatewayMethod }}("{{ .GatewayPath }}", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		response := respond.To(w, req)
 
 		serviceRequest := {{ .Request.Name }}{}
@@ -65,7 +66,7 @@ func New{{ .Name }}Gateway(service {{ .Name }}) *{{ .Name }}Gateway {
 			return
 		}
 
-		serviceResponse, err := gw.service.{{ .Name }}(req.Context(), &serviceRequest)
+		serviceResponse, err := gw.Service.{{ .Name }}(req.Context(), &serviceRequest)
 		response.Ok(serviceResponse, err)
 	})
 	{{ end }}
@@ -74,14 +75,13 @@ func New{{ .Name }}Gateway(service {{ .Name }}) *{{ .Name }}Gateway {
 }
 
 type {{.Name}}Gateway struct {
+	gateway.HTTPGateway
 	// The "real" implementation of the service that this gateway delegates to.
-	service {{ .Name }}
-	// The underlying HTTP router/mux that wraps all of our endpoints up into a single handler.
-	router  *httprouter.Router
+	Service {{ .Name }}
 }
 
 func (gw {{ .Name }}Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	gw.router.ServeHTTP(w, req)
+	gw.Router.ServeHTTP(w, req)
 }
 {{end}}
 `))

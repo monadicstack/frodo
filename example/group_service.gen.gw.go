@@ -8,16 +8,17 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/robsignorelli/expose/binding"
+	"github.com/robsignorelli/expose/gateway"
 	"github.com/robsignorelli/respond"
 )
 
-func NewGroupServiceGateway(service GroupService) *GroupServiceGateway {
+func NewGroupServiceGateway(service GroupService, options ...gateway.Option) *GroupServiceGateway {
 	gw := &GroupServiceGateway{
-		service: service,
-		router:  httprouter.New(),
+		HTTPGateway: gateway.New(options...),
+		Service:     service,
 	}
 
-	gw.router.POST("/GroupService.CreateGroup", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	gw.Router.POST("/GroupService.CreateGroup", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		response := respond.To(w, req)
 
 		serviceRequest := CreateGroupRequest{}
@@ -26,11 +27,11 @@ func NewGroupServiceGateway(service GroupService) *GroupServiceGateway {
 			return
 		}
 
-		serviceResponse, err := gw.service.CreateGroup(req.Context(), &serviceRequest)
+		serviceResponse, err := gw.Service.CreateGroup(req.Context(), &serviceRequest)
 		response.Ok(serviceResponse, err)
 	})
 
-	gw.router.DELETE("/group/:ID", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	gw.Router.DELETE("/group/:ID", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		response := respond.To(w, req)
 
 		serviceRequest := DeleteGroupRequest{}
@@ -39,7 +40,7 @@ func NewGroupServiceGateway(service GroupService) *GroupServiceGateway {
 			return
 		}
 
-		serviceResponse, err := gw.service.DeleteGroup(req.Context(), &serviceRequest)
+		serviceResponse, err := gw.Service.DeleteGroup(req.Context(), &serviceRequest)
 		response.Ok(serviceResponse, err)
 	})
 
@@ -47,12 +48,11 @@ func NewGroupServiceGateway(service GroupService) *GroupServiceGateway {
 }
 
 type GroupServiceGateway struct {
+	gateway.HTTPGateway
 	// The "real" implementation of the service that this gateway delegates to.
-	service GroupService
-	// The underlying HTTP router/mux that wraps all of our endpoints up into a single handler.
-	router *httprouter.Router
+	Service GroupService
 }
 
 func (gw GroupServiceGateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	gw.router.ServeHTTP(w, req)
+	gw.Router.ServeHTTP(w, req)
 }
