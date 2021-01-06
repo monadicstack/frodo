@@ -4,10 +4,10 @@
 package example
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/robsignorelli/expose/binding"
 	"github.com/robsignorelli/respond"
 )
 
@@ -17,30 +17,30 @@ func NewGroupServiceGateway(service GroupService) *GroupServiceGateway {
 		router:  httprouter.New(),
 	}
 
-	gw.router.POST("/GroupService.CreateGroup", func(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-		reply := respond.To(w, req)
+	gw.router.POST("/GroupService.CreateGroup", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		response := respond.To(w, req)
 
-		request := CreateGroupRequest{}
-		err := json.NewDecoder(req.Body).Decode(&request)
-		if err != nil {
-			reply.Fail(err)
+		serviceRequest := CreateGroupRequest{}
+		if err := binding.Bind(req, params, &serviceRequest); err != nil {
+			response.Fail(err)
+			return
 		}
 
-		response, err := gw.service.CreateGroup(req.Context(), &request)
-		reply.Ok(response, err)
+		serviceResponse, err := gw.service.CreateGroup(req.Context(), &serviceRequest)
+		response.Ok(serviceResponse, err)
 	})
 
-	gw.router.POST("/GroupService.DeleteGroup", func(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-		reply := respond.To(w, req)
+	gw.router.DELETE("/group/:ID", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		response := respond.To(w, req)
 
-		request := DeleteGroupRequest{}
-		err := json.NewDecoder(req.Body).Decode(&request)
-		if err != nil {
-			reply.Fail(err)
+		serviceRequest := DeleteGroupRequest{}
+		if err := binding.Bind(req, params, &serviceRequest); err != nil {
+			response.Fail(err)
+			return
 		}
 
-		response, err := gw.service.DeleteGroup(req.Context(), &request)
-		reply.Ok(response, err)
+		serviceResponse, err := gw.service.DeleteGroup(req.Context(), &serviceRequest)
+		response.Ok(serviceResponse, err)
 	})
 
 	return gw

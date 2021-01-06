@@ -6,26 +6,31 @@ import (
 )
 
 type GroupService interface {
+	// CreateGroup makes a new group... duh.
 	CreateGroup(ctx context.Context, request *CreateGroupRequest) (*CreateGroupResponse, error)
+	// DeleteGroup smokes the group if it exists.
+	// DELETE /group/:ID
 	DeleteGroup(ctx context.Context, request *DeleteGroupRequest) (*DeleteGroupResponse, error)
 }
 
 type CreateGroupRequest struct {
-	Name        string
-	Description string
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 type CreateGroupResponse struct {
-	ID          string
-	Name        string
-	Description string
-	Created     time.Time
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Created     time.Time `json:"created"`
 }
 
 type DeleteGroupRequest struct {
-	ID string
+	ID   string `json:"id"`
+	Hard string `json:"hard"`
 }
 
 type DeleteGroupResponse struct {
-	ID string
+	ID   string `json:"id"`
+	Hard string `json:"hard"`
 }

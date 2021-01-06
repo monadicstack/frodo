@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net/http"
 	"strings"
 )
 
@@ -103,7 +104,6 @@ func fieldName(field *ast.Field) string {
 }
 
 func typeName(field *ast.Field) string {
-	fmt.Printf(">>>>>>>>> TYPE NAME: %T\n", field.Type)
 	switch fieldType := field.Type.(type) {
 	case *ast.Ident:
 		return fieldType.Name
@@ -119,10 +119,8 @@ func typeName(field *ast.Field) string {
 func ParseServiceMethod(ctx *Context, methodObj *ast.Field) error {
 	name := fieldName(methodObj)
 	method := &ServiceMethodDeclaration{
-		Name:          name,
-		Node:          methodObj,
-		GatewayMethod: "POST",
-		GatewayPath:   ctx.currentService.Name + "." + name,
+		Name: name,
+		Node: methodObj,
 	}
 
 	ctx.currentMethod = method
@@ -154,10 +152,52 @@ func ParseServiceMethod(ctx *Context, methodObj *ast.Field) error {
 		return fmt.Errorf("%s: second return value is not an error", name)
 	}
 
+	// Connect the model/struct declarations for request/response to this method.
 	method.Request = ctx.ModelByName(typeName(function.Params.List[1]))
 	method.Response = ctx.ModelByName(typeName(function.Results.List[0]))
+
+	// Check the doc comments for the function to determine if they're providing
+	// a custom method/path for the endpoint as opposed to the default RPC-style we assign.
+	httpMethod, httpPath := endpointMethodPath(ctx, methodObj)
+	method.GatewayMethod = httpMethod
+	method.GatewayPath = httpPath
+
 	ctx.currentService.AddMethod(method)
 	return nil
+}
+
+func endpointMethodPath(ctx *Context, methodObj *ast.Field) (method string, path string) {
+	defaultMethod := "POST"
+	defaultPath := "/" + ctx.currentService.Name + "." + fieldName(methodObj)
+
+	if methodObj.Doc == nil {
+		return defaultMethod, defaultPath
+	}
+
+	for _, doc := range methodObj.Doc.List {
+		comment := doc.Text
+		comment = strings.TrimSpace(comment)
+		comment = strings.TrimPrefix(comment, "//")
+		comment = strings.TrimSpace(comment)
+
+		switch {
+		case strings.HasPrefix(comment, "GET /"):
+			return http.MethodGet, comment[4:]
+		case strings.HasPrefix(comment, "PUT /"):
+			return http.MethodPut, comment[4:]
+		case strings.HasPrefix(comment, "POST /"):
+			return http.MethodPost, comment[5:]
+		case strings.HasPrefix(comment, "PATCH /"):
+			return http.MethodPatch, comment[6:]
+		case strings.HasPrefix(comment, "DELETE /"):
+			return http.MethodDelete, comment[7:]
+		case strings.HasPrefix(comment, "OPTIONS /"):
+			return http.MethodOptions, comment[8:]
+		case strings.HasPrefix(comment, "HEAD /"):
+			return http.MethodHead, comment[5:]
+		}
+	}
+	return defaultMethod, defaultPath
 }
 
 // The first param to all service methods should be a standard "context.Context"
@@ -202,7 +242,6 @@ func (ctx *Context) AddModel(model *ServiceModelDeclaration) {
 }
 
 func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
-	fmt.Println(">>>> Looking for ", name)
 	for _, model := range ctx.Models {
 		if model.Name == name {
 			return model

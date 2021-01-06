@@ -18,5 +18,5 @@ func (svc GroupServiceServer) CreateGroup(ctx context.Context, req *CreateGroupR
 }
 
 func (svc GroupServiceServer) DeleteGroup(ctx context.Context, req *DeleteGroupRequest) (*DeleteGroupResponse, error) {
-	return &DeleteGroupResponse{ID: req.ID}, nil
+	return &DeleteGroupResponse{ID: req.ID, Hard: req.Hard}, nil
 }

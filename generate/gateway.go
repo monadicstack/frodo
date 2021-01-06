@@ -39,11 +39,11 @@ var gatewayTemplate = template.Must(template.New("gateway").Parse(`// !!!!!!! DO
 package {{ .Package }}
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/robsignorelli/respond"
+	"github.com/robsignorelli/expose/binding"
 )
 
 {{ $ctx := . }}
@@ -56,17 +56,17 @@ func New{{ .Name }}Gateway(service {{ .Name }}) *{{ .Name }}Gateway {
 
 	{{ $service := . }}
 	{{ range $service.Methods }}
-	gw.router.{{ .GatewayMethod }}("/{{ .GatewayPath }}", func(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-		reply := respond.To(w, req)
+	gw.router.{{ .GatewayMethod }}("{{ .GatewayPath }}", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		response := respond.To(w, req)
 
-		request := {{ .Request.Name }}{}
-		err := json.NewDecoder(req.Body).Decode(&request)
-		if err != nil {
-			reply.Fail(err)
+		serviceRequest := {{ .Request.Name }}{}
+		if err := binding.Bind(req, params, &serviceRequest); err != nil {
+			response.Fail(err)
+			return
 		}
 
-		response, err := gw.service.{{ .Name }}(req.Context(), &request)
-		reply.Ok(response, err)
+		serviceResponse, err := gw.service.{{ .Name }}(req.Context(), &serviceRequest)
+		response.Ok(serviceResponse, err)
 	})
 	{{ end }}
 
@@ -80,7 +80,7 @@ type {{.Name}}Gateway struct {
 	router  *httprouter.Router
 }
 
-func (gw {{.Name}}Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (gw {{ .Name }}Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	gw.router.ServeHTTP(w, req)
 }
 {{end}}
