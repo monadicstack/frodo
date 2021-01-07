@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -119,8 +120,11 @@ func typeName(field *ast.Field) string {
 func ParseServiceMethod(ctx *Context, methodObj *ast.Field) error {
 	name := fieldName(methodObj)
 	method := &ServiceMethodDeclaration{
-		Name: name,
-		Node: methodObj,
+		Name:       name,
+		Node:       methodObj,
+		HTTPStatus: http.StatusOK,
+		HTTPMethod: "POST",
+		HTTPPath:   "/" + ctx.currentService.Name + "." + fieldName(methodObj),
 	}
 
 	ctx.currentMethod = method
@@ -158,22 +162,16 @@ func ParseServiceMethod(ctx *Context, methodObj *ast.Field) error {
 
 	// Check the doc comments for the function to determine if they're providing
 	// a custom method/path for the endpoint as opposed to the default RPC-style we assign.
-	httpMethod, httpPath := endpointMethodPath(ctx, methodObj)
-	method.GatewayMethod = httpMethod
-	method.GatewayPath = httpPath
+	applyDocCommentOptions(ctx, methodObj, method)
 
 	ctx.currentService.AddMethod(method)
 	return nil
 }
 
-func endpointMethodPath(ctx *Context, methodObj *ast.Field) (method string, path string) {
-	defaultMethod := "POST"
-	defaultPath := "/" + ctx.currentService.Name + "." + fieldName(methodObj)
-
+func applyDocCommentOptions(_ *Context, methodObj *ast.Field, method *ServiceMethodDeclaration) {
 	if methodObj.Doc == nil {
-		return defaultMethod, defaultPath
+		return
 	}
-
 	for _, doc := range methodObj.Doc.List {
 		comment := doc.Text
 		comment = strings.TrimSpace(comment)
@@ -182,22 +180,38 @@ func endpointMethodPath(ctx *Context, methodObj *ast.Field) (method string, path
 
 		switch {
 		case strings.HasPrefix(comment, "GET /"):
-			return http.MethodGet, comment[4:]
+			method.HTTPMethod = http.MethodGet
+			method.HTTPPath = comment[4:]
 		case strings.HasPrefix(comment, "PUT /"):
-			return http.MethodPut, comment[4:]
+			method.HTTPMethod = http.MethodPut
+			method.HTTPPath = comment[4:]
 		case strings.HasPrefix(comment, "POST /"):
-			return http.MethodPost, comment[5:]
+			method.HTTPMethod = http.MethodPost
+			method.HTTPPath = comment[5:]
 		case strings.HasPrefix(comment, "PATCH /"):
-			return http.MethodPatch, comment[6:]
+			method.HTTPMethod = http.MethodPatch
+			method.HTTPPath = comment[6:]
 		case strings.HasPrefix(comment, "DELETE /"):
-			return http.MethodDelete, comment[7:]
+			method.HTTPMethod = http.MethodDelete
+			method.HTTPPath = comment[7:]
 		case strings.HasPrefix(comment, "OPTIONS /"):
-			return http.MethodOptions, comment[8:]
+			method.HTTPMethod = http.MethodOptions
+			method.HTTPPath = comment[8:]
 		case strings.HasPrefix(comment, "HEAD /"):
-			return http.MethodHead, comment[5:]
+			method.HTTPMethod = http.MethodHead
+			method.HTTPPath = comment[5:]
+		case strings.HasPrefix(comment, "HTTP "):
+			method.HTTPStatus = parseHTTPStatus(comment[5:])
 		}
 	}
-	return defaultMethod, defaultPath
+}
+
+func parseHTTPStatus(statusText string) int {
+	status, err := strconv.ParseInt(statusText, 10, 64)
+	if err != nil {
+		return http.StatusOK
+	}
+	return int(status)
 }
 
 // The first param to all service methods should be a standard "context.Context"
@@ -280,12 +294,13 @@ func (service ServiceDeclaration) MethodByName(name string) *ServiceMethodDeclar
 }
 
 type ServiceMethodDeclaration struct {
-	Name          string
-	Request       *ServiceModelDeclaration
-	Response      *ServiceModelDeclaration
-	GatewayMethod string
-	GatewayPath   string
-	Node          *ast.Field
+	Name       string
+	Request    *ServiceModelDeclaration
+	Response   *ServiceModelDeclaration
+	HTTPMethod string
+	HTTPPath   string
+	HTTPStatus int
+	Node       *ast.Field
 }
 
 func (method ServiceMethodDeclaration) String() string {

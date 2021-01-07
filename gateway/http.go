@@ -1,10 +1,14 @@
 package gateway
 
-import "github.com/julienschmidt/httprouter"
+import (
+	"github.com/julienschmidt/httprouter"
+)
 
 func New(options ...Option) HTTPGateway {
 	gw := HTTPGateway{
-		Router: httprouter.New(),
+		Router:     httprouter.New(),
+		Binder:     JSONBinder{},
+		Middleware: nopMiddleware,
 	}
 	for _, option := range options {
 		option(&gw)
@@ -13,7 +17,9 @@ func New(options ...Option) HTTPGateway {
 }
 
 type HTTPGateway struct {
-	Router *httprouter.Router
+	Router     *httprouter.Router
+	Binder     Binder
+	Middleware Middleware
 }
 
 type Option func(*HTTPGateway)

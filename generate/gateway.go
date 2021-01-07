@@ -43,7 +43,6 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/robsignorelli/respond"
-	"github.com/robsignorelli/expose/binding"
 	"github.com/robsignorelli/expose/gateway"
 )
 
@@ -57,17 +56,17 @@ func New{{ .Name }}Gateway(service {{ .Name }}, options ...gateway.Option) *{{ .
 
 	{{ $service := . }}
 	{{ range $service.Methods }}
-	gw.Router.{{ .GatewayMethod }}("{{ .GatewayPath }}", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	gw.Router.{{ .HTTPMethod }}("{{ .HTTPPath }}", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		response := respond.To(w, req)
 
 		serviceRequest := {{ .Request.Name }}{}
-		if err := binding.Bind(req, params, &serviceRequest); err != nil {
+		if err := gw.Binder.Bind(req, params, &serviceRequest); err != nil {
 			response.Fail(err)
 			return
 		}
 
 		serviceResponse, err := gw.Service.{{ .Name }}(req.Context(), &serviceRequest)
-		response.Ok(serviceResponse, err)
+		response.Reply({{ .HTTPStatus }}, serviceResponse, err)
 	})
 	{{ end }}
 
@@ -81,7 +80,7 @@ type {{.Name}}Gateway struct {
 }
 
 func (gw {{ .Name }}Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	gw.Router.ServeHTTP(w, req)
+	gw.Middleware.ServeHTTP(w, req, gw.Router.ServeHTTP)
 }
 {{end}}
 `))

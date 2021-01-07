@@ -8,8 +8,11 @@ import (
 type GroupService interface {
 	// CreateGroup makes a new group... duh.
 	CreateGroup(ctx context.Context, request *CreateGroupRequest) (*CreateGroupResponse, error)
+
 	// DeleteGroup smokes the group if it exists.
+	//
 	// DELETE /group/:ID
+	// HTTP 202
 	DeleteGroup(ctx context.Context, request *DeleteGroupRequest) (*DeleteGroupResponse, error)
 }
 

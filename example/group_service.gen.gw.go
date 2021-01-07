@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
-	"github.com/robsignorelli/expose/binding"
 	"github.com/robsignorelli/expose/gateway"
 	"github.com/robsignorelli/respond"
 )
@@ -22,26 +21,26 @@ func NewGroupServiceGateway(service GroupService, options ...gateway.Option) *Gr
 		response := respond.To(w, req)
 
 		serviceRequest := CreateGroupRequest{}
-		if err := binding.Bind(req, params, &serviceRequest); err != nil {
+		if err := gw.Binder.Bind(req, params, &serviceRequest); err != nil {
 			response.Fail(err)
 			return
 		}
 
 		serviceResponse, err := gw.Service.CreateGroup(req.Context(), &serviceRequest)
-		response.Ok(serviceResponse, err)
+		response.Reply(200, serviceResponse, err)
 	})
 
 	gw.Router.DELETE("/group/:ID", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		response := respond.To(w, req)
 
 		serviceRequest := DeleteGroupRequest{}
-		if err := binding.Bind(req, params, &serviceRequest); err != nil {
+		if err := gw.Binder.Bind(req, params, &serviceRequest); err != nil {
 			response.Fail(err)
 			return
 		}
 
 		serviceResponse, err := gw.Service.DeleteGroup(req.Context(), &serviceRequest)
-		response.Ok(serviceResponse, err)
+		response.Reply(202, serviceResponse, err)
 	})
 
 	return gw
@@ -54,5 +53,5 @@ type GroupServiceGateway struct {
 }
 
 func (gw GroupServiceGateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	gw.Router.ServeHTTP(w, req)
+	gw.Middleware.ServeHTTP(w, req, gw.Router.ServeHTTP)
 }
