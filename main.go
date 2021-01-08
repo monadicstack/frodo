@@ -21,7 +21,12 @@ func main() {
 	ctx, err := parser.ParseFile(inputFileName)
 	crapPants(err)
 
-	outputFileName := strings.TrimSuffix(inputFileName, ".go") + ".gen.gw.go"
+	generateServer(ctx, inputFileName)
+	generateClient(ctx, inputFileName)
+}
+
+func generateServer(ctx *parser.Context, inputFileName string) {
+	outputFileName := strings.TrimSuffix(inputFileName, ".go") + ".gen.server.go"
 	log.Printf("[exposec] Writing gateway: %s -> %s", inputFileName, outputFileName)
 
 	_ = os.Remove(outputFileName)
@@ -29,7 +34,20 @@ func main() {
 	crapPants(err)
 	defer outputFile.Close()
 
-	err = generate.Gateway(ctx, outputFile)
+	err = generate.Server(ctx, outputFile)
+	crapPants(err)
+}
+
+func generateClient(ctx *parser.Context, inputFileName string) {
+	outputFileName := strings.TrimSuffix(inputFileName, ".go") + ".gen.client.go"
+	log.Printf("[exposec] Writing client: %s -> %s", inputFileName, outputFileName)
+
+	_ = os.Remove(outputFileName)
+	outputFile, err := os.Create(outputFileName)
+	crapPants(err)
+	defer outputFile.Close()
+
+	err = generate.Client(ctx, outputFile)
 	crapPants(err)
 }
 

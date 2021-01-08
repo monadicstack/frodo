@@ -41,11 +41,7 @@ func (b JSONBinder) bindBody(req *http.Request, _ httprouter.Params, out interfa
 	if req.Body == nil {
 		return nil
 	}
-	contentLength := strings.TrimSpace(req.Header.Get("Content-Type"))
-	if contentLength == "" {
-		return nil
-	}
-	if contentLength == "0" {
+	if req.Body == http.NoBody {
 		return nil
 	}
 	return json.NewDecoder(req.Body).Decode(out)
