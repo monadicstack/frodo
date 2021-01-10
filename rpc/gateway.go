@@ -14,13 +14,28 @@ func NewGateway(options ...GatewayOption) Gateway {
 	gw := Gateway{
 		Router:     httprouter.New(),
 		Binder:     jsonBinder{},
-		Middleware: nopMiddleware,
+		middleware: middlewarePipeline{},
+		handler:    nil,
 	}
 	for _, option := range options {
 		option(&gw)
 	}
+
+	// Combine all middleware (internal book-keeping and user-provided) with the handler
+	// for the router/mux to create a single function we'll use as the master handler when
+	// we supply the gateway to ListenAndServe.
+	mw := middlewarePipeline{
+		MiddlewareFunc(restoreCallDetails),
+		MiddlewareFunc(restoreMetadata),
+	}
+	mw = append(mw, gw.middleware...)
+	gw.handler = mw.Then(gw.Router.ServeHTTP)
+
 	return gw
 }
+
+// GatewayOption defines a setting you can apply when creating an RPC gateway via 'NewGateway'.
+type GatewayOption func(*Gateway)
 
 // Gateway wrangles all of the incoming RPC/HTTP handling for your service calls. It automatically
 // converts all transport data into your Go request struct. Conversely, it also marshals and transmits
@@ -29,25 +44,13 @@ func NewGateway(options ...GatewayOption) Gateway {
 type Gateway struct {
 	Router     *httprouter.Router
 	Binder     Binder
-	Middleware Middleware
+	middleware middlewarePipeline
+	handler    http.HandlerFunc
 }
 
+// ServeHTTP is the central HTTP handler that includes all http routing, middleware, service forwarding, etc.
 func (gw Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	// NOTE: We're actually defining these in the REVERSE order in which they'll be
-	// run. Basically we want to restore all implicit RPC data before any of your
-	// middleware/handler code is run.
-	handler3 := gw.Router.ServeHTTP
-
-	handler2 := func(w http.ResponseWriter, req *http.Request) {
-		gw.Middleware.ServeHTTP(w, req, handler3)
-	}
-	handler1 := func(w http.ResponseWriter, req *http.Request) {
-		restoreCallDetails(w, req, handler2)
-	}
-	handler := func(w http.ResponseWriter, req *http.Request) {
-		restoreMetadata(w, req, handler1)
-	}
-	handler(w, req)
+	gw.handler(w, req)
 }
 
 func restoreCallDetails(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
@@ -67,5 +70,3 @@ func restoreMetadata(w http.ResponseWriter, req *http.Request, next http.Handler
 	ctx := metadata.WithValues(req.Context(), values)
 	next(w, req.WithContext(ctx))
 }
-
-type GatewayOption func(*Gateway)
