@@ -18,6 +18,9 @@ import (
 	"github.com/robsignorelli/frodo/rpc/metadata"
 )
 
+// NewClient constructs the RPC client that does the "heavy lifting" when communicating
+// with remote frodo-powered RPC services. It contains all data/logic required to marshal/unmarshal
+// requests/responses as well as communicate w/ the remote service.
 func NewClient(name string, addr string, options ...ClientOption) Client {
 	defaultTimeout := 30 * time.Second
 	client := Client{
@@ -28,29 +31,60 @@ func NewClient(name string, addr string, options ...ClientOption) Client {
 				TLSHandshakeTimeout: defaultTimeout,
 			},
 		},
-		Name:    name,
-		BaseURL: strings.TrimSuffix(addr, "/"),
+		Name:       name,
+		BaseURL:    strings.TrimSuffix(addr, "/"),
+		middleware: clientMiddlewarePipeline{},
 	}
 	for _, option := range options {
 		option(&client)
 	}
+
+	mw := clientMiddlewarePipeline{
+		writeMetadataHeader,
+	}
+	client.middleware = append(mw, client.middleware...)
+	client.roundTrip = client.middleware.Then(client.HTTP.Do)
+
 	return client
 }
 
-type ClientOption func(*Client)
-
+// WithHTTPClient allows you to provide an HTTP client configured to your liking. You do not *need*
+// to supply this. The default client already implements a 30 second timeout, but if you want a
+// different timeout or custom dialer/transport/etc, then you can feed in you custom client here and
+// we'll use that one for all HTTP communication with other services.
 func WithHTTPClient(httpClient *http.Client) ClientOption {
 	return func(rpcClient *Client) {
 		rpcClient.HTTP = httpClient
 	}
 }
 
+// ClientOption is a single configurable setting that modifies some attribute of the RPC client
+// when building one via NewClient().
+type ClientOption func(*Client)
+
+// Client manages all RPC communication with other frodo-powered services. It uses HTTP under the hood,
+// so you can supply a custom HTTP client by including WithHTTPClient() when calling your client
+// constructor, NewXxxServiceClient().
 type Client struct {
-	HTTP    *http.Client
+	// HTTP takes care of the raw HTTP request/response logic used when communicating w/ remote services.
+	HTTP *http.Client
+	// BaseURL contains the protocol/host/port/etc that is the prefix for all service function
+	// endpoints. (e.g. "http://api.myawesomeapp.com")
 	BaseURL string
-	Name    string
+	// Name is just the display name of the service; used only for debugging/tracing purposes.
+	Name string
+	// Middleware defines all of the units of work we will apply to the request/response when
+	// round-tripping our RPC call to he remote service.
+	middleware clientMiddlewarePipeline
+	// roundTrip captures all middleware and the actual request dispatching in a single handler
+	// function. This is what we'll call once we've created the HTTP/RPC request when invoking
+	// one of your client's service functions.
+	roundTrip RoundTripperFunc
 }
 
+// Invoke handles the standard request/response logic used to call a service method on the remote service.
+// You should NOT call this yourself. Instead, you should stick to the strongly typed, code-generated
+// service functions on your client.
 func (c Client) Invoke(ctx context.Context, method string, path string, serviceRequest interface{}, serviceResponse interface{}) error {
 	// Step 1: Fill in the URL path and query string w/ fields from the request. (e.g. /user/:id -> /user/abc)
 	address := c.buildURL(method, path, serviceRequest)
@@ -63,25 +97,19 @@ func (c Client) Invoke(ctx context.Context, method string, path string, serviceR
 	}
 
 	// Step 3: Form the HTTP request
-	request, err := http.NewRequest(method, address, body)
+	request, err := http.NewRequestWithContext(ctx, method, address, body)
 	if err != nil {
 		return fmt.Errorf("rpc: unable to create request: %w", err)
 	}
 
-	// Step 4: Write the HTTP headers (content type, metadata, etc)
-	request, err = c.writeHeaders(ctx, request)
+	// Step 4: Run the request through all middleware and fire it off.
+	response, err := c.roundTrip(request)
 	if err != nil {
-		return fmt.Errorf("rpc: unable to write headers: %w", err)
-	}
-
-	// Step 5: Dispatch the HTTP request to the other service.
-	response, err := c.HTTP.Do(request)
-	if err != nil {
-		return fmt.Errorf("rpc: unable to dispatch request: %w", err)
+		return fmt.Errorf("rpc: round trip error: %w", err)
 	}
 	defer response.Body.Close()
 
-	// Step 6: Based on the status code, either fill in the "out" struct (service response) with the
+	// Step 5: Based on the status code, either fill in the "out" struct (service response) with the
 	// unmarshaled JSON or respond a properly formed error.
 	if response.StatusCode >= 400 {
 		errData, _ := ioutil.ReadAll(response.Body)
@@ -102,18 +130,6 @@ func (c Client) createRequestBody(method string, serviceRequest interface{}) (io
 	body := &bytes.Buffer{}
 	err := json.NewEncoder(body).Encode(serviceRequest)
 	return body, err
-}
-
-func (c Client) writeHeaders(ctx context.Context, request *http.Request) (*http.Request, error) {
-	encodedValues, err := metadata.ToJSON(ctx)
-	if err != nil {
-		return request, err
-	}
-	request.Header.Set(metadata.RequestHeader, encodedValues)
-	fmt.Println("==== RPC VALUES ====")
-	fmt.Println(encodedValues)
-	fmt.Println("====================")
-	return request, nil
 }
 
 func (c Client) buildURL(method string, path string, serviceRequest interface{}) string {
@@ -151,4 +167,16 @@ func shouldEncodeUsingBody(method string) bool {
 
 func shouldEncodeUsingQueryString(method string) bool {
 	return !shouldEncodeUsingBody(method)
+}
+
+// writeMetadataHeader encodes all of the context's (the context on the request) metadata values as
+// JSON and writes that to the "X-RPC-Values" header so that the remote service has access to all
+// of your values as well.
+func writeMetadataHeader(request *http.Request, next RoundTripperFunc) (*http.Response, error) {
+	encodedValues, err := metadata.ToJSON(request.Context())
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set(metadata.RequestHeader, encodedValues)
+	return next(request)
 }

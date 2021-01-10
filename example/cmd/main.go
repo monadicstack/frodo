@@ -32,8 +32,13 @@ func runClientTest() {
 		Flag: true,
 	})
 
-	time.Sleep(2 * time.Second)
-	client := example.NewGroupServiceClient("http://localhost:8080")
+	time.Sleep(1 * time.Second)
+	client := example.NewGroupServiceClient("http://localhost:8080",
+		rpc.WithClientMiddleware(
+			ClientLogger,
+			ClientLogger2,
+		),
+	)
 	response, err := client.GetByID(ctx, &example.GetByIDRequest{
 		ID:   "123x45",
 		Flag: false,
@@ -51,4 +56,18 @@ func Logger2(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
 	fmt.Println("> Hello 2")
 	next(w, req)
 	fmt.Println("> Goodbye 2")
+}
+
+func ClientLogger(request *http.Request, next rpc.RoundTripperFunc) (*http.Response, error) {
+	fmt.Println(">>>>> BEFORE CLIENT INVOKE")
+	r, err := next(request)
+	fmt.Println(">>>>> AFTER CLIENT INVOKE")
+	return r, err
+}
+
+func ClientLogger2(request *http.Request, next rpc.RoundTripperFunc) (*http.Response, error) {
+	fmt.Println(">>>>> BEFORE CLIENT INVOKE 2")
+	r, err := next(request)
+	fmt.Println(">>>>> AFTER CLIENT INVOKE 2")
+	return r, err
 }
