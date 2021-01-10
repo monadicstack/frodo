@@ -14,7 +14,10 @@ import (
 func main() {
 	groupService := example.GroupServiceServer{}
 	gw := example.NewGroupServiceGateway(groupService,
-		rpc.WithMiddlewareFunc(Logger),
+		rpc.WithMiddlewareFunc(
+			Logger,
+			Logger2,
+		),
 	)
 
 	go runClientTest()
@@ -42,4 +45,10 @@ func Logger(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
 	fmt.Println("> Hello")
 	next(w, req)
 	fmt.Println("> Goodbye")
+}
+
+func Logger2(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+	fmt.Println("> Hello 2")
+	next(w, req)
+	fmt.Println("> Goodbye 2")
 }
