@@ -8,7 +8,7 @@ import (
 	"log"
 	"text/template"
 
-	"github.com/robsignorelli/expose/parser"
+	"github.com/robsignorelli/frodo/parser"
 )
 
 func Server(ctx *parser.Context, w io.Writer) error {
@@ -43,16 +43,13 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/robsignorelli/respond"
-	"github.com/robsignorelli/expose/gateway"
+	"github.com/robsignorelli/frodo/rpc"
 )
 
 {{ $ctx := . }}
 {{ range .Services }}
-func New{{ .Name }}Gateway(service {{ .Name }}, options ...gateway.Option) *{{ .Name }}Gateway {
-	gw := &{{.Name}}Gateway{
-		HTTPGateway: gateway.New(options...),
-		Service: service,
-	}
+func New{{ .Name }}Gateway(service {{ .Name }}, options ...rpc.GatewayOption) rpc.Gateway {
+	gw := rpc.NewGateway(options...)
 
 	{{ $service := . }}
 	{{ range $service.Methods }}
@@ -65,22 +62,12 @@ func New{{ .Name }}Gateway(service {{ .Name }}, options ...gateway.Option) *{{ .
 			return
 		}
 
-		serviceResponse, err := gw.Service.{{ .Name }}(req.Context(), &serviceRequest)
+		serviceResponse, err := service.{{ .Name }}(req.Context(), &serviceRequest)
 		response.Reply({{ .HTTPStatus }}, serviceResponse, err)
 	})
 	{{ end }}
 
 	return gw
-}
-
-type {{.Name}}Gateway struct {
-	gateway.HTTPGateway
-	// The "real" implementation of the service that this gateway delegates to.
-	Service {{ .Name }}
-}
-
-func (gw {{ .Name }}Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	gw.Middleware.ServeHTTP(w, req, gw.Router.ServeHTTP)
 }
 {{end}}
 `))

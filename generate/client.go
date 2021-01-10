@@ -8,7 +8,7 @@ import (
 	"log"
 	"text/template"
 
-	"github.com/robsignorelli/expose/parser"
+	"github.com/robsignorelli/frodo/parser"
 )
 
 func Client(ctx *parser.Context, w io.Writer) error {
@@ -40,12 +40,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/robsignorelli/expose/rpc"
+	"github.com/robsignorelli/frodo/rpc"
 )
 
 {{ $ctx := . }}
 {{ range .Services }}
-func New{{ .Name }}Client(address string, options ...rpc.Option) *{{.Name}}Client {
+func New{{ .Name }}Client(address string, options ...rpc.ClientOption) *{{.Name}}Client {
 	fmt.Println(">>>> Creating client")
 	return &{{.Name}}Client{
 		Client: rpc.NewClient("{{ .Name }}", address, options...),

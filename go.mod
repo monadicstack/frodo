@@ -1,4 +1,4 @@
-module github.com/robsignorelli/expose
+module github.com/robsignorelli/frodo
 
 go 1.15
 

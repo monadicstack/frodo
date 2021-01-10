@@ -1,4 +1,4 @@
-package gateway
+package rpc
 
 import "net/http"
 
@@ -16,12 +16,12 @@ var nopMiddleware MiddlewareFunc = func(w http.ResponseWriter, req *http.Request
 	next(w, req)
 }
 
-func WithMiddleware(mw Middleware) Option {
-	return func(gw *HTTPGateway) {
+func WithMiddleware(mw Middleware) GatewayOption {
+	return func(gw *Gateway) {
 		gw.Middleware = mw
 	}
 }
 
-func WithMiddlewareFunc(mw MiddlewareFunc) Option {
+func WithMiddlewareFunc(mw MiddlewareFunc) GatewayOption {
 	return WithMiddleware(mw)
 }

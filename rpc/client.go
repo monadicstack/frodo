@@ -14,13 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/robsignorelli/expose/internal/reflection"
+	"github.com/robsignorelli/frodo/internal/reflection"
+	"github.com/robsignorelli/frodo/rpc/metadata"
 )
 
-func NewClient(name string, addr string, options ...Option) Client {
+func NewClient(name string, addr string, options ...ClientOption) Client {
 	defaultTimeout := 30 * time.Second
 	client := Client{
 		HTTP: &http.Client{
+			Timeout: defaultTimeout,
 			Transport: &http.Transport{
 				DialContext:         (&net.Dialer{Timeout: defaultTimeout}).DialContext,
 				TLSHandshakeTimeout: defaultTimeout,
@@ -35,9 +37,9 @@ func NewClient(name string, addr string, options ...Option) Client {
 	return client
 }
 
-type Option func(*Client)
+type ClientOption func(*Client)
 
-func WithHTTPClient(httpClient *http.Client) Option {
+func WithHTTPClient(httpClient *http.Client) ClientOption {
 	return func(rpcClient *Client) {
 		rpcClient.HTTP = httpClient
 	}
@@ -103,6 +105,14 @@ func (c Client) createRequestBody(method string, serviceRequest interface{}) (io
 }
 
 func (c Client) writeHeaders(ctx context.Context, request *http.Request) (*http.Request, error) {
+	encodedValues, err := metadata.ToJSON(ctx)
+	if err != nil {
+		return request, err
+	}
+	request.Header.Set(metadata.RequestHeader, encodedValues)
+	fmt.Println("==== RPC VALUES ====")
+	fmt.Println(encodedValues)
+	fmt.Println("====================")
 	return request, nil
 }
 

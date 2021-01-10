@@ -50,3 +50,14 @@ func FieldName(field reflect.StructField) string {
 		return tag
 	}
 }
+
+func Assign(value interface{}, out interface{}) {
+	// Depending on whether you wrote "SomeStruct{}" or "&SomeStruct{}" (a pointer) to the
+	// scope, we want to make sure that we're de-referencing the scope value properly.
+	reflectValue := reflect.ValueOf(value)
+	if reflectValue.Type().Kind() == reflect.Ptr {
+		reflect.ValueOf(out).Elem().Set(reflectValue.Elem())
+	} else {
+		reflect.ValueOf(out).Elem().Set(reflectValue)
+	}
+}

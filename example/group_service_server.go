@@ -4,16 +4,25 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/robsignorelli/frodo/rpc/metadata"
 )
 
 type GroupServiceServer struct {
 }
 
 func (svc GroupServiceServer) GetByID(ctx context.Context, request *GetByIDRequest) (*GetByIDResponse, error) {
+	var someNumber int
+	metadata.Value(ctx, "foo", &someNumber)
+	var other GetByIDRequest
+	metadata.Value(ctx, "bar", &other)
+	var other2 GetByIDRequest
+	metadata.Value(ctx, "bar", &other2)
+	callName := ctx.Value("ServiceCall")
 	return &GetByIDResponse{
 		ID:          request.ID,
 		Name:        "The Bees",
-		Description: "They know the way of the bee.",
+		Description: fmt.Sprintf("They know the way of the bee: %v => %+v : %+v: %s", someNumber, other, other2, callName),
 	}, nil
 }
 

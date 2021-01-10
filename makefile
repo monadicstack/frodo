@@ -1,6 +1,6 @@
 build: clean-gen
 	@ \
-	go build -o out/exposec main.go
+	go build -o out/frodoc main.go
 
 clean-gen:
 	@ \
@@ -8,7 +8,7 @@ clean-gen:
 
 example-gen: build
 	@ \
-	out/exposec example/group_service.go
+	out/frodoc example/group_service.go
 
 example-run: example-gen
 	@ \

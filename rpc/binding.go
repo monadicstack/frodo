@@ -1,4 +1,4 @@
-package gateway
+package rpc
 
 import (
 	"bytes"
@@ -11,20 +11,27 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+// Binder performs the work of taking all meaningful values from an incoming request (body,
+// path params, query string) and applying them to a Go struct (likely the "XxxRequest" for
+// your service method).
 type Binder interface {
 	Bind(req *http.Request, params httprouter.Params, out interface{}) error
 }
 
-func WithBinder(binder Binder) Option {
-	return func(gw *HTTPGateway) {
+// WithBinder allows you to override a Gateway's default binding behavior with the custom behavior
+// of your choice.
+func WithBinder(binder Binder) GatewayOption {
+	return func(gw *Gateway) {
 		gw.Binder = binder
 	}
 }
 
-type JSONBinder struct {
+// jsonBinder is the default gateway binder that uses encoding/json to apply body/path/query data
+// to service request models.
+type jsonBinder struct {
 }
 
-func (b JSONBinder) Bind(req *http.Request, params httprouter.Params, out interface{}) error {
+func (b jsonBinder) Bind(req *http.Request, params httprouter.Params, out interface{}) error {
 	if err := b.bindBody(req, params, out); err != nil {
 		return fmt.Errorf("binding error: %w", err)
 	}
@@ -37,7 +44,7 @@ func (b JSONBinder) Bind(req *http.Request, params httprouter.Params, out interf
 	return nil
 }
 
-func (b JSONBinder) bindBody(req *http.Request, _ httprouter.Params, out interface{}) error {
+func (b jsonBinder) bindBody(req *http.Request, _ httprouter.Params, out interface{}) error {
 	if req.Body == nil {
 		return nil
 	}
@@ -47,8 +54,8 @@ func (b JSONBinder) bindBody(req *http.Request, _ httprouter.Params, out interfa
 	return json.NewDecoder(req.Body).Decode(out)
 }
 
-func (b JSONBinder) bindQueryString(req *http.Request, _ httprouter.Params, out interface{}) error {
-	jsonReader := b.QueryStringToJSON(req)
+func (b jsonBinder) bindQueryString(req *http.Request, _ httprouter.Params, out interface{}) error {
+	jsonReader := b.queryStringToJSON(req)
 	err := json.NewDecoder(jsonReader).Decode(out)
 	if err != nil {
 		return fmt.Errorf("bind query string: %w", err)
@@ -56,8 +63,8 @@ func (b JSONBinder) bindQueryString(req *http.Request, _ httprouter.Params, out 
 	return nil
 }
 
-func (b JSONBinder) bindPathParams(_ *http.Request, params httprouter.Params, out interface{}) error {
-	jsonReader := b.ParamsToJSON(params)
+func (b jsonBinder) bindPathParams(_ *http.Request, params httprouter.Params, out interface{}) error {
+	jsonReader := b.paramsToJSON(params)
 	err := json.NewDecoder(jsonReader).Decode(out)
 	if err != nil {
 		return fmt.Errorf("bind path params: %w", err)
@@ -65,7 +72,7 @@ func (b JSONBinder) bindPathParams(_ *http.Request, params httprouter.Params, ou
 	return nil
 }
 
-func (b JSONBinder) ParamsToJSON(params httprouter.Params) io.Reader {
+func (b jsonBinder) paramsToJSON(params httprouter.Params) io.Reader {
 	paramJSON := &bytes.Buffer{}
 	paramJSON.WriteString("{")
 	for i, param := range params {
@@ -78,7 +85,7 @@ func (b JSONBinder) ParamsToJSON(params httprouter.Params) io.Reader {
 	return paramJSON
 }
 
-func (b JSONBinder) QueryStringToJSON(req *http.Request) io.Reader {
+func (b jsonBinder) queryStringToJSON(req *http.Request) io.Reader {
 	paramJSON := &bytes.Buffer{}
 	paramJSON.WriteString("{")
 	i := 0
@@ -93,7 +100,10 @@ func (b JSONBinder) QueryStringToJSON(req *http.Request) io.Reader {
 	return paramJSON
 }
 
-func (b JSONBinder) writeAttributeJSON(buf *bytes.Buffer, key string, value string) {
+// writeAttributeJSON writes a key/value pair to a JSON object buffer. For instance, writing
+// the key "foo" and the value "bar rules!" will result in this writing `"foo":"bar rules!"`
+// to the buffer.
+func (b jsonBinder) writeAttributeJSON(buf *bytes.Buffer, key string, value string) {
 	buf.WriteString("\"")
 	buf.WriteString(key)
 	buf.WriteString("\":")

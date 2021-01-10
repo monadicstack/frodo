@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/robsignorelli/expose/generate"
-	"github.com/robsignorelli/expose/parser"
+	"github.com/robsignorelli/frodo/generate"
+	"github.com/robsignorelli/frodo/parser"
 )
 
 func main() {
@@ -26,7 +26,7 @@ func main() {
 }
 
 func generateServer(ctx *parser.Context, inputFileName string) {
-	outputFileName := strings.TrimSuffix(inputFileName, ".go") + ".gen.server.go"
+	outputFileName := strings.TrimSuffix(inputFileName, ".go") + ".gen.gateway.go"
 	log.Printf("[exposec] Writing gateway: %s -> %s", inputFileName, outputFileName)
 
 	_ = os.Remove(outputFileName)
