@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/robsignorelli/frodo/example"
+	"github.com/robsignorelli/frodo/example/gen"
 	"github.com/robsignorelli/frodo/rpc"
 	"github.com/robsignorelli/frodo/rpc/metadata"
 )
 
 func main() {
 	groupService := example.GroupServiceServer{}
-	gw := example.NewGroupServiceGateway(groupService,
+	gw := examplerpc.NewGroupServiceGateway(groupService,
 		rpc.WithMiddlewareFunc(
 			Logger,
 			Logger2,
@@ -34,7 +35,7 @@ func runClientTest() {
 	})
 
 	time.Sleep(1 * time.Second)
-	client := example.NewGroupServiceClient("http://localhost:8080",
+	client := examplerpc.NewGroupServiceClient("http://localhost:8080",
 		rpc.WithClientMiddleware(
 			ClientLogger,
 			ClientLogger2,
