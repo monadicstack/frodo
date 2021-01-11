@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/robsignorelli/frodo/rpc/metadata"
@@ -15,6 +16,7 @@ func NewGateway(options ...GatewayOption) Gateway {
 		Router:     httprouter.New(),
 		Binder:     jsonBinder{},
 		middleware: middlewarePipeline{},
+		PathPrefix: "",
 		handler:    nil,
 	}
 	for _, option := range options {
@@ -44,6 +46,7 @@ type GatewayOption func(*Gateway)
 type Gateway struct {
 	Router     *httprouter.Router
 	Binder     Binder
+	PathPrefix string
 	middleware middlewarePipeline
 	handler    http.HandlerFunc
 }
@@ -51,6 +54,24 @@ type Gateway struct {
 // ServeHTTP is the central HTTP handler that includes all http routing, middleware, service forwarding, etc.
 func (gw Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	gw.handler(w, req)
+}
+
+// WithPrefix allows you to specify a custom URL prefix for all endpoints. By default a URL might look
+// like "https://api.foo.com/GroupService.GetByID", but if you create your gateway using `WithPrefix("v2")`
+// then the endpoint would be "https://api.foo.com/v2/GroupService.GetByID".
+func WithPrefix(pathPrefix string) GatewayOption {
+	return func(gateway *Gateway) {
+		switch {
+		case pathPrefix == "":
+			return
+		case pathPrefix == "/":
+			return
+		case strings.HasPrefix(pathPrefix, "/"):
+			gateway.PathPrefix = pathPrefix
+		default:
+			gateway.PathPrefix = "/" + pathPrefix
+		}
+	}
 }
 
 func restoreCallDetails(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {

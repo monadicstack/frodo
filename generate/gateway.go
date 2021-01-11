@@ -33,6 +33,8 @@ func Server(ctx *parser.Context, w io.Writer) error {
 
 //--------------------------------
 
+// Once Go 1.16 comes out and we can embed files in the Go binary, I should pull this out
+// into a separate template file and just embed that in the binary fs.
 var gatewayTemplate = template.Must(template.New("gateway").Parse(`// !!!!!!! DO NOT EDIT !!!!!!!
 // Auto-generated server code from {{.Path}}
 // !!!!!!! DO NOT EDIT !!!!!!!
@@ -53,7 +55,7 @@ func New{{ .Name }}Gateway(service {{ .Name }}, options ...rpc.GatewayOption) rp
 
 	{{ $service := . }}
 	{{ range $service.Methods }}
-	gw.Router.{{ .HTTPMethod }}("{{ .HTTPPath }}", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+	gw.Router.{{ .HTTPMethod }}(gw.PathPrefix + "{{ .HTTPPath }}", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		response := respond.To(w, req)
 
 		serviceRequest := {{ .Request.Name }}{}
