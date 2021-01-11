@@ -5,34 +5,110 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
+
+	"golang.org/x/mod/modfile"
 )
 
-func ParseFile(inputFile string) (*Context, error) {
+func ParseFile(inputPath string) (*Context, error) {
 	fileSet := token.NewFileSet()
 
-	file, err := parser.ParseFile(fileSet, inputFile, nil, parser.ParseComments)
+	file, err := parser.ParseFile(fileSet, inputPath, nil, parser.ParseComments)
 	if err != nil {
-		return nil, fmt.Errorf("[%s] unable to parse go file: %w", inputFile, err)
+		return nil, fmt.Errorf("[%s] unable to parse go file: %w", inputPath, err)
+	}
+
+	absolutePath, err := filepath.Abs(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("[%s] unable to parse go file: %w", inputPath, err)
 	}
 
 	ctx := &Context{
-		File:    file,
-		Path:    inputFile,
-		Package: file.Name.Name,
+		File: file,
+		Path: absolutePath,
 	}
 
-	// Step 1: Identify all of the struct/type declarations for the request/response models.
-	if err = ParseModelTypes(ctx); err != nil {
-		return nil, fmt.Errorf("[%s] parse error: %w", inputFile, err)
+	if err = ParseModuleInfo(ctx); err != nil {
+		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	// Step 2: Now that we know the possible inputs/outputs, parse the service interfaces and their functions
+	if err = ParsePackageInfo(ctx); err != nil {
+		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
+	}
+	if err = ParseModelTypes(ctx); err != nil {
+		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
+	}
 	if err = ParseServiceInterfaces(ctx); err != nil {
-		return nil, fmt.Errorf("[%s] parse error: %w", inputFile, err)
+		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
 	return ctx, nil
+}
+
+func ParsePackageInfo(ctx *Context) error {
+	packageName := ctx.File.Name.Name
+	packageDir := filepath.Dir(ctx.Path)
+	packageDirRelative := strings.TrimPrefix(packageDir, ctx.Module.Directory)
+
+	ctx.Package = &PackageDeclaration{
+		Name:      packageName,
+		Import:    filepath.Join(ctx.Module.Name, packageDirRelative),
+		Directory: filepath.Dir(ctx.Path),
+	}
+	ctx.OutputPackage = &PackageDeclaration{
+		Name:      packageName + "rpc",
+		Import:    filepath.Join(ctx.Package.Import, "gen"),
+		Directory: filepath.Join(ctx.Package.Directory, "gen"),
+	}
+	return nil
+}
+
+func ParseModuleInfo(ctx *Context) error {
+	inputFilePath, err := filepath.Abs(ctx.Path)
+	if err != nil {
+		return fmt.Errorf("unable to determine absolute path: %w", err)
+	}
+
+	// Look in the input file's directory (an all of its parents/ancestors) for the "go.mod" file.
+	goModPath, err := findGoDotMod(filepath.Dir(inputFilePath))
+	if err != nil {
+		return err
+	}
+	// Read/parse the "go.mod" file so we can extract the module/package info we need.
+	goModData, err := ioutil.ReadFile(goModPath)
+	if err != nil {
+		return err
+	}
+	goModFile, err := modfile.Parse(goModPath, goModData, nil)
+	if err != nil {
+		return err
+	}
+
+	ctx.Module = &ModuleDeclaration{
+		Name:      goModFile.Module.Mod.Path,
+		Directory: filepath.Dir(goModPath),
+	}
+	return nil
+}
+
+func findGoDotMod(dirName string) (string, error) {
+	if dirName == "" || dirName == "/" {
+		return "", fmt.Errorf("unable to find 'go.mod' for project")
+	}
+
+	files, err := ioutil.ReadDir(dirName)
+	if err != nil {
+		return "", fmt.Errorf("unable to find 'go.mod': %w", err)
+	}
+
+	for _, file := range files {
+		if file.Name() == "go.mod" {
+			return filepath.Join(dirName, file.Name()), nil
+		}
+	}
+	return findGoDotMod(filepath.Dir(dirName))
 }
 
 func ParseModelTypes(ctx *Context) error {
@@ -236,90 +312,6 @@ func isValidReturnValue2(_ *Context, returnVal *ast.Field) bool {
 	return typeName(returnVal) == "error"
 }
 
-type Context struct {
-	File     *ast.File
-	Path     string
-	Package  string
-	Services []*ServiceDeclaration
-	Models   []*ServiceModelDeclaration
-
-	currentService *ServiceDeclaration
-	currentMethod  *ServiceMethodDeclaration
-}
-
-func (ctx *Context) AddService(service *ServiceDeclaration) {
-	ctx.Services = append(ctx.Services, service)
-}
-
-func (ctx *Context) AddModel(model *ServiceModelDeclaration) {
-	ctx.Models = append(ctx.Models, model)
-}
-
-func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
-	for _, model := range ctx.Models {
-		if model.Name == name {
-			return model
-		}
-	}
-	return nil
-}
-
-type ServiceDeclaration struct {
-	Name    string
-	Methods []*ServiceMethodDeclaration
-	Node    *ast.Object
-}
-
-func (service *ServiceDeclaration) AddMethod(method *ServiceMethodDeclaration) {
-	service.Methods = append(service.Methods, method)
-}
-
-func (service ServiceDeclaration) String() string {
-	buf := strings.Builder{}
-	buf.WriteString(service.Name)
-	for _, method := range service.Methods {
-		buf.WriteString("\n")
-		buf.WriteString("    ." + method.String())
-	}
-	return buf.String()
-}
-
-func (service ServiceDeclaration) MethodByName(name string) *ServiceMethodDeclaration {
-	for _, m := range service.Methods {
-		if m.Name == name {
-			return m
-		}
-	}
-	return nil
-}
-
-type ServiceMethodDeclaration struct {
-	Name       string
-	Request    *ServiceModelDeclaration
-	Response   *ServiceModelDeclaration
-	HTTPMethod string
-	HTTPPath   string
-	HTTPStatus int
-	Node       *ast.Field
-}
-
-func (method ServiceMethodDeclaration) String() string {
-	return fmt.Sprintf("%s(context.Context, %v) (%v, error)",
-		method.Name,
-		method.Request,
-		method.Response,
-	)
-}
-
-type ServiceModelDeclaration struct {
-	Name string
-	Node *ast.Object
-}
-
-func (model ServiceModelDeclaration) String() string {
-	return model.Name
-}
-
 func IsServiceDeclaration(astObj *ast.Object) bool {
 	// Only looking for 'type' declarations (e.g. 'type XXX interface')
 	if astObj.Kind != ast.Typ {
@@ -345,10 +337,6 @@ func IsServiceDeclaration(astObj *ast.Object) bool {
 	return strings.HasSuffix(astObj.Name, "Service")
 }
 
-func IsPackageDeclaration(astObj *ast.Object) bool {
-	return astObj.Kind == ast.Pkg
-}
-
 func IsModelDeclaration(astObj *ast.Object) bool {
 	// Only looking for 'type' declarations (e.g. 'type XXX interface')
 	if astObj.Kind != ast.Typ {
@@ -371,10 +359,5 @@ func IsModelDeclaration(astObj *ast.Object) bool {
 	if !ok {
 		return false
 	}
-
 	return true
-
-	// We're enforcing the convention that the input to the method "CreateFoo" must be "CreateFooRequest"
-	// and the output must be called "CreateFooResponse"
-	//return strings.HasSuffix(astObj.Name, "Request") || strings.HasSuffix(astObj.Name, "Response")
 }
