@@ -18,6 +18,7 @@ func main() {
 			Logger,
 			Logger2,
 		),
+		rpc.WithPrefix("v2"),
 	)
 
 	go runClientTest()
@@ -38,6 +39,7 @@ func runClientTest() {
 			ClientLogger,
 			ClientLogger2,
 		),
+		rpc.WithClientPathPrefix("v2"),
 	)
 	response, err := client.GetByID(ctx, &example.GetByIDRequest{
 		ID:   "123x45",
@@ -47,7 +49,7 @@ func runClientTest() {
 }
 
 func Logger(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
-	fmt.Println("> Hello")
+	fmt.Println("> Hello", req.URL.String())
 	next(w, req)
 	fmt.Println("> Goodbye")
 }

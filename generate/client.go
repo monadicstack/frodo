@@ -31,6 +31,8 @@ func Client(ctx *parser.Context, w io.Writer) error {
 	return nil
 }
 
+// Once Go 1.16 comes out and we can embed files in the Go binary, I should pull this out
+// into a separate template file and just embed that in the binary fs.
 var clientTemplate = template.Must(template.New("gateway").Parse(`// !!!!!!! DO NOT EDIT !!!!!!!
 // Auto-generated client code from {{ .Path }}
 // !!!!!!! DO NOT EDIT !!!!!!!

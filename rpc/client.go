@@ -71,6 +71,10 @@ type Client struct {
 	// BaseURL contains the protocol/host/port/etc that is the prefix for all service function
 	// endpoints. (e.g. "http://api.myawesomeapp.com")
 	BaseURL string
+	// PathPrefix sits between the host/port and the endpoint path (e.g. something like "v2") so that
+	// you can segment/version your services. Typically this will be the same as what you apply as
+	// the gateway's path prefix.
+	PathPrefix string
 	// Name is just the display name of the service; used only for debugging/tracing purposes.
 	Name string
 	// Middleware defines all of the units of work we will apply to the request/response when
@@ -148,7 +152,7 @@ func (c Client) buildURL(method string, path string, serviceRequest interface{})
 	}
 
 	// If we're doing a POST/PUT/PATCH, don't bother adding query string arguments.
-	address := c.BaseURL + "/" + strings.Join(pathSegments, "/")
+	address := c.BaseURL + c.PathPrefix + "/" + strings.Join(pathSegments, "/")
 	if shouldEncodeUsingBody(method) {
 		return address
 	}
@@ -179,4 +183,21 @@ func writeMetadataHeader(request *http.Request, next RoundTripperFunc) (*http.Re
 	}
 	request.Header.Set(metadata.RequestHeader, encodedValues)
 	return next(request)
+}
+
+// WithClientPathPrefix should match what you supply if you call WithPrefix when building your service
+// gateway so that all endpoint URLs will be constructed consistently.
+func WithClientPathPrefix(pathPrefix string) ClientOption {
+	return func(client *Client) {
+		switch {
+		case pathPrefix == "":
+			return
+		case pathPrefix == "/":
+			return
+		case strings.HasPrefix(pathPrefix, "/"):
+			client.PathPrefix = pathPrefix
+		default:
+			client.PathPrefix = "/" + pathPrefix
+		}
+	}
 }
