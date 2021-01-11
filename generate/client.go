@@ -1,39 +1,12 @@
 package generate
 
 import (
-	"bytes"
-	"fmt"
-	"go/format"
-	"io"
-	"log"
 	"text/template"
-
-	"github.com/robsignorelli/frodo/parser"
 )
-
-func Client(ctx *parser.Context, w io.Writer) error {
-	buf := &bytes.Buffer{}
-	err := clientTemplate.Execute(buf, ctx)
-	if err != nil {
-		return fmt.Errorf("error generating http gateway: %w", err)
-	}
-
-	sourceCode, err := format.Source(buf.Bytes())
-	if err != nil {
-		log.Printf("[exposec] Unable to 'go fmt' gatway code: %v", err)
-		_, err = w.Write(buf.Bytes())
-	} else {
-		_, err = w.Write(sourceCode)
-	}
-	if err != nil {
-		return fmt.Errorf("error writing http gateway code: %w", err)
-	}
-	return nil
-}
 
 // Once Go 1.16 comes out and we can embed files in the Go binary, I should pull this out
 // into a separate template file and just embed that in the binary fs.
-var clientTemplate = template.Must(template.New("gateway").Parse(`// !!!!!!! DO NOT EDIT !!!!!!!
+var TemplateClientGo = template.Must(template.New("client.go").Parse(`// !!!!!!! DO NOT EDIT !!!!!!!
 // Auto-generated client code from {{ .Path }}
 // !!!!!!! DO NOT EDIT !!!!!!!
 package {{ .Package }}
@@ -84,5 +57,4 @@ func (proxy *{{ $service.Name }}Proxy) {{ .Name }} (ctx context.Context, request
 }
 {{ end }}
 {{ end }}
-
 `))
