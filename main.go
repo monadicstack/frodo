@@ -23,6 +23,7 @@ func main() {
 	log.Printf("[frodoc] Generating artifacts...")
 	crapPants(generate.Artifact(ctx, inputFileName, generate.TemplateGatewayGo))
 	crapPants(generate.Artifact(ctx, inputFileName, generate.TemplateClientGo))
+	crapPants(generate.Artifact(ctx, inputFileName, generate.TemplateClientJS))
 }
 
 func crapPants(err error) {

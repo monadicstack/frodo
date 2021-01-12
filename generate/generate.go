@@ -44,8 +44,8 @@ func Artifact(ctx *parser.Context, inputPath string, codeTemplate *template.Temp
 		return fmt.Errorf("template eval error: %s: %v", codeTemplate.Name(), err)
 	}
 
-	// Step 4: Run the generated source code through "go fmt"
-	sourceCode, err = format.Source(sourceCode)
+	// Step 4: Run the generated source code through "go fmt" (if generating a Go artifact)
+	sourceCode, err = prettify(codeTemplate, sourceCode)
 	if err != nil {
 		return fmt.Errorf("error running 'go fmt': %s: %v", codeTemplate.Name(), err)
 	}
@@ -62,4 +62,19 @@ func eval(ctx *parser.Context, t *template.Template) ([]byte, error) {
 	buf := &bytes.Buffer{}
 	err := t.Execute(buf, ctx)
 	return buf.Bytes(), err
+}
+
+// prettify runs your generated Go code through 'go fmt'. If the template is for some
+// language other than Go, we'll return the source code as-is.
+func prettify(t *template.Template, sourceCode []byte) ([]byte, error) {
+	if !strings.HasSuffix(t.Name(), ".go") {
+		return sourceCode, nil
+	}
+	return format.Source(sourceCode)
+}
+
+var templateFuncs = template.FuncMap{
+	"HTTPMethodSupportsBody": func(method string) bool {
+		return method == "POST" || method == "PUT" || method == "PATCH"
+	},
 }
