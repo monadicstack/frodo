@@ -44,6 +44,7 @@ type GatewayOption func(*Gateway)
 // your service response struct data back to the caller. Aside from feeding this to `http.ListenAndServe()`
 // you likely won't interact with this at all yourself.
 type Gateway struct {
+	Name       string
 	Router     *httprouter.Router
 	Binder     Binder
 	PathPrefix string

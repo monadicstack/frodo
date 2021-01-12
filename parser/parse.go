@@ -28,8 +28,9 @@ func ParseFile(inputPath string) (*Context, error) {
 	}
 
 	ctx := &Context{
-		File: file,
-		Path: absolutePath,
+		File:         file,
+		Path:         inputPath,
+		AbsolutePath: absolutePath,
 	}
 
 	if err = ParseModuleInfo(ctx); err != nil {
@@ -353,11 +354,15 @@ func IsModelDeclaration(astObj *ast.Object) bool {
 		return false
 	}
 
-	// Your input must be a struct
-	// TODO: support type aliases so you can re-use common inputs/outputs
-	_, ok = typeSpec.Type.(*ast.StructType)
-	if !ok {
+	// The model type must either be a struct or some sort of type alias.
+	switch typeSpec.Type.(type) {
+	case *ast.StructType:
+		return true
+	case *ast.Ident: // type alias to another type in this package (e.g. "type Foo Bar")
+		return true
+	case *ast.SelectorExpr: // type alias to a type in another package (e.g. "type Foo other.Bar")
+		return true
+	default:
 		return false
 	}
-	return true
 }
