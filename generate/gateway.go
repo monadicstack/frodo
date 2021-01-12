@@ -22,8 +22,20 @@ import (
 
 {{ $ctx := . }}
 {{ range .Services }}
+// New{{ .Name }}Gateway accepts your "real" {{ .Name }} instance (the thing that really does the work), and
+// exposes it to other services/clients over RPC. The rpc.Gateway it returns implements http.Handler, so you
+// can pass it to any standard library HTTP server of your choice.
+//
+//	// How to fire up your service for RPC and/or your REST API
+//	service := {{ $ctx.Package.Name }}.{{ .Name }}{ /* set up to your liking */ }
+//	gateway := {{ $ctx.OutputPackage.Name }}.New{{ .Name }}Gateway(service)
+//	http.ListenAndServe(":8080", gateway)
+//
+// The default instance works well enough, but you can supply additional options such as WithMiddleware() which
+// accepts any negroni-compatible middleware handlers.
 func New{{ .Name }}Gateway(service {{ $ctx.Package.Name }}.{{ .Name }}, options ...rpc.GatewayOption) rpc.Gateway {
 	gw := rpc.NewGateway(options...)
+	gw.Name = "{{ .Name }}"
 
 	{{ $service := . }}
 	{{ range $service.Methods }}

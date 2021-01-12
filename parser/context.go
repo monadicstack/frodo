@@ -15,6 +15,8 @@ type Context struct {
 	File *ast.File
 	// Path is the relative path to the service definition file we're parsing.
 	Path string
+	// AbsolutePath is the absolute path to the service definition file we're parsing.
+	AbsolutePath string
 	// Package contains information about the package where the service definition resides.
 	Package *PackageDeclaration
 	// OutputPackage contains information about the package where the generated code will go.
