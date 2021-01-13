@@ -1,12 +1,7 @@
 package generate
 
-import (
-	"text/template"
-)
-
-// Once Go 1.16 comes out and we can embed files in the Go binary, I should pull this out
-// into a separate template file and just embed that in the binary fs.
-var TemplateGatewayGo = template.Must(template.New("gateway.go").Parse(`// !!!!!!! DO NOT EDIT !!!!!!!
+// TemplateGatewayGo is the text template for the Go server/gateway (accepts incoming RPC requests)
+var TemplateGatewayGo = parseArtifactTemplate("gateway.go", `// !!!!!!! DO NOT EDIT !!!!!!!
 // Auto-generated server code from {{ .Path }}
 // !!!!!!! DO NOT EDIT !!!!!!!
 package {{ .OutputPackage.Name }}
@@ -56,4 +51,4 @@ func New{{ .Name }}Gateway(service {{ $ctx.Package.Name }}.{{ .Name }}, options 
 	return gw
 }
 {{end}}
-`))
+`)

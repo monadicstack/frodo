@@ -21,7 +21,7 @@ func (svc GroupServiceServer) GetByID(ctx context.Context, request *GetByIDReque
 	callName := ctx.Value("ServiceCall")
 	return &GetByIDResponse{
 		ID:          request.ID,
-		Name:        "The Bees",
+		Name:        fmt.Sprintf("The Bees: [id=%s][flag=%v]", request.ID, request.Flag),
 		Description: fmt.Sprintf("They know the way of the bee: %v => %+v : %+v: %s", someNumber, other, other2, callName),
 	}, nil
 }
