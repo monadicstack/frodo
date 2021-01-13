@@ -112,6 +112,8 @@ func (b jsonBinder) writeAttributeJSON(buf *bytes.Buffer, key string, value stri
 		buf.WriteString(value)
 	case looksLikeBool(value):
 		buf.WriteString(value)
+	case looksLikeStruct(value):
+		buf.WriteString(value)
 	default:
 		buf.WriteString("\"")
 		buf.WriteString(value)
@@ -141,4 +143,11 @@ func looksLikeBool(value string) bool {
 	}
 	valueLower := strings.ToLower(value)
 	return valueLower == "true" || valueLower == "false"
+}
+
+func looksLikeStruct(value string) bool {
+	if value == "" {
+		return false
+	}
+	return strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}")
 }

@@ -1,12 +1,9 @@
 package generate
 
-import (
-	"text/template"
-)
-
-// Once Go 1.16 comes out and we can embed files in the Go binary, I should pull this out
-// into a separate template file and just embed that in the binary fs.
-var TemplateClientGo = template.Must(template.New("client.go").Parse(`// !!!!!!! DO NOT EDIT !!!!!!!
+// TemplateClientGo is the text template for a service's Go client code. It creates the constructor
+// function to create the client such as 'NewFooServiceClient()' and all of the types/functions to
+// properly implement the service as an RPC client.
+var TemplateClientGo = parseArtifactTemplate("client.go", `// !!!!!!! DO NOT EDIT !!!!!!!
 // Auto-generated client code from {{ .Path }}
 // !!!!!!! DO NOT EDIT !!!!!!!
 package {{ .OutputPackage.Name }}
@@ -74,4 +71,4 @@ func (proxy *{{ $service.Name }}Proxy) {{ .Name }} (ctx context.Context, request
 }
 {{ end }}
 {{ end }}
-`))
+`)

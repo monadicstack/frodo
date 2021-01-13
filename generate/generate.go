@@ -73,6 +73,10 @@ func prettify(t *template.Template, sourceCode []byte) ([]byte, error) {
 	return format.Source(sourceCode)
 }
 
+func parseArtifactTemplate(name string, text string) *template.Template {
+	return template.Must(template.New(name).Funcs(templateFuncs).Parse(text))
+}
+
 var templateFuncs = template.FuncMap{
 	"HTTPMethodSupportsBody": func(method string) bool {
 		return method == "POST" || method == "PUT" || method == "PATCH"
