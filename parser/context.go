@@ -95,6 +95,8 @@ type ServiceMethodDeclaration struct {
 	HTTPPath string
 	// HTTPStatus indicates what success status code the gateway should use when responding via HTTP (e.g. 200, 202, etc)
 	HTTPStatus int
+	// Documentation are all of the comments documenting this operation.
+	Documentation DocumentationLines
 	// Node is the syntax tree object that defined this function within the service interface.
 	Node *ast.Field
 }
@@ -143,4 +145,35 @@ type PackageDeclaration struct {
 	Import string
 	// Directory is the absolute path to the package.
 	Directory string
+}
+
+// DocumentationLines represents all of the 'go doc' lines above a type/function/field with all
+// of the leading slashes removed.
+type DocumentationLines []string
+
+// Trim removes blank doc lines from the front/back of your list of comments.
+func (docs DocumentationLines) Trim() DocumentationLines {
+	if len(docs) == 0 {
+		return docs
+	}
+	// We want to be able to trim leading and trailing blank lines in a single pass over the
+	// slice, so the first time we encounter a non-empty line that's the first index to keep.
+	// The last index will continuously be updated as we go further and find other non-empty
+	// lines, so by the time we finish the loop we should have both ends of the valid range.
+	first := -1
+	last := -1
+	for i, line := range docs {
+		switch {
+		case line == "":
+			// don't update anything
+		case first < 0:
+			// we just found the first non-blank comment
+			first = i
+			last = i
+		default:
+			// there's another non-blank comment line further after the first one
+			last = i
+		}
+	}
+	return docs[first : last+1]
 }

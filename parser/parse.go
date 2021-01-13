@@ -279,8 +279,15 @@ func applyDocCommentOptions(_ *Context, methodObj *ast.Field, method *ServiceMet
 			method.HTTPPath = comment[5:]
 		case strings.HasPrefix(comment, "HTTP "):
 			method.HTTPStatus = parseHTTPStatus(comment[5:])
+		default:
+			method.Documentation = append(method.Documentation, comment)
 		}
 	}
+	fmt.Printf("==BEFORE====\n%v\n==AFTER=====\n%v\n=====",
+		method.Documentation,
+		method.Documentation.Trim(),
+	)
+	method.Documentation = method.Documentation.Trim()
 }
 
 func parseHTTPStatus(statusText string) int {
