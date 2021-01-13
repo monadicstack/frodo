@@ -6,7 +6,10 @@ import (
 )
 
 type GroupService interface {
-	// GetByID looks up a group given its unique identifier.
+	// GetByID looks up a group given its unique identifier. We will return a NotFoundError
+	// instead of a nil response if there is no record with that id.
+	//
+	// Monkeys are cool.
 	//
 	// GET /group/:id
 	GetByID(ctx context.Context, request *GetByIDRequest) (*GetByIDResponse, error)
@@ -14,8 +17,6 @@ type GroupService interface {
 	// CreateGroup makes a new group... duh.
 	CreateGroup(ctx context.Context, request *CreateGroupRequest) (*CreateGroupResponse, error)
 
-	// DeleteGroup smokes the group if it exists.
-	//
 	// HTTP 202
 	// DELETE /group/:id
 	DeleteGroup(ctx context.Context, request *DeleteGroupRequest) (*DeleteGroupResponse, error)

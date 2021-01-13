@@ -28,9 +28,9 @@ class {{ .Name }}Client {
 
     {{ $service := . }}
     {{ range .Methods }}
-    /**
-     * Dispatches the {{ .Name }} REST/RPC request to the service. 
-     * 
+    /**{{ range .Documentation }}
+     * {{ . }} {{ end }}
+     *
      * @param { {{ .Request.Name }} } serviceRequest The input parameters
      * @returns {Promise<{{ .Response.Name }}>} The JSON-encoded return value of the operation.
      */
