@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"fmt"
 	"net/http"
 )
 
@@ -64,7 +63,6 @@ func (pipeline middlewarePipeline) Then(handler http.HandlerFunc) http.HandlerFu
 // on each service function invocation before/after we dispatch the HTTP request.
 func WithClientMiddleware(funcs ...ClientMiddleware) ClientOption {
 	return func(client *Client) {
-		fmt.Println(">>>>> APPLYING MIDDLEWARE", len(funcs))
 		client.middleware = funcs
 	}
 }
@@ -82,7 +80,6 @@ type ClientMiddleware func(request *http.Request, next RoundTripperFunc) (*http.
 type clientMiddlewarePipeline []ClientMiddleware
 
 func (pipeline clientMiddlewarePipeline) Then(handler RoundTripperFunc) RoundTripperFunc {
-	fmt.Println(">>>>>>> Codifying client middleware", len(pipeline))
 	for i := len(pipeline) - 1; i >= 0; i-- {
 		mw := pipeline[i]
 		next := handler

@@ -283,10 +283,6 @@ func applyDocCommentOptions(_ *Context, methodObj *ast.Field, method *ServiceMet
 			method.Documentation = append(method.Documentation, comment)
 		}
 	}
-	fmt.Printf("==BEFORE====\n%v\n==AFTER=====\n%v\n=====",
-		method.Documentation,
-		method.Documentation.Trim(),
-	)
 	method.Documentation = method.Documentation.Trim()
 }
 
