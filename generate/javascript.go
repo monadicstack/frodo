@@ -184,19 +184,4 @@ function supportsBody(method) {
 module.exports = {
     {{ range .Services }}{{ .Name }}Client,{{ end }}
 };
-
-/*
-(async () => {
-    console.info(">>>>> Making Call");
-    const client = new GroupServiceClient("http://localhost:8080", { pathPrefix: 'v2'});
-    const resultA = await client.GetByID({ id: "abc xyz", flag: true, moo: "cow", dog: {reason: 'i like pugs'}});
-    console.info(">>>>>> RESULT A: ", resultA);
-
-    const resultB = await client.CreateGroup({ name: 'Dogs', description: 'Woof woof, baby.' });
-    console.info(">>>>>> RESULT B: ", resultB);
-})().catch(err => {
-    console.info(">>>>> ERROR...");
-    console.error(err);
-});
-*/
 `)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +21,6 @@ func Artifact(ctx *parser.Context, inputPath string, codeTemplate *template.Temp
 	outputFileName := strings.TrimSuffix(inputFileName, ".go") + ".gen." + codeTemplate.Name()
 	outputDir := filepath.Join(inputDir, "gen")
 	outputPath := filepath.Join(outputDir, outputFileName)
-	log.Printf("[frodoc] Generating artifact: %s", outputPath)
 
 	// Step 1: Create the "gen/" directory in the same directory as the file we're parsing.
 	err := os.MkdirAll(outputDir, os.ModePerm)
@@ -77,6 +75,8 @@ func parseArtifactTemplate(name string, text string) *template.Template {
 	return template.Must(template.New(name).Funcs(templateFuncs).Parse(text))
 }
 
+// templateFuncs are all of pipe functions we want available when evaluating the Go template
+// to generate an artifact's source code.
 var templateFuncs = template.FuncMap{
 	"HTTPMethodSupportsBody": func(method string) bool {
 		return method == "POST" || method == "PUT" || method == "PATCH"
