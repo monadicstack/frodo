@@ -132,7 +132,7 @@ type ModuleDeclaration struct {
 	Directory string
 }
 
-// GoMod returns the absolute path to the "go.mod" file for this module on the system running frodoc.
+// GoMod returns the absolute path to the "go.mod" file for this module on the system running frodo.
 func (module ModuleDeclaration) GoMod() string {
 	return filepath.Join(module.Directory, "go.mod")
 }

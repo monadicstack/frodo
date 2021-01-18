@@ -14,7 +14,7 @@ import (
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "frodoc",
+		Use:   "frodo",
 		Short: "A code generator for Go-based (micro)services that creates RPC clients/gateways.",
 	}
 	rootCmd.AddCommand(GatewayCommand{}.Cobra())
@@ -26,7 +26,7 @@ func main() {
 	}
 }
 
-// GatewayCommand handles the registration and execution of the 'frodoc gateway' CLI subcommand.
+// GatewayCommand handles the registration and execution of the 'frodo gateway' CLI subcommand.
 type GatewayCommand struct{}
 
 // Cobra creates the Cobra struct describing this CLI command and its options.
@@ -41,14 +41,14 @@ func (c GatewayCommand) Cobra() *cobra.Command {
 	return cmd
 }
 
-// Run handles when the user actually executes 'frodoc gateway'; generating a Go-based gateway
+// Run handles when the user actually executes 'frodo gateway'; generating a Go-based gateway
 // type that can be fed to http.ListenAndServe() in order to expose a service over RPC.
 func (c GatewayCommand) Run(cmd *cobra.Command, _ []string) error {
 	inputFileName := cmd.Flags().Lookup("input").Value.String()
 	return generateArtifact(inputFileName, generate.TemplateGatewayGo)
 }
 
-// ClientCommand handles the registration and execution of the 'frodoc client' CLI subcommand.
+// ClientCommand handles the registration and execution of the 'frodo client' CLI subcommand.
 type ClientCommand struct{}
 
 // Cobra creates the Cobra struct describing this CLI command and its options.
@@ -66,7 +66,7 @@ func (c ClientCommand) Cobra() *cobra.Command {
 	return cmd
 }
 
-// Run handles when the user executes 'frodoc client'; generating a strongly typed RPC client that
+// Run handles when the user executes 'frodo client'; generating a strongly typed RPC client that
 // accepts/returns data structures, but handles all of the HTTP/RPC magic under the hood.
 func (c ClientCommand) Run(cmd *cobra.Command, _ []string) error {
 	inputFileName := cmd.Flags().Lookup("input").Value.String()
@@ -84,13 +84,13 @@ func (c ClientCommand) Run(cmd *cobra.Command, _ []string) error {
 // generateArtifact parses the input service definition file and creates an output client/gateway
 // code, writing it to the output gen/ directory.
 func generateArtifact(inputFileName string, artifactTemplate *template.Template) error {
-	log.Printf("[frodoc] Parsing service definitions: %s", inputFileName)
+	log.Printf("[frodo] Parsing service definitions: %s", inputFileName)
 	ctx, err := parser.ParseFile(inputFileName)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[frodoc] Generating artifact '%s'", artifactTemplate.Name())
+	log.Printf("[frodo] Generating artifact '%s'", artifactTemplate.Name())
 	err = generate.Artifact(ctx, inputFileName, artifactTemplate)
 	if err != nil {
 		return err
