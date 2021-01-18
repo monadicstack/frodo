@@ -1,6 +1,6 @@
 build: clean-gen
 	@ \
-	go build -o out/frodoc main.go
+	go build -o out/frodo main.go
 
 clean-gen:
 	@ \
@@ -8,9 +8,9 @@ clean-gen:
 
 example-gen: build
 	@ \
-	out/frodoc gateway --input=example/group_service.go && \
-	out/frodoc client  --input=example/group_service.go --language=go && \
-	out/frodoc client  --input=example/group_service.go --language=js
+	out/frodo gateway --input=example/group_service.go && \
+	out/frodo client  --input=example/group_service.go --language=go && \
+	out/frodo client  --input=example/group_service.go --language=js
 
 example-run: example-gen
 	@ \
