@@ -8,7 +8,9 @@ clean-gen:
 
 example-gen: build
 	@ \
-	out/frodoc example/group_service.go
+	out/frodoc gateway --input=example/group_service.go && \
+	out/frodoc client  --input=example/group_service.go --language=go && \
+	out/frodoc client  --input=example/group_service.go --language=js
 
 example-run: example-gen
 	@ \
