@@ -9,7 +9,6 @@ package {{ .OutputPackage.Name }}
 import (
 	"net/http"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/robsignorelli/respond"
 	"github.com/robsignorelli/frodo/rpc"
 	"{{ .Package.Import }}"
@@ -34,17 +33,23 @@ func New{{ .Name }}Gateway(service {{ $ctx.Package.Name }}.{{ .Name }}, options 
 
 	{{ $service := . }}
 	{{ range $service.Methods }}
-	gw.Router.{{ .HTTPMethod }}(gw.PathPrefix + "{{ .HTTPPath }}", func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		response := respond.To(w, req)
+	gw.Register(rpc.Endpoint{
+		Method:      "{{ .HTTPMethod }}",
+		Path:        "{{ .HTTPPath }}",
+		ServiceName: "{{ $service.Name }}",
+		Name:        "{{ .Name }}",
+		Handler:     func(w http.ResponseWriter, req *http.Request) {
+			response := respond.To(w, req)
 
-		serviceRequest := {{ $ctx.Package.Name }}.{{ .Request.Name }}{}
-		if err := gw.Binder.Bind(req, params, &serviceRequest); err != nil {
-			response.Fail(err)
-			return
-		}
+			serviceRequest := {{ $ctx.Package.Name }}.{{ .Request.Name }}{}
+			if err := gw.Binder.Bind(req, &serviceRequest); err != nil {
+				response.Fail(err)
+				return
+			}
 
-		serviceResponse, err := service.{{ .Name }}(req.Context(), &serviceRequest)
-		response.Reply({{ .HTTPStatus }}, serviceResponse, err)
+			serviceResponse, err := service.{{ .Name }}(req.Context(), &serviceRequest)
+			response.Reply({{ .HTTPStatus }}, serviceResponse, err)
+		},
 	})
 	{{ end }}
 

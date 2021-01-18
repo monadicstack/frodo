@@ -56,7 +56,7 @@ func Logger(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
 }
 
 func Logger2(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
-	fmt.Println("> Hello 2")
+	fmt.Println("> Hello 2", rpc.EndpointFromContext(req.Context()))
 	next(w, req)
 	fmt.Println("> Goodbye 2")
 }
