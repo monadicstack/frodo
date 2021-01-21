@@ -23,8 +23,18 @@ type GroupService interface {
 }
 
 type GetByIDRequest struct {
-	ID   string `json:"id"`
-	Flag bool   `json:"flag"`
+	ID   string  `json:"id"`
+	Flag bool    `json:"flag"`
+	Flip Flipper `json:"flip"`
+	Page Paging  `json:"page"`
+}
+
+type Flipper bool
+
+type Paging struct {
+	Limit  int
+	Offset int
+	Sort   string
 }
 
 type GetByIDResponse struct {

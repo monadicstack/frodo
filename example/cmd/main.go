@@ -22,7 +22,8 @@ func main() {
 		rpc.WithPrefix("v2"),
 	)
 
-	go runClientTest()
+	//go runClientTest()
+	fmt.Println("[SERVER] Running on :8080")
 	http.ListenAndServe(":8080", gw)
 }
 
@@ -45,6 +46,7 @@ func runClientTest() {
 	response, err := client.GetByID(ctx, &example.GetByIDRequest{
 		ID:   "123x45",
 		Flag: false,
+		Flip: true,
 	})
 	fmt.Printf(">>>>>> %+v : %v", response, err)
 }
