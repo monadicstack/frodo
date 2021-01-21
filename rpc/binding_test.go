@@ -13,7 +13,7 @@ import (
 func BenchmarkJsonBinder_Bind(b *testing.B) {
 	b.ReportAllocs()
 	binder := jsonBinder{}
-	address, _ := url.Parse("http://localhost:8080/group/abcdef?flag=true&page.limit=42&page.offset=3&page.sort=crap&page.missing=goo")
+	address, _ := url.Parse("http://localhost:8080/group/abcdef?flaggeroo=true&page.limit=42&p.offset=3&p.order=crap&p.missing=goo")
 	request := &http.Request{
 		URL: address,
 	}
@@ -30,9 +30,9 @@ func BenchmarkJsonBinder_Bind(b *testing.B) {
 
 type benchmarkRequest struct {
 	ID   string           `json:"id"`
-	Flag bool             `json:"flag"`
+	Flag bool             `json:"flaggeroo"`
 	Flip benchmarkFlipper `json:"flip"`
-	Page benchmarkPaging  `json:"page"`
+	Page benchmarkPaging  `json:"p"`
 }
 
 type benchmarkFlipper bool
@@ -40,5 +40,5 @@ type benchmarkFlipper bool
 type benchmarkPaging struct {
 	Limit  int
 	Offset int
-	Sort   string
+	Sort   string `json:"order"`
 }

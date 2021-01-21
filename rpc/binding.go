@@ -226,9 +226,33 @@ var noField = reflect.StructField{}
 func lookupField(structType reflect.Type, name string) (reflect.StructField, bool) {
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)
-		if strings.EqualFold(name, field.Name) {
+		if strings.EqualFold(name, fieldMappingName(field)) {
 			return field, true
 		}
 	}
 	return noField, false
+}
+
+func fieldMappingName(field reflect.StructField) string {
+	jsonTag, ok := field.Tag.Lookup("json")
+	if !ok {
+		return field.Name
+	}
+	// You're actually omitting this field, so don't return something that can be matched
+	if jsonTag == "" || jsonTag == "-" {
+		return ""
+	}
+
+	// Parse the `json` tag to determine how the user has re-mapped the field.
+	switch comma := strings.IndexRune(jsonTag, ','); comma {
+	case -1:
+		// e.g. `json:"firstName"`
+		return jsonTag
+	case 0:
+		// e.g. `json:",omitempty"` (not remapped so use fields actual name)
+		return field.Name
+	default:
+		// e.g. `json:"firstName,omitempty" (just use the remapped name)
+		return jsonTag[0:comma]
+	}
 }
