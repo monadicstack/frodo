@@ -13,7 +13,7 @@ import (
 func BenchmarkJsonBinder_Bind(b *testing.B) {
 	b.ReportAllocs()
 	binder := jsonBinder{}
-	address, _ := url.Parse("http://localhost:8080/group/abcdef?flaggeroo=true&page.limit=42&p.offset=3&p.order=crap&p.missing=goo")
+	address, _ := url.Parse("http://localhost:8080/group/abcdef?flaggeroo=true&p.limit=42&p.offset=3&p.order=crap&p.missing=goo")
 	request := &http.Request{
 		URL: address,
 	}

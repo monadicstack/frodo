@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/robsignorelli/frodo/internal/reflection"
 )
 
 // Binder performs the work of taking all meaningful values from an incoming request (body,
@@ -32,19 +33,19 @@ func WithBinder(binder Binder) GatewayOption {
 type jsonBinder struct{}
 
 func (b jsonBinder) Bind(req *http.Request, out interface{}) error {
-	if err := b.bindBody(req, out); err != nil {
-		return fmt.Errorf("binding error: %w", err)
+	if err := b.BindBody(req, out); err != nil {
+		return fmt.Errorf("error binding body: %w", err)
 	}
-	if err := b.bindQueryString(req, out); err != nil {
-		return fmt.Errorf("binding error: %w", err)
+	if err := b.BindQueryString(req, out); err != nil {
+		return fmt.Errorf("error binding query string: %w", err)
 	}
-	if err := b.bindPathParams(req, out); err != nil {
-		return fmt.Errorf("binding error: %w", err)
+	if err := b.BindPathParams(req, out); err != nil {
+		return fmt.Errorf("error binding path params: %w", err)
 	}
 	return nil
 }
 
-func (b jsonBinder) bindBody(req *http.Request, out interface{}) error {
+func (b jsonBinder) BindBody(req *http.Request, out interface{}) error {
 	if req.Body == nil {
 		return nil
 	}
@@ -54,95 +55,17 @@ func (b jsonBinder) bindBody(req *http.Request, out interface{}) error {
 	return json.NewDecoder(req.Body).Decode(out)
 }
 
-func (b jsonBinder) bindQueryString(req *http.Request, out interface{}) error {
-	//fmt.Printf("+++++++++++++ QUERY: %v\n", req.URL.Query())
-	err := b.bindValues(req.URL.Query(), out)
-	if err != nil {
-		return fmt.Errorf("bind query string: %w", err)
-	}
-	return nil
+func (b jsonBinder) BindQueryString(req *http.Request, out interface{}) error {
+	return b.bindValues(req.URL.Query(), out)
 }
 
-func (b jsonBinder) bindPathParams(req *http.Request, out interface{}) error {
+func (b jsonBinder) BindPathParams(req *http.Request, out interface{}) error {
 	params := httprouter.ParamsFromContext(req.Context())
 	values := url.Values{}
 	for _, param := range params {
 		values[param.Key] = []string{param.Value}
 	}
-
-	//fmt.Printf(">>>>> Bind values: %v\n", values)
-	err := b.bindValues(values, out)
-	if err != nil {
-		return fmt.Errorf("bind path params: %w", err)
-	}
-	return nil
-}
-
-type jsonType int
-
-const (
-	jsonTypeNil    = jsonType(0)
-	jsonTypeString = jsonType(1)
-	jsonTypeNumber = jsonType(2)
-	jsonTypeBool   = jsonType(3)
-	jsonTypeObject = jsonType(4)
-	jsonTypeArray  = jsonType(5)
-)
-
-func (b jsonBinder) toClosestJSONType(outValue reflect.Value, key []string) jsonType {
-	keyLength := len(key)
-	if keyLength < 1 {
-		return jsonTypeNil
-	}
-	if outValue.Kind() != reflect.Struct {
-		return jsonTypeNil
-	}
-
-	currentType := outValue.Type()
-	currentJSONType := jsonTypeObject
-	for i := 0; i < keyLength; i++ {
-		finalSegment := i >= keyLength-1
-		field, ok := lookupField(currentType, key[i])
-
-		if !ok {
-			return jsonTypeNil
-		}
-
-		currentType = field.Type
-		currentJSONType = fieldToJSONType(field)
-
-		// There are more segments left in the key (e.g. we're only on "bar" of the key "foo.bar.baz.blah"),
-		// so update our cursor type so that we can continue to iterate deeper into the structure. If, however,
-		// the value is not a struct or map, we can't have attributes on it, so we've got a mismatch between
-		// the incoming data that thinks the structure is more rich than it is. In the example maybe "foo.bar"
-		// is actually a string when you look at the Go models, so we can't possibly resolve the
-		// attribute "baz" on a string.
-		if !finalSegment && currentJSONType != jsonTypeObject {
-			return jsonTypeNil
-		}
-	}
-	return currentJSONType
-}
-
-func fieldToJSONType(field reflect.StructField) jsonType {
-	switch field.Type.Kind() {
-	case reflect.String:
-		return jsonTypeString
-	case reflect.Bool:
-		return jsonTypeBool
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return jsonTypeNumber
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return jsonTypeNumber
-	case reflect.Float32, reflect.Float64:
-		return jsonTypeNumber
-	case reflect.Array, reflect.Slice:
-		return jsonTypeArray
-	case reflect.Map, reflect.Struct:
-		return jsonTypeObject
-	default:
-		return jsonTypeNil
-	}
+	return b.bindValues(values, out)
 }
 
 func (b jsonBinder) bindValues(requestValues url.Values, out interface{}) error {
@@ -164,11 +87,10 @@ func (b jsonBinder) bindValues(requestValues url.Values, out interface{}) error 
 		// that will most naturally unmarshal to the Go type. So if the Go data type for the "baz" field
 		// is uint16 then we'd expect this to return 'jsonTypeNumber'. If "baz" were a string then
 		// we'd expect this to return 'jsonTypeString', and so on.
-		valueType := b.toClosestJSONType(outValue, keySegments)
+		valueType := b.keyToJSONType(outValue, keySegments)
 
 		// We didn't find a field path with that name (e.g. the key was "name" but there was no field called "name")
 		if valueType == jsonTypeNil {
-			//log.Printf("skipping param without equivalent field: %s", key)
 			continue
 		}
 		// Maybe you provided "foo.bar.baz=4" and there was is a field at "out.foo.bar.baz", but it's
@@ -181,25 +103,30 @@ func (b jsonBinder) bindValues(requestValues url.Values, out interface{}) error 
 		// Convert the parameter "foo.bar.baz=4" into {"foo":{"bar":{"baz":4}}} so that the standard
 		// JSON decoder can work its magic to apply that to 'out' properly.
 		buf.Reset()
-		for i, keySegment := range keySegments {
-			finalSegment := i == len(keySegments)-1
+		b.writeValueJSON(buf, keySegments, value[0], valueType)
 
-			buf.WriteString(`{"`)
-			buf.WriteString(keySegment)
-			buf.WriteString(`":`)
-			if finalSegment {
-				b.writeBindingValueJSON(buf, value[0], valueType)
-			}
-		}
-		for i := 0; i < len(keySegments); i++ {
-			buf.WriteString("}")
-		}
-
+		// Now that we have a close-enough JSON representation of your parameter, let the standard
+		// JSON decoder do its magic.
 		if err := decoder.Decode(out); err != nil {
-			return fmt.Errorf("unable to bind '%s': %w", key, err)
+			return fmt.Errorf("unable to bind value '%s'='%s': %w", key, value[0], err)
 		}
 	}
 	return nil
+}
+
+// writeValueJSON accepts the decomposed parameter key (e.g. "foo.bar.baz") and the raw string value (e.g. "moo")
+// and writes JSON to the buffer which can be used in standard JSON decoding/unmarshaling to apply the value
+// to the out object (e.g. `{"foo":{"bar":{"baz":"moo"}}}`).
+func (b jsonBinder) writeValueJSON(buf *bytes.Buffer, keySegments []string, value string, valueType jsonType) {
+	for _, keySegment := range keySegments {
+		buf.WriteString(`{"`)
+		buf.WriteString(keySegment)
+		buf.WriteString(`":`)
+	}
+	b.writeBindingValueJSON(buf, value, valueType)
+	for i := 0; i < len(keySegments); i++ {
+		buf.WriteString("}")
+	}
 }
 
 // writeBindingValueJSON outputs the right-hand-side of the JSON we're going to use to try and bind
@@ -221,38 +148,71 @@ func (b jsonBinder) writeBindingValueJSON(buf *bytes.Buffer, value string, value
 	}
 }
 
-var noField = reflect.StructField{}
+// jsonType describes all of the possible JSON data types.
+type jsonType int
 
-func lookupField(structType reflect.Type, name string) (reflect.StructField, bool) {
-	for i := 0; i < structType.NumField(); i++ {
-		field := structType.Field(i)
-		if strings.EqualFold(name, fieldMappingName(field)) {
-			return field, true
+const (
+	jsonTypeNil    = jsonType(0)
+	jsonTypeString = jsonType(1)
+	jsonTypeNumber = jsonType(2)
+	jsonTypeBool   = jsonType(3)
+	jsonTypeObject = jsonType(4)
+	jsonTypeArray  = jsonType(5)
+)
+
+func (b jsonBinder) keyToJSONType(outValue reflect.Value, key []string) jsonType {
+	keyLength := len(key)
+	if keyLength < 1 {
+		return jsonTypeNil
+	}
+	if outValue.Kind() != reflect.Struct {
+		return jsonTypeNil
+	}
+
+	currentType := outValue.Type()
+	currentJSONType := jsonTypeObject
+	for i := 0; i < keyLength; i++ {
+		field, ok := reflection.FindField(currentType, key[i])
+		if !ok {
+			return jsonTypeNil
+		}
+
+		currentType = field.Type
+		currentJSONType = b.fieldToJSONType(field)
+
+		// There are more segments left in the key (e.g. we're only on "bar" of the key "foo.bar.baz.blah"),
+		// so update our cursor type so that we can continue to iterate deeper into the structure. If, however,
+		// the value is not a struct or map, we can't have attributes on it, so we've got a mismatch between
+		// the incoming data that thinks the structure is more rich than it is. In the example maybe "foo.bar"
+		// is actually a string when you look at the Go models, so we can't possibly resolve the
+		// attribute "baz" on a string.
+		finalSegment := i >= keyLength-1
+		if !finalSegment && currentJSONType != jsonTypeObject {
+			return jsonTypeNil
 		}
 	}
-	return noField, false
+	return currentJSONType
 }
 
-func fieldMappingName(field reflect.StructField) string {
-	jsonTag, ok := field.Tag.Lookup("json")
-	if !ok {
-		return field.Name
-	}
-	// You're actually omitting this field, so don't return something that can be matched
-	if jsonTag == "" || jsonTag == "-" {
-		return ""
-	}
-
-	// Parse the `json` tag to determine how the user has re-mapped the field.
-	switch comma := strings.IndexRune(jsonTag, ','); comma {
-	case -1:
-		// e.g. `json:"firstName"`
-		return jsonTag
-	case 0:
-		// e.g. `json:",omitempty"` (not remapped so use fields actual name)
-		return field.Name
+// fieldToJSONType looks at the Go type of some field on a struct and returns the JSON data type
+// that will most likely unmarshal to that field w/o an error.
+func (b jsonBinder) fieldToJSONType(field reflect.StructField) jsonType {
+	switch field.Type.Kind() {
+	case reflect.String:
+		return jsonTypeString
+	case reflect.Bool:
+		return jsonTypeBool
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return jsonTypeNumber
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return jsonTypeNumber
+	case reflect.Float32, reflect.Float64:
+		return jsonTypeNumber
+	case reflect.Array, reflect.Slice:
+		return jsonTypeArray
+	case reflect.Map, reflect.Struct:
+		return jsonTypeObject
 	default:
-		// e.g. `json:"firstName,omitempty" (just use the remapped name)
-		return jsonTag[0:comma]
+		return jsonTypeNil
 	}
 }
