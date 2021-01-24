@@ -22,7 +22,7 @@ func main() {
 		rpc.WithPrefix("v2"),
 	)
 
-	//go runClientTest()
+	go runClientTest()
 	fmt.Println("[SERVER] Running on :8080")
 	http.ListenAndServe(":8080", gw)
 }

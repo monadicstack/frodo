@@ -27,21 +27,6 @@ type Context struct {
 	Services []*ServiceDeclaration
 	// Models encapsulates snapshot info for all service request/response structs that were defined in the input file.
 	Models []*ServiceModelDeclaration
-
-	// currentService is used internally when processing method info to know what service you're "inside" of.
-	currentService *ServiceDeclaration
-	// currentMethod is used internally when processing field info to know what service operation you're "inside" of.
-	currentMethod *ServiceMethodDeclaration
-}
-
-// AddService appends a service definition to this parsing context.
-func (ctx *Context) AddService(service *ServiceDeclaration) {
-	ctx.Services = append(ctx.Services, service)
-}
-
-// AddModel appends a request/response struct definition to this parsing context.
-func (ctx *Context) AddModel(model *ServiceModelDeclaration) {
-	ctx.Models = append(ctx.Models, model)
 }
 
 // ModelByName looks through "Models" to find the one whose method/function name matches 'name'.
