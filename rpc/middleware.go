@@ -30,7 +30,7 @@ type Middleware interface {
 	ServeHTTP(w http.ResponseWriter, req *http.Request, next http.HandlerFunc)
 }
 
-// Middleware is a component that conforms to the 'negroni' middleware function. It accepts the
+// MiddlewareFunc is a component that conforms to the 'negroni' middleware function. It accepts the
 // standard HTTP inputs as well as the rest of the computation.
 type MiddlewareFunc func(w http.ResponseWriter, req *http.Request, next http.HandlerFunc)
 
