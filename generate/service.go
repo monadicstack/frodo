@@ -12,8 +12,8 @@ import (
 // creates a directory for the service code to live, a declaration file that contains the
 // interface and model definitions, and a skeleton implementation. These all help establish some
 // of the base patterns you should use when working with frodo services.
-func ServiceScaffold(serviceName string, path string) error {
-	shortName := serviceName
+func ServiceScaffold(request ServiceScaffoldRequest) error {
+	shortName := request.ServiceName
 	shortName = strings.TrimSuffix(shortName, "Service")
 	shortName = strings.TrimSuffix(shortName, "service")
 
@@ -21,18 +21,18 @@ func ServiceScaffold(serviceName string, path string) error {
 	shortNameTitle := strings.Title(shortName)
 
 	ctx := scaffoldServiceContext{
-		RawName:        serviceName,
+		Request:        request,
 		ShortName:      shortNameTitle,
 		ShortNameLower: shortNameLower,
 		InterfaceName:  shortNameTitle + "Service",
 		HandlerName:    shortNameTitle + "ServiceHandler",
-		Path:           path,
+		Directory:      request.Directory,
 	}
 
-	if path == "" {
-		ctx.Path = ctx.ShortNameLower
+	if ctx.Directory == "" {
+		ctx.Directory = ctx.ShortNameLower
 	}
-	ctx.Package = filepath.Base(ctx.Path)
+	ctx.Package = filepath.Base(ctx.Directory)
 
 	if err := scaffoldDirectory(ctx); err != nil {
 		return err
@@ -46,24 +46,40 @@ func ServiceScaffold(serviceName string, path string) error {
 	return nil
 }
 
+// ServiceScaffoldRequest contains the inputs from our "frodo create" CLI command.
+type ServiceScaffoldRequest struct {
+	// ServiceName is the value of the --service argument.
+	ServiceName string
+	// Directory is the value of the --dir argument which defines where the new .go files will be written.
+	Directory string
+	// Force is the status of the --force flag to overwrite files if they already exist.
+	Force bool
+}
+
 func scaffoldDirectory(ctx scaffoldServiceContext) error {
-	dirInfo, err := os.Stat(ctx.Path)
+	info, err := os.Stat(ctx.Directory)
 	if os.IsNotExist(err) {
-		return os.MkdirAll(ctx.Path, 0777)
+		return os.MkdirAll(ctx.Directory, 0777)
 	}
-	if !dirInfo.IsDir() {
-		return fmt.Errorf("unable to create service: '%s' is not a directory", ctx.Path)
+	if !info.IsDir() {
+		return fmt.Errorf("unable to create service: '%s' is not a directory", ctx.Directory)
 	}
 	return nil
 }
 
 func scaffoldTemplate(ctx scaffoldServiceContext, t *template.Template) error {
-	path := filepath.Join(ctx.Path, ctx.ShortNameLower+t.Name())
+	path := filepath.Join(ctx.Directory, ctx.ShortNameLower+"_"+t.Name())
+
+	// Only allow you to overwrite the file if you included the --force argument.
+	_, err := os.Stat(path)
+	if !os.IsNotExist(err) && !ctx.Request.Force {
+		return fmt.Errorf("unable to open %s: already exists (use --force to overwrite it)", path)
+	}
 
 	_ = os.Remove(path)
 	outputFile, err := os.Create(path)
 	if err != nil {
-		return fmt.Errorf("unable to open file: %s: %w", path, err)
+		return fmt.Errorf("unable to open %s: %w", path, err)
 	}
 	defer outputFile.Close()
 
@@ -75,18 +91,18 @@ func scaffoldTemplate(ctx scaffoldServiceContext, t *template.Template) error {
 }
 
 type scaffoldServiceContext struct {
-	// RawName is the exact input that the user provided when invoking the scaffolding command.
-	RawName string
-	// ShortNameLower is the name of the service w/o the "Service" suffix (e.g. "Greeter")
+	// Request are the raw incoming params to the scaffolding operation we're processing.
+	Request ServiceScaffoldRequest
+	// ShortNameLower is the name of the service w/o the "Service" suffix (e.g. "Greeter").
 	ShortName string
-	// ShortNameLower is the name of the service w/o the "Service" suffix in all lower case (e.g. "greeter")
+	// ShortNameLower is the name of the service w/o the "Service" suffix in all lower case (e.g. "greeter").
 	ShortNameLower string
-	// InterfaceName is the "cleaned up" version used for the service interface (e.g. "GreeterService")
+	// InterfaceName is the "cleaned up" version used for the service interface (e.g. "GreeterService").
 	InterfaceName string
-	// HandlerName is the name of the struct for the real implementation (e.g. "GreeterServiceHandler")
+	// HandlerName is the name of the struct for the real implementation (e.g. "GreeterServiceHandler").
 	HandlerName string
-	// Path is the directory where we will put the declaration file for the service.
-	Path string
+	// Directory is the directory where we will put the declaration file for the service.
+	Directory string
 	// Package is the name of the package that the new service will belong to.
 	Package string
 }

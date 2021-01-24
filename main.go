@@ -113,6 +113,7 @@ func (c CreateCommand) Cobra() *cobra.Command {
 	}
 	cmd.Flags().StringP("service", "s", "", "The name of the service to create (doesn't have to end in 'Service')")
 	cmd.Flags().StringP("dir", "d", "", "Path to the directory where we'll write the Go file (defaults to new directory named after the service)")
+	cmd.Flags().BoolP("force", "f", false, "Overwrite declaration/handler source code files if they exist. (default=false)")
 
 	_ = cmd.MarkFlagRequired("service")
 	return cmd
@@ -120,8 +121,9 @@ func (c CreateCommand) Cobra() *cobra.Command {
 
 // Run handles when the user executes 'frodo create'; scaffolding a new service directory/declaration.
 func (c CreateCommand) Run(cmd *cobra.Command, _ []string) error {
-	return generate.ServiceScaffold(
-		cmd.Flag("service").Value.String(),
-		cmd.Flag("dir").Value.String(),
-	)
+	return generate.ServiceScaffold(generate.ServiceScaffoldRequest{
+		ServiceName: cmd.Flag("service").Value.String(),
+		Directory:   cmd.Flag("dir").Value.String(),
+		Force:       cmd.Flag("force").Value.String() == "true",
+	})
 }
