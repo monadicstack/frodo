@@ -14,6 +14,13 @@ import (
 	"golang.org/x/mod/modfile"
 )
 
+// ParseFile parses a source code file containing a service interface declaration as well as the
+// structs for the request/response inputs and outputs. It will aggregate all of the services/methods/models
+// described in the source code in a much more simple/direct Context.
+//
+// The resulting Context contains all of the information from the source code that we need to generate
+// clients/gateways for the service(s). It will also be used as the input value when evaluating any
+// of our artifact templates.
 func ParseFile(inputPath string) (*Context, error) {
 	fileSet := token.NewFileSet()
 
@@ -33,68 +40,76 @@ func ParseFile(inputPath string) (*Context, error) {
 		AbsolutePath: absolutePath,
 	}
 
-	if err = ParseModuleInfo(ctx); err != nil {
+	if ctx.Module, err = ParseModuleInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if err = ParsePackageInfo(ctx); err != nil {
+	if ctx.Package, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if err = ParseModelTypes(ctx); err != nil {
+	if ctx.Models, err = ParseServiceModels(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if err = ParseServiceInterfaces(ctx); err != nil {
+	if ctx.Services, err = ParseServices(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
 	return ctx, nil
 }
 
-func ParsePackageInfo(ctx *Context) error {
+// ParsePackageInfo overlays your project's "go.mod" file and your input file/path to figure
+// out the fully qualified package info for the input service. We'll then apply our conventions
+// to construct info about the output package where we'll put all of our output artifacts.
+func ParsePackageInfo(ctx *Context) (input *PackageDeclaration, output *PackageDeclaration, err error) {
 	packageName := ctx.File.Name.Name
 	packageDir := filepath.Dir(ctx.Path)
 	packageDirRelative := strings.TrimPrefix(packageDir, ctx.Module.Directory)
 
-	ctx.Package = &PackageDeclaration{
+	input = &PackageDeclaration{
 		Name:      packageName,
 		Import:    filepath.Join(ctx.Module.Name, packageDirRelative),
 		Directory: filepath.Dir(ctx.Path),
 	}
-	ctx.OutputPackage = &PackageDeclaration{
+	output = &PackageDeclaration{
 		Name:      packageName + "rpc",
-		Import:    filepath.Join(ctx.Package.Import, "gen"),
-		Directory: filepath.Join(ctx.Package.Directory, "gen"),
+		Import:    filepath.Join(input.Import, "gen"),
+		Directory: filepath.Join(input.Directory, "gen"),
 	}
-	return nil
+	return input, output, nil
 }
 
-func ParseModuleInfo(ctx *Context) error {
+// ParseModuleInfo cherry picks a tiny bit of info from your "go.mod" file that we use
+// in processing your services.
+func ParseModuleInfo(ctx *Context) (*ModuleDeclaration, error) {
 	inputFilePath, err := filepath.Abs(ctx.Path)
 	if err != nil {
-		return fmt.Errorf("unable to determine absolute path: %w", err)
+		return nil, fmt.Errorf("unable to determine absolute path: %w", err)
 	}
 
 	// Look in the input file's directory (an all of its parents/ancestors) for the "go.mod" file.
-	goModPath, err := findGoDotMod(filepath.Dir(inputFilePath))
+	goModPath, err := FindGoDotMod(filepath.Dir(inputFilePath))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Read/parse the "go.mod" file so we can extract the module/package info we need.
 	goModData, err := ioutil.ReadFile(goModPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	goModFile, err := modfile.Parse(goModPath, goModData, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	ctx.Module = &ModuleDeclaration{
+	return &ModuleDeclaration{
 		Name:      goModFile.Module.Mod.Path,
 		Directory: filepath.Dir(goModPath),
-	}
-	return nil
+	}, nil
 }
 
-func findGoDotMod(dirName string) (string, error) {
+// FindGoDotMod starts in the current directory provided and recursively checks
+// parent directories until it encounters a "go.mod" file. When it does, this will
+// return a path to the file. You'll receive an error if we can't find a "go.mod"
+// file or the input is not a valid directory.
+func FindGoDotMod(dirName string) (string, error) {
 	if dirName == "" || dirName == "/" {
 		return "", fmt.Errorf("unable to find 'go.mod' for project")
 	}
@@ -109,128 +124,128 @@ func findGoDotMod(dirName string) (string, error) {
 			return filepath.Join(dirName, file.Name()), nil
 		}
 	}
-	return findGoDotMod(filepath.Dir(dirName))
+	return FindGoDotMod(filepath.Dir(dirName))
 }
 
-func ParseModelTypes(ctx *Context) error {
+// ParseServiceModels looks at all of the top-level 'type XXX' definitions looking for
+// structs and type aliases that you plan to use as the requests/responses to all of
+// your service functions.
+func ParseServiceModels(ctx *Context) ([]*ServiceModelDeclaration, error) {
+	var models []*ServiceModelDeclaration
 	for _, scopeObj := range ctx.File.Scope.Objects {
 		if !IsModelDeclaration(scopeObj) {
 			continue
 		}
 
-		err := ParseModelStruct(ctx, scopeObj)
+		model, err := ParseServiceModel(ctx, scopeObj)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		models = append(models, model)
 	}
-	return nil
+	return models, nil
 }
 
-func ParseModelStruct(ctx *Context, astObject *ast.Object) error {
-	ctx.AddModel(&ServiceModelDeclaration{
-		Name: astObject.Name,
-		Node: astObject,
-	})
-	return nil
+// ParseServiceModel accepts a single 'type XXX' node and generates the model information
+// that we want to capture for the service context.
+func ParseServiceModel(_ *Context, modelNode *ast.Object) (*ServiceModelDeclaration, error) {
+	return &ServiceModelDeclaration{
+		Name: modelNode.Name,
+		Node: modelNode,
+	}, nil
 }
 
-func ParseServiceInterfaces(ctx *Context) error {
+// ParseServices looks for all 'type XxxService interface' declarations and extracts all
+// service/operation info from it that we need to generate our artifacts. Most of the time
+// the resulting slice will only contain 1 item since its generally good design to only define
+// a single service in a file, but you might have declared multiple.
+func ParseServices(ctx *Context) ([]*ServiceDeclaration, error) {
+	var services []*ServiceDeclaration
 	for _, scopeObj := range ctx.File.Scope.Objects {
 		if !IsServiceDeclaration(scopeObj) {
 			continue
 		}
 
-		err := ParseService(ctx, scopeObj)
+		service, err := ParseService(ctx, scopeObj)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		services = append(services, service)
 	}
-	return nil
+	return services, nil
 }
 
-func ParseService(ctx *Context, serviceObj *ast.Object) error {
+// ParseService accepts the syntax tree node for the 'type XxxService interface' declaration
+// for a single service and extracts all meaningful information about it. The service/function/model
+// info is packaged up in a service declaration which you can add to your Context.
+func ParseService(ctx *Context, serviceObj *ast.Object) (*ServiceDeclaration, error) {
 	service := &ServiceDeclaration{
 		Name: serviceObj.Name,
 		Node: serviceObj,
 	}
 
-	ctx.currentService = service
-	defer func() {
-		ctx.currentService = nil
-	}()
+	methods, err := ParseServiceMethods(ctx, serviceObj)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", serviceObj.Name, err)
+	}
+	service.Methods = methods
+	return service, nil
+}
 
-	interfaceType, _ := serviceObj.
+// ParseServiceMethods accepts the syntax tree node for a 'type XxxService interface' declaration,
+// iterates the functions it defines and creates declarations for each one with just the info from
+// it that we need when building clients/gateways for the service.
+func ParseServiceMethods(ctx *Context, serviceNode *ast.Object) ([]*ServiceMethodDeclaration, error) {
+	interfaceType, _ := serviceNode.
 		Decl.(*ast.TypeSpec).
 		Type.(*ast.InterfaceType)
 
+	var methods []*ServiceMethodDeclaration
 	for _, methodObj := range interfaceType.Methods.List {
-		err := ParseServiceMethod(ctx, methodObj)
+		method, err := ParseServiceMethod(ctx, serviceNode, methodObj)
 		if err != nil {
-			return fmt.Errorf("%s: %w", serviceObj.Name, err)
+			return nil, fmt.Errorf("%s: %w", serviceNode.Name, err)
 		}
+		methods = append(methods, method)
 	}
-
-	ctx.AddService(service)
-	return nil
+	return methods, nil
 }
 
-func fieldName(field *ast.Field) string {
-	if len(field.Names) == 0 {
-		return ""
-	}
-	return field.Names[0].Name
-}
-
-func typeName(field *ast.Field) string {
-	switch fieldType := field.Type.(type) {
-	case *ast.Ident:
-		return fieldType.Name
-	case *ast.SelectorExpr:
-		return fmt.Sprintf("%v.%v", fieldType.X, fieldType.Sel)
-	case *ast.StarExpr:
-		return fmt.Sprintf("%v", fieldType.X)
-	default:
-		return ""
-	}
-}
-
-func ParseServiceMethod(ctx *Context, methodObj *ast.Field) error {
+// ParseServiceMethod accepts the ast node for a service interface and one if its functions, then
+// aggregates all of the information about that service operation for the context. It captures
+// the name as well as HTTP-related info (status, method, path) to use in the gateway.
+func ParseServiceMethod(ctx *Context, serviceNode *ast.Object, methodObj *ast.Field) (*ServiceMethodDeclaration, error) {
 	name := fieldName(methodObj)
 	method := &ServiceMethodDeclaration{
 		Name:       name,
 		Node:       methodObj,
 		HTTPStatus: http.StatusOK,
 		HTTPMethod: "POST",
-		HTTPPath:   "/" + ctx.currentService.Name + "." + fieldName(methodObj),
+		HTTPPath:   "/" + serviceNode.Name + "." + fieldName(methodObj),
 	}
-
-	ctx.currentMethod = method
-	defer func() {
-		ctx.currentMethod = nil
-	}()
 
 	function := methodObj.Type.(*ast.FuncType)
 
 	// Check to make sure that we have 2 parameters w/ the correct types (context and your request)
 	if len(function.Params.List) != 2 {
-		return fmt.Errorf("%s: does not have 2 parameters", name)
+		return nil, fmt.Errorf("%s: does not have 2 parameters", name)
 	}
 	if !isValidParam1(ctx, function.Params.List[0]) {
-		return fmt.Errorf("%s: first param is not a context.Context", name)
+		return nil, fmt.Errorf("%s: first param is not a context.Context", name)
 	}
 	if !isValidParam2(ctx, function.Params.List[1]) {
-		return fmt.Errorf("%s: second param type is defined in this file", name)
+		return nil, fmt.Errorf("%s: second param type is defined in this file", name)
 	}
 
 	// Check to make sure that we have 2 return values (your response type and an error)
 	if len(function.Results.List) != 2 {
-		return fmt.Errorf("%s: does not return 2 values", name)
+		return nil, fmt.Errorf("%s: does not return 2 values", name)
 	}
 	if !isValidReturnValue1(ctx, function.Results.List[0]) {
-		return fmt.Errorf("%s: first return value is not deifned in this file", name)
+		return nil, fmt.Errorf("%s: first return value is not deifned in this file", name)
 	}
 	if !isValidReturnValue2(ctx, function.Results.List[1]) {
-		return fmt.Errorf("%s: second return value is not an error", name)
+		return nil, fmt.Errorf("%s: second return value is not an error", name)
 	}
 
 	// Connect the model/struct declarations for request/response to this method.
@@ -239,17 +254,20 @@ func ParseServiceMethod(ctx *Context, methodObj *ast.Field) error {
 
 	// Check the doc comments for the function to determine if they're providing
 	// a custom method/path for the endpoint as opposed to the default RPC-style we assign.
-	applyDocCommentOptions(ctx, methodObj, method)
-
-	ctx.currentService.AddMethod(method)
-	return nil
+	applyMethodCommentOptions(ctx, methodObj, method)
+	return method, nil
 }
 
-func applyDocCommentOptions(_ *Context, methodObj *ast.Field, method *ServiceMethodDeclaration) {
+// applyMethodCommentOptions looks at all of your GoDoc comments for some of the "super special" ones
+// that actually apply different options to your service method. For instance it looks for comments
+// like "HTTP 202" to change the output HTTP status cod the operation.
+func applyMethodCommentOptions(_ *Context, methodObj *ast.Field, method *ServiceMethodDeclaration) {
 	if methodObj.Doc == nil {
 		return
 	}
 	for _, doc := range methodObj.Doc.List {
+		// The raw strings in the AST still look like "// HTTP 202" so normalize it down to
+		// just "HTTP 202" without slashes/spaces, etc.
 		comment := doc.Text
 		comment = strings.TrimSpace(comment)
 		comment = strings.TrimPrefix(comment, "//")
@@ -286,6 +304,8 @@ func applyDocCommentOptions(_ *Context, methodObj *ast.Field, method *ServiceMet
 	method.Documentation = method.Documentation.Trim()
 }
 
+// parseHTTPStatus is just a strconv.ParseInt that parses the right hand side of an "HTTP 202"
+// looking comment. If we can't parse it as a number for any reason, we'll default to 200.
 func parseHTTPStatus(statusText string) int {
 	status, err := strconv.ParseInt(statusText, 10, 64)
 	if err != nil {
@@ -296,16 +316,20 @@ func parseHTTPStatus(statusText string) int {
 
 // The first param to all service methods should be a standard "context.Context"
 func isValidParam1(_ *Context, param *ast.Field) bool {
+	// I know... doesn't handle if you decided to alias the context class, but that
+	// should be a fairly infrequent case. I'm going to wait for feedback to determine
+	// if there's a valid need to compare the X in the selector expression to your
+	// file's imports and see if they resolve to the right context class.
 	return typeName(param) == "context.Context"
 }
 
-// The parameter should be a "request" struct that is defined in the file we're parsing, so
-// to be valid, we must have parsed a model with the same type name earlier.
+// The parameter should be a "request" struct/type that is defined in the file we're parsing,
+// so to be valid, we must have parsed a model with the same type name earlier.
 func isValidParam2(ctx *Context, param *ast.Field) bool {
 	return ctx.ModelByName(typeName(param)) != nil
 }
 
-// The first return value should be a "response" struct that you also defined in the file
+// The first return value should be a "response" struct/type that you also defined in the file
 // that we're parsing. There needs to be a struct/type of the same name that we parsed earlier.
 func isValidReturnValue1(ctx *Context, returnVal *ast.Field) bool {
 	return ctx.ModelByName(typeName(returnVal)) != nil
@@ -316,6 +340,10 @@ func isValidReturnValue2(_ *Context, returnVal *ast.Field) bool {
 	return typeName(returnVal) == "error"
 }
 
+// IsServiceDeclaration analyzes a node from the AST and determines if it's a `type XxxService interface`
+// declaration defining one of your services. In addition to being an interface it must also
+// be exported (e.g. "FooService" instead of "fooService") as well as follow the naming convention of
+// ending with the word "Service" (e.g. "FooService" instead of just "Foo").
 func IsServiceDeclaration(astObj *ast.Object) bool {
 	// Only looking for 'type' declarations (e.g. 'type XXX interface')
 	if astObj.Kind != ast.Typ {
@@ -337,12 +365,15 @@ func IsServiceDeclaration(astObj *ast.Object) bool {
 		return false
 	}
 
-	// We're enforcing the convention that the "foo" service is called "FooService", etc.
-	return strings.HasSuffix(astObj.Name, "Service")
+	// We're enforcing the convention that the "foo" service is called "FooService" or "FooSvc"
+	name := astObj.Name
+	return strings.HasSuffix(name, "Service") || strings.HasSuffix(name, "Svc")
 }
 
+// IsModelDeclaration looks at a node from your file's AST and returns true if it's a type
+// declaration that can be used as one of our request/response values to our service operations.
 func IsModelDeclaration(astObj *ast.Object) bool {
-	// Only looking for 'type' declarations (e.g. 'type XXX interface')
+	// Only looking for 'type' declarations (e.g. 'type XXX struct')
 	if astObj.Kind != ast.Typ {
 		return false
 	}
@@ -367,5 +398,25 @@ func IsModelDeclaration(astObj *ast.Object) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func fieldName(field *ast.Field) string {
+	if len(field.Names) == 0 {
+		return ""
+	}
+	return field.Names[0].Name
+}
+
+func typeName(field *ast.Field) string {
+	switch fieldType := field.Type.(type) {
+	case *ast.Ident:
+		return fieldType.Name
+	case *ast.SelectorExpr:
+		return fmt.Sprintf("%v.%v", fieldType.X, fieldType.Sel)
+	case *ast.StarExpr:
+		return fmt.Sprintf("%v", fieldType.X)
+	default:
+		return ""
 	}
 }
