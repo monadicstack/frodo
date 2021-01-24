@@ -365,9 +365,8 @@ func IsServiceDeclaration(astObj *ast.Object) bool {
 		return false
 	}
 
-	// We're enforcing the convention that the "foo" service is called "FooService" or "FooSvc"
-	name := astObj.Name
-	return strings.HasSuffix(name, "Service") || strings.HasSuffix(name, "Svc")
+	// We're enforcing the convention that the "foo" service is called "FooService"
+	return strings.HasSuffix(astObj.Name, "Service")
 }
 
 // IsModelDeclaration looks at a node from your file's AST and returns true if it's a type
