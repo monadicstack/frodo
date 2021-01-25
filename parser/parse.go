@@ -59,9 +59,10 @@ func ParseFile(inputPath string) (*Context, error) {
 // out the fully qualified package info for the input service. We'll then apply our conventions
 // to construct info about the output package where we'll put all of our output artifacts.
 func ParsePackageInfo(ctx *Context) (input *PackageDeclaration, output *PackageDeclaration, err error) {
+	moduleDir, _ := filepath.Abs(ctx.Module.Directory)
+	packageDir, _ := filepath.Abs(filepath.Dir(ctx.Path))
+	packageDirRelative := strings.TrimPrefix(packageDir, moduleDir)
 	packageName := ctx.File.Name.Name
-	packageDir := filepath.Dir(ctx.Path)
-	packageDirRelative := strings.TrimPrefix(packageDir, ctx.Module.Directory)
 
 	input = &PackageDeclaration{
 		Name:      packageName,
