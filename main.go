@@ -62,8 +62,7 @@ func (c ClientCommand) Cobra() *cobra.Command {
 	cmd.Flags().StringP("input", "i", "", "Path to the Go file w/ your service interface.")
 	_ = cmd.MarkFlagRequired("input")
 
-	cmd.Flags().StringP("language", "l", "", "The file extension for the language to output (e.g. 'go' or 'js')")
-	_ = cmd.MarkFlagRequired("language")
+	cmd.Flags().StringP("language", "l", "go", "The file extension for the language to output (e.g. 'go' or 'js')")
 	return cmd
 }
 
