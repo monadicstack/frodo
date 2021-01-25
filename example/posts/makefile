@@ -1,15 +1,12 @@
-SERVICE_NAME=post
-BINARY_NAME=$(SERVICE_NAME)-service
-
 run: build
-	out/$(BINARY_NAME)
+	out/post-service
 
 frodo:
-	../../out/frodo gateway --input=$(SERVICE_NAME)_service.go && \
-	../../out/frodo client  --input=$(SERVICE_NAME)_service.go --language=go
+	frodo gateway --input=post_service.go && \
+	frodo client  --input=post_service.go
 
 build: frodo
-	go build -o out/$(BINARY_NAME) cmd/main.go
+	go build -o out/post-service cmd/main.go
 
 test:
 	go test ./...
