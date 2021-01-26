@@ -489,6 +489,53 @@ It's included in the JSDoc of the client so all of your service/API
 documentation should be available to your IDE even when writing
 your frontend code.
 
+## Creating a New Service Using `frodo create`
+
+This is 100% optional. As we saw in the initial example,
+you can write all of your Go code starting with empty
+files and have a fully distributed service in a few lines of code.
+
+The `frodo` tool, however, has a command that generates a
+lot of that boilerplate for you so that you can get straight
+to solving your customers' problems.
+
+Let's pretend that you wanted to make a new service called
+`UserService`, you can execute the following command:
+
+```shell
+frodo create user
+# or
+frodo create User
+# or
+frodo create UserService
+```
+
+This will create a new package in your project with all of the
+following assets created:
+
+```
+[project]
+  user/
+    makefile
+    user_service.go
+    user_service_handler.go
+    cmd/
+      main.go
+    gen/
+      user_service.gen.gateway.go
+      user_service.gen.client.go
+```
+
+The service will already have a dummy `Create()` function
+just so that there's *something* in the service. You should replace
+that with your own functions and implement them to make the service
+do something useful.
+
+The makefile has some convenience targets for building/running/testing
+your new service as you make updates. The `build` target even
+makes sure that your latest service updates get re-frodo'd so
+your gateway/client are always in sync.
+
 ## Why Not Just Use gRPC?
 
 Simply put... complexity. gRPC solves a lot of hard problems
