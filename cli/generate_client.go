@@ -26,16 +26,15 @@ type GenerateClient struct{}
 func (c GenerateClient) Command() *cobra.Command {
 	request := &GenerateClientRequest{}
 	cmd := &cobra.Command{
-		Use:  "client",
-		Args: cobra.MaximumNArgs(0),
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Use:   "client [flags] FILENAME",
+		Short: "Process a Go source file with your service interface to generate an RPC client proxy for your service(s).",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			request.InputFileName = args[0]
 			return c.Exec(request)
 		},
 	}
-	cmd.Flags().StringVar(&request.InputFileName, "input", "", "Path to the Go file w/ your service interface.")
-	cmd.Flags().StringVar(&request.Language, "language", "go", "The file extension for the language to output (e.g. 'go' or 'js')")
-
-	_ = cmd.MarkFlagRequired("input")
+	cmd.Flags().StringVar(&request.Language, "language", "go", "The file extension of the target language (e.g. 'go' or 'js')")
 	return cmd
 }
 
