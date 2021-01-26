@@ -185,9 +185,9 @@ func writeMetadataHeader(request *http.Request, next RoundTripperFunc) (*http.Re
 	return next(request)
 }
 
-// WithClientPathPrefix should match what you supply if you call WithPrefix when building your service
+// WithClientPrefix should match what you supply if you call WithPrefix when building your service
 // gateway so that all endpoint URLs will be constructed consistently.
-func WithClientPathPrefix(pathPrefix string) ClientOption {
+func WithClientPrefix(pathPrefix string) ClientOption {
 	return func(client *Client) {
 		switch {
 		case pathPrefix == "":
