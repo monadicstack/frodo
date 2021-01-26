@@ -21,14 +21,14 @@ type GenerateGateway struct{}
 func (c GenerateGateway) Command() *cobra.Command {
 	request := &GenerateGatewayRequest{}
 	cmd := &cobra.Command{
-		Use:  "gateway",
-		Args: cobra.MaximumNArgs(0),
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Use:   "gateway [flags] FILENAME",
+		Short: "Process a Go source file with your service interface to generate an RPC/API gateway.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			request.InputFileName = args[0]
 			return c.Exec(request)
 		},
 	}
-	cmd.Flags().StringVar(&request.InputFileName, "input", "", "Path to the Go file w/ your service interface.")
-	_ = cmd.MarkFlagRequired("input")
 	return cmd
 }
 

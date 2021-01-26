@@ -2,10 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/robsignorelli/frodo/parser"
 	"github.com/spf13/cobra"
@@ -19,6 +21,8 @@ type CreateServiceRequest struct {
 	Directory string
 	// Force is the status of the --force flag to overwrite files if they already exist.
 	Force bool
+	// Port defines which HTTP port you want the RPC/HTTP gateway to run on by default.
+	Port int
 }
 
 // CreateService is the scaffolding command that creates a new service directory and a minimal
@@ -27,19 +31,20 @@ type CreateService struct{}
 
 // Command creates the Cobra struct describing this CLI command and its options.
 func (c CreateService) Command() *cobra.Command {
-	args := &CreateServiceRequest{}
+	request := &CreateServiceRequest{}
 	cmd := &cobra.Command{
-		Use:  "create",
-		Args: cobra.MaximumNArgs(0),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return c.Exec(args)
+		Use:   "create [flags] SERVICE_NAME",
+		Short: "Creates a new service in your project with all of the code required to run.",
+		Long:  "This creates a new package in your project for the service. It creates 4 different Go files: your service declaration (interface/structs), your service handler/implementation, the frodo RPC client, and the frodo RPC/API gateway. This also creates a makefile with convenience targets that regenerate your frodo RPC artifacts, build, test, and run your new service.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			request.ServiceName = args[0]
+			return c.Exec(request)
 		},
 	}
-	cmd.Flags().StringVar(&args.ServiceName, "service", "", "The name of the service to create (doesn't have to end in 'Service')")
-	cmd.Flags().StringVar(&args.Directory, "dir", "", "Path to the directory where we'll write the Go file (defaults to new directory named after the service)")
-	cmd.Flags().BoolVar(&args.Force, "force", false, "Overwrite declaration/handler source code files if they exist. (default=false)")
-
-	_ = cmd.MarkFlagRequired("service")
+	cmd.Flags().StringVar(&request.Directory, "dir", "", "Path to the directory where we'll write the Go file (defaults to new directory named after the service)")
+	cmd.Flags().BoolVar(&request.Force, "force", false, "Overwrite declaration/handler source code files if they exist.")
+	cmd.Flags().IntVar(&request.Port, "port", 0, "When generating main(), what port will the RPC/API gateway run on? (default = random port between 9000-9999)")
 	return cmd
 }
 
@@ -62,8 +67,16 @@ func (c CreateService) Exec(request *CreateServiceRequest) error {
 		ServiceName:    shortNameTitle + "Service",
 		HandlerName:    shortNameTitle + "ServiceHandler",
 		Directory:      request.Directory,
+		Port:           request.Port,
 	}
 
+	// Let the user pick their port, but if they didn't, just assign a random one between 9000 and 9999
+	if ctx.Port == 0 {
+		rand.Seed(time.Now().UnixNano())
+		minPort := 9000
+		maxPort := 9999
+		ctx.Port = rand.Intn(maxPort-minPort+1) + minPort
+	}
 	if ctx.Directory == "" {
 		ctx.Directory = ctx.ShortNameLower
 	}
@@ -149,6 +162,8 @@ type createServiceContext struct {
 	Package string
 	// PackageImport is the full import path for this service within the module.
 	PackageImport string
+	// Port is the HTTP port we will have main() listen on to expose the RPC gateway.
+	Port int
 	// Paths contains the directory/filename paths to the various assets we're creating.
 	Paths struct {
 		Service  string
@@ -206,17 +221,32 @@ func (svc *{{ .HandlerName }}) Create(ctx context.Context, request *CreateReques
 }
 `))
 
-var createMakefileTemplate = template.Must(template.New("makefile").Parse(`
+var createMakefileTemplate = template.Must(template.New("makefile").Parse(`#
+# Local development only. This builds and executes the service in a local process.
+#
 run: build
 	out/{{ .ShortNameLower }}
 
+#
+# Runs {{ .ShortNameLower }}_service.go through the 'frodo' code generator to spit out
+# the latest and greatest RPC client/gateway code.
+#
 frodo:
-	frodo gateway --input={{ .ShortNameLower }}_service.go && \
-	frodo client  --input={{ .ShortNameLower }}_service.go
+	frodo gateway {{ .ShortNameLower }}_service.go && \
+	frodo client  {{ .ShortNameLower }}_service.go
 
+#
+# Rebuilds the binary for this service. We will "re-frodo" the service declaration beforehand
+# so that any modifications to your service are always reflected in your client/gateway code
+# without you having to think about it.
+#
 build: frodo
 	go build -o out/{{ .ShortNameLower }} cmd/main.go
 
+#
+# This target hacks the Gibson; what do you think 'test' does? It runs through all of
+# the test suites for this service.
+#
 test:
 	go test ./...
 `))
@@ -233,6 +263,6 @@ import (
 func main() {
 	serviceHandler := {{ .Package }}.{{ .HandlerName }}{}
 	gateway := {{ .Package }}rpc.New{{ .ServiceName }}Gateway(&serviceHandler)
-	http.ListenAndServe(":9001", gateway)
+	http.ListenAndServe(":{{ .Port }}", gateway)
 }
 `))
