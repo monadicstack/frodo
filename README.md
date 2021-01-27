@@ -1,42 +1,42 @@
 # Frodo
 
-`frodo` is a code generator and runtime library that helps
-you write RPC-style (micro) services without actually writing
-any network/transport related code at all. You write your
-services with business logic only and `frodo` exposes them
-over RPC/REST.
+Frodo is a code generator and runtime library that helps
+you write RPC-enabled (micro) services and APIs. It parses
+the interfaces/structs/comments in your service code to 
+generate all of your client/server communication code.
 
-Frodo solves a number of the same problems that gRPC does, but
-with a lot less complexity. It focuses heavily on using
-sane defaults with a strong developer experience that are
-good enough for the vast majority of projects. Just write
-your service code and let Frodo turn them into a distributed
-system.
+* No .proto files. Your services are just idiomatic Go code.
+* Auto-generate APIs that play nicely with `net/http`, middleware, and other standard library compatible API solutions.  
+* Auto-generate RPC clients in multiple languages like Go and JavaScript.
+
+Frodo automates all the boilerplate associated with service
+communication, data marshaling, routing, error handling, etc. so you
+can focus on writing features right now.
 
 ## Getting Started
-
-Add `frodo` to your project using `go install`. This will
-give you the code generating executable `frodo` as well
-as the runtime libraries used to support the RPC for your services.
 
 ```shell
 go install github.com/robsignorelli/frodo
 ```
+This will fetch the `frodo` code generation executable as well
+as the runtime libraries that allow your services to
+communicate with each other.
 
-## Your First Service
+## Example Service
 
-`frodo` doesn't use .proto files or any other archaic DSL
+The `frodo` tool doesn't use .proto files or any other archaic DSL
 files to work its magic. If you follow a few idiomatic
 practices for service development in your code, `frodo`
 will "just work".
 
 #### Step 1: Define Your Service
+
 Your first step is to define a .go file that simply defines
 the contract for your service; the interface as well as the
 inputs/outputs.
 
 ```go
-// [project]/calc/calculator_service.go
+// calculator_service.go
 package calc
 
 import (
@@ -44,9 +44,7 @@ import (
 )
 
 type CalculatorService interface {
-    // Add calculates the sum of A + B.
     Add(context.Context, *AddRequest) (*AddResponse, error)
-    // Sub calculates the difference of A - B.
     Sub(context.Context, *SubRequest) (*SubResponse, error)
 }
 
@@ -69,17 +67,16 @@ type SubResponse struct {
 }
 ```
 
-At this point you haven't defined *how* this service actually
-does its work. You just described what operations are
-available.
+You haven't actually defined *how* this service gets
+this work done; just which operations are available.
 
-We actually have enough for `frodo` to generate
-every RPC artifact for you right now. We want you, however,
-to think about your service, not RPC, so go ahead and
-implement your service handler to behave how you want.
+We actually have enough for `frodo` to
+generate your RPC/API code already, but we'll hold off
+for a moment. Frodo frees you up to focus on building
+features, so let's actually implement service.
 
 ```go
-// [project]/calc/calculator_handler.go
+// calculator_service_handler.go
 package calc
 
 import (
@@ -89,44 +86,38 @@ import (
 type CalculatorServiceHandler struct {}
 
 func (svc CalculatorServiceHandler) Add(ctx context.Context, req *AddRequest) (*AddResponse, error) {
-    return &AddResponse{Result: req.A + req.B}, nil
+    result := req.A + req.B
+    return &AddResponse{Result: result}, nil
 }
 
 func (svc CalculatorServiceHandler) Sub(ctx context.Context, req *SubRequest) (*SubResponse, error) {
-    return &SubResponse{Result: req.A - req.B}, nil
+    result := req.A - req.B
+    return &SubResponse{Result: result}, nil
 }
 ```
 
-Notice that there's nothing in your service regarding
-RPC, JSON, HTTP, etc. It's just some simple logic that
-accepts an input value and returns an output value.
-
-#### Step 2: Generate Your `frodo` RPC Client and Gateway
+#### Step 2: Generate Your RPC Client and Gateway
 
 At this point, you've just written the same code that you (hopefully)
-would have written even if you weren't using `frodo`. Next,
-we want to auto-generate the RPC/networking code that
-will let you talk to instances of this service remotely.
-Run these commands in a terminal from your project's root
-directory:
+would have written even if you weren't using Frodo. Next,
+we want to auto-generate two things:
+
+* A "gateway" that allows an instance of your CalculatorService
+  to listen for incoming requests (via an HTTP API).
+* A "client" struct that communicates with that API to get work done.
+
+Just run these two commands in a terminal:
 
 ```shell
 # Feed it the service interface code, not the handler.
-frodo gateway calc/calculator_service.go
-frodo client  calc/calculator_service.go
+frodo gateway calculator_service.go
+frodo client  calculator_service.go
 ```
-This will create the directory `calc/gen/` which includes
-two new .go files; one that will run the RPC service for 
-your "live" instance and another client that will let you
-make calls to that instance remotely.
 
-### Step 3: Run/Expose Your Calculator Service
+### Step 3: Run Your Calculator API Server
 
-At this point you have everything you need to run a Go
-program that listens for calculator service requests,
-and another that makes calls to it. First, let's fire
-up an HTTP server that makes your `CalculatorService`
-available for consumption.
+Let's fire up an HTTP server on port 9000 that makes your service
+available for consumption (you can choose any port you want, obviously).  
 
 ```go
 package main
@@ -135,7 +126,7 @@ import (
     "net/http"
 
     "github.com/your/project/calc"
-    "github.com/your/project/calc/gen"
+    calcrpc "github.com/your/project/calc/gen"
 )
 
 func main() {
@@ -146,7 +137,7 @@ func main() {
 ```
 Seriously. That's the whole program.
 
-Compile and run it, and your service is now ready
+Compile and run it, and your service/API is now ready
 to be consumed. We'll use the Go client we generated in just
 a moment, but you can try this out right now by simply
 using curl:
@@ -154,17 +145,22 @@ using curl:
 ```shell
 curl -d '{"A":5, "B":2}' http://localhost:9000/CalculatorService.Add
 # {"Result":7}
-
 curl -d '{"A":5, "B":2}' http://localhost:9000/CalculatorService.Sub
 # {"Result":3}
 ```
 
 #### Step 4: Consume Your Greeter Service
 
-Making raw HTTP calls is somewhat of a pain. You've got to
-deal with JSON, status codes, and so much other noise. Let's
-just use the strongly-typed client that `frodo` created
-back in step 2.
+While you can use raw HTTP to communicate with the service,
+let's use our auto-generated client to hide the gory
+details of JSON marshaling, status code translation, and
+other noise.
+
+The client actually implements CalculatorService
+just like the server/handler does. As a result the RPC-style
+call will "feel" like you're executing the service work
+locally, when in reality the client is actually making API
+calls to the server running on port 9000.
 
 ```go
 package main
@@ -179,11 +175,8 @@ import (
 )
 
 func main() {
-    // The client also implements CalculatorService, so just
-    // make calls on it like you would if it were a local instance.
-    client := calcrpc.NewCalculatorServiceClient("http://localhost:9000")
-
     ctx := context.Background()
+    client := calcrpc.NewCalculatorServiceClient("http://localhost:9000")
 
     add, err := client.Add(ctx, &calc.AddRequest{A:5, B:2})
     if err != nil {
@@ -205,48 +198,46 @@ Compile/run this program, and you should see the following output:
 Add(5, 2) -> 7
 Sub(5, 2) -> 3
 ```
-That's it! Just write some idiomatic Go services and `frodo`
-takes care of the mucky muck of dealing with marshaling,
-transports, error handling, and everything else that makes
-distributed services tricky.
+That's it!
+
+For more examples of how to write services that let Frodo take
+care of the RPC/API boilerplate, take a look in the [example/](https://github.com/robsignorelli/frodo/tree/main/example)
+directory of this repo.
 
 ## RESTful URLs/Endpoints
 
-You might have noticed that the URLs in the `curl` sample
+You might have noticed that the URLs in the curl sample
 of our calculator service were all HTTP POSTs whose URLs
-followed the format: "ServiceName.FunctionName". That's
-fine for a purely RPC environment, but if you want to expose
-your API to third parties, RESTful URLs might make your API
-easier to consume.
-
-With Frodo, you can easily change the HTTP method and path
-used to invoke that operation using "Doc Options"
-(worst Spider-Man villain ever). Here's how we can customize
-the URLs of our CalculatorService:
+followed the format: `ServiceName.FunctionName`. If you
+prefer RESTful endpoints, it's easy to change the HTTP
+method and path using "Doc Options"...
+worst Spider-Man villain ever.
 
 ```go
 type CalculatorService interface {
     // Add calculates the sum of A + B.
     //
-    // GET /addition/{A}/{B}
+    // GET /addition/:A/:B
     Add(context.Context, *AddRequest) (*AddResponse, error)
 
     // Sub calculates the difference of A - B.
     //
-    // GET /subtraction/{A}/{B}
+    // GET /subtraction/:A/:B
     Sub(context.Context, *SubRequest) (*SubResponse, error)
 }
 ```
 
 When Frodo sees a comment line for one of your service functions
-of the format "METHOD /PATH", it will use those in the HTTP
-router instead of the default. Here are the updated curl
+of the format `METHOD /PATH`, it will use those in the HTTP
+router instead of the default. The path parameters `:A` and `:B`
+will be bound to the equivalent attributes on your request value.
+
+Here are the updated curl
 calls after we generate the new gateway code:
 
 ```shell
 curl http://localhost:9000/addition/5/2
 # {"Result":7}
-
 curl http://localhost:9000/subtraction/5/2
 # {"Result":3}
 ```
@@ -259,16 +250,21 @@ of the standard "200 Ok". You can use another "Doc Option" just like we used abo
 customize the method/path:
 
 ```go
-type SomeService interface {
+type SomeJobberService interface {
     // SubmitJob places your task at the end of the queue.
     //
     // HTTP 202
     SubmitJob(context.Context, *SubmitJobRequest) (*SubmitJobResponse, error)
+    // DeleteJob removes your task from the queue.
+    //
+    // HTTP 204
+    DeleteJob(context.Context, *SubmitJobRequest) (*SubmitJobResponse, error)
 }
 ```
 
-Now, whenever someone invokes this service operation, they'll
-get a 202 when it completes instead of a 200.
+Now, whenever someone submits a job they'll receive a 202,
+and when they delete a job they'll receive a 204 rather
+than good old-fashioned 200s.
 
 ## Error Handling
 
@@ -277,7 +273,7 @@ resulting RPC/HTTP request will have a 500 status code. You
 can, however, customize that status code to correspond to the type
 of failure (e.g. 404 when something was not found).
 
-The easiest way to do this is to just use the `frodo/rpc/errors`
+The easiest way to do this is to just use the `rpc/errors`
 package when you encounter a failure case:
 
 ```go
@@ -349,11 +345,10 @@ func (svc VideoServiceHandler) Download(ctx context.Context, req *DownloadReques
 
 ## API Versioning
 
-It's fairly simple to provide a path prefix to all
-the endpoints exposed by your RPC/API gateway. Just provide
-the proper functional argument when creating your gateway
-and client:
-
+You can prepend a version or any sort of domain prefix to
+every URL in your API by using the `WithPrefix` functional
+parameter when building your gateway. Just remember to include
+that in the base URL when building clients for that service.
 ```go
 import (
     "github.com/robsignorelli/frodo/rpc"
@@ -364,12 +359,10 @@ gateway := calcrpc.NewCalculatorServiceGateway(service,
     rpc.WithPrefix("v2"),
 )
 // ...
-client := calcrpc.NewCalculatorServiceClient("http://localhost:9000",
-    rpc.WithClientPrefix("v2"),
-)
+client := calcrpc.NewCalculatorServiceClient("http://localhost:9000/v2")
 ```
 
-Your RPC communication will use the "v2" prefix under the
+Your API and RPC communication will use the "v2" prefix under the
 hood, but if you want to hit the raw HTTP endpoints, here's
 how they look now:
 
@@ -422,7 +415,7 @@ to service:
 
 ```go
 func (a ServiceA) Foo(ctx context.Context, r *FooRequest) (*FooResponse, error) {
-    // "Hello" NOT follow you when you call Bar(),
+    // "Hello" will NOT follow you when you call Bar(),
     // but "DontPanic" will. Notice that the metadata
     // value does not need to be a string like in gRPC.
     ctx = context.WithValue(ctx, "Hello", "World")
@@ -448,7 +441,9 @@ If you're wondering why `metadata.Value()` looks more like
 do with a limitation of reflection in Go. When the values
 are sent over the network from Service A to Service B, we
 lose all type information. We need the type info `&b` gives
-us in order to restore the original value.
+us in order to properly restore the original value, so Frodo
+follows the idiom established by many
+of the decoders in the standard library.
 
 ## Creating a JavaScript Client
 
@@ -472,7 +467,7 @@ import {CalculatorService} from 'lib/calculator_service.gen.client';
 // The service client is a class that exposes all of the
 // operations as 'async' functions that resolve with the
 // result of the service call.
-const service = new CalculatorService("https://calculator.api.example.com")
+const service = new CalculatorService("http://localhost:9000")
 const add = await service.Add({A:5, B:2})
 const sub = await service.Sub({A:5, B:2})
 
@@ -489,7 +484,7 @@ It's included in the JSDoc of the client so all of your service/API
 documentation should be available to your IDE even when writing
 your frontend code.
 
-## Creating a New Service Using `frodo create`
+## Create a New Service w/ `frodo create`
 
 This is 100% optional. As we saw in the initial example,
 you can write all of your Go code starting with empty
@@ -499,14 +494,14 @@ The `frodo` tool, however, has a command that generates a
 lot of that boilerplate for you so that you can get straight
 to solving your customers' problems.
 
-Let's pretend that you wanted to make a new service called
-`UserService`, you can execute the following command:
+Let's assume that you want to make a new service called
+`UserService`, you can execute any  of the following commands:
 
 ```shell
 frodo create user
-# or
+  # or
 frodo create User
-# or
+  # or
 frodo create UserService
 ```
 
@@ -526,8 +521,8 @@ following assets created:
       user_service.gen.client.go
 ```
 
-The service will already have a dummy `Create()` function
-just so that there's *something* in the service. You should replace
+The service will have a dummy `Create()` function
+just so that there's *something* defined. You should replace
 that with your own functions and implement them to make the service
 do something useful.
 
@@ -544,18 +539,16 @@ the cost of simplicity. There's a huge learning curve, a lot
 of setup pains, and finding documentation to solve the
 specific problem you have (if there even is a solution) is
 incredibly difficult. It's an airlplane cockpit of knobs and
-dials when most of us just want the autopilot button.
+dials when most of us just want/need the autopilot button.
+
+Frodo is the autopilot button.
 
 Here are some ways that Frodo tries to improve on
 the developer experience over gRPC:
 
-* 100% Go. Not only is Frodo written in Go, there are
-  no proto files to learn. Just describe your services
+* No proto files or other quirky DSLs to learn. Just describe your services
   as plain old Go interfaces; something you were likely to do anyway.
-* Easier to set up. To get going with gRPC you need to
-  install `protoc` then "go get" 3 or 4 packages, but make
-  sure that you're getting the right version, update your PATH, etc.
-  Frodo? Just "go install" it and you're done.
+* Easy to set up. Just "go install" it and you're done.
 * A CLI you can easily understand. Even a simple gRPC service
   with an API gateway requires 10 or 12 arguments to `protoc` in order
   to function. Contrast that with `frodo gateway foo/service.go`.
