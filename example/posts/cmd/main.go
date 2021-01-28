@@ -10,8 +10,7 @@ import (
 
 func main() {
 	postService := posts.PostServiceHandler{}
-	gateway := postsrpc.NewPostServiceGateway(&postService) //rpc.WithMiddleware(cors.AllowAll())
-
+	gateway := postsrpc.NewPostServiceGateway(&postService)
 	http.ListenAndServe(":9001", gateway)
 }
 
