@@ -359,6 +359,10 @@ func IsModelDeclaration(astObj *ast.Object) bool {
 	}
 }
 
+// ApplyDocumentation runs GoDoc parsing on your context's file and adds all of your source's documentation
+// comments to the services/methods/models in the context. This *does* mutate the values on the context.
+// In addition to regurgitating the comments, this will ultimately parse all of the Doc Options
+// that might appear in the comments.
 func ApplyDocumentation(ctx *Context) error {
 	docs, err := doc.NewFromFiles(ctx.FileSet, []*ast.File{ctx.File}, ctx.Module.Name)
 	if err != nil {
@@ -410,6 +414,8 @@ func ApplyDocumentation(ctx *Context) error {
 	return nil
 }
 
+// ApplyServiceDocumentation takes the documentation comment block above your interface type
+// declaration and applies them to the service snapshot, parsing all Doc Options in the process.
 func ApplyServiceDocumentation(_ *Context, service *ServiceDeclaration, comments string) {
 	if service == nil {
 		return
@@ -430,6 +436,8 @@ func ApplyServiceDocumentation(_ *Context, service *ServiceDeclaration, comments
 	service.Documentation = service.Documentation.Trim()
 }
 
+// ApplyMethodDocumentation takes the documentation comment block above your interface function
+// declaration and applies them to the method snapshot, parsing all Doc Options in the process.
 func ApplyMethodDocumentation(_ *Context, method *ServiceMethodDeclaration, comments string) {
 	if method == nil {
 		return
@@ -469,6 +477,8 @@ func ApplyMethodDocumentation(_ *Context, method *ServiceMethodDeclaration, comm
 	method.Documentation = method.Documentation.Trim()
 }
 
+// ApplyModelDocumentation takes the documentation comment block above your struct/alias type
+// declaration and applies them to the model snapshot, parsing all Doc Options in the process.
 func ApplyModelDocumentation(_ *Context, model *ServiceModelDeclaration, comments string) {
 	if model == nil {
 		return
