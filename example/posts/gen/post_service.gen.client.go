@@ -14,14 +14,13 @@ import (
 // NewPostServiceClient creates an RPC client that conforms to the PostService interface, but delegates
 // work to remote instances. You must supply the base address of the remote service gateway instance or
 // the load balancer for that service.
-//
-// You should be able to get a working service using default options (i.e. no options), but you can customize
-// the HTTP client, define middleware, and more using client options. All of the ones that apply to the RPC
-// client are named "WithClientXXX()".
+// PostService is a service that manages blog/article posts. This is just for example purposes,
+// so this is not a truly exhaustive set of operations that you might want if you were *really*
+// building some sort of blog/CRM engine.
 func NewPostServiceClient(address string, options ...rpc.ClientOption) *PostServiceClient {
-	return &PostServiceClient{
-		Client: rpc.NewClient("PostService", address, options...),
-	}
+	rpcClient := rpc.NewClient("PostService", address, options...)
+	rpcClient.PathPrefix = "v2"
+	return &PostServiceClient{Client: rpcClient}
 }
 
 // PostServiceClient manages all interaction w/ a remote PostService instance by letting you invoke functions

@@ -8,6 +8,8 @@ import (
 // PostService is a service that manages blog/article posts. This is just for example purposes,
 // so this is not a truly exhaustive set of operations that you might want if you were *really*
 // building some sort of blog/CRM engine.
+//
+// PATH /v2
 type PostService interface {
 	// GetPost fetches a Post record by its unique identifier.
 	GetPost(context.Context, *GetPostRequest) (*GetPostResponse, error)
@@ -29,6 +31,7 @@ type GetPostRequest struct {
 	ID string
 }
 
+// GetPostResponse describes a single post in the blog.
 type GetPostResponse Post
 
 type CreatePostRequest struct {

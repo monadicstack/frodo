@@ -1,5 +1,5 @@
 // !!!!!!! DO NOT EDIT !!!!!!!
-// Auto-generated server code from example/posts/post_service.go
+// Auto-generated server code from post_service.go
 // !!!!!!! DO NOT EDIT !!!!!!!
 package postsrpc
 
@@ -25,6 +25,7 @@ import (
 func NewPostServiceGateway(service posts.PostService, options ...rpc.GatewayOption) rpc.Gateway {
 	gw := rpc.NewGateway(options...)
 	gw.Name = "PostService"
+	gw.PathPrefix = "v2"
 
 	gw.Register(rpc.Endpoint{
 		Method:      "POST",
@@ -41,7 +42,7 @@ func NewPostServiceGateway(service posts.PostService, options ...rpc.GatewayOpti
 			}
 
 			serviceResponse, err := service.GetPost(req.Context(), &serviceRequest)
-			response.Reply(200, serviceResponse, err)
+			response.Reply(202, serviceResponse, err)
 		},
 	})
 

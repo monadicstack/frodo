@@ -3,7 +3,9 @@ package parser
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"path/filepath"
+	"strings"
 )
 
 // Context wrangles all of the captured data about your input service declaration file. It tracks
@@ -11,6 +13,8 @@ import (
 // that were defined in the file, etc. It's the output of Parse() and is the input value when we
 // evaluate Go templates to generate other source files based on this service definition info.
 type Context struct {
+	// FileSet is the collection of related files we're going to give to the Go AST parser.
+	FileSet *token.FileSet
 	// File is the entire syntax tree from when we parsed your input file.
 	File *ast.File
 	// Path is the relative path to the service definition file we're parsing.
@@ -29,6 +33,16 @@ type Context struct {
 	Models []*ServiceModelDeclaration
 }
 
+// ServiceByName looks through "Services" to find the one with the matching interface name.
+func (ctx Context) ServiceByName(name string) *ServiceDeclaration {
+	for _, service := range ctx.Services {
+		if service.Name == name {
+			return service
+		}
+	}
+	return nil
+}
+
 // ModelByName looks through "Models" to find the one whose method/function name matches 'name'.
 func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 	for _, model := range ctx.Models {
@@ -44,15 +58,20 @@ func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 type ServiceDeclaration struct {
 	// Name is the name of the service/interface.
 	Name string
+	// HTTPPathPrefix is the optional version/domain prefix for all endpoints in the API (e.g. "v2/").
+	HTTPPathPrefix string
 	// Methods are all of the functions explicitly defined on this service.
 	Methods []*ServiceMethodDeclaration
+	// Documentation are all of the comments documenting this service.
+	Documentation DocumentationLines
 	// Node is the syntax tree object for the interface that described this service.
 	Node *ast.Object
 }
 
-// AddMethod appends a method definition to this service, indicating that the service contains this operation.
-func (service *ServiceDeclaration) AddMethod(method *ServiceMethodDeclaration) {
-	service.Methods = append(service.Methods, method)
+func (service ServiceDeclaration) InterfaceNode() *ast.InterfaceType {
+	return service.Node.
+		Decl.(*ast.TypeSpec).
+		Type.(*ast.InterfaceType)
 }
 
 // MethodByName fetches the service operation with the given function name. This returns nil when there
@@ -99,6 +118,8 @@ func (method ServiceMethodDeclaration) String() string {
 type ServiceModelDeclaration struct {
 	// Name is the name of the type/struct used when defining the request/response value.
 	Name string
+	// Documentation are all of the comments documenting this operation.
+	Documentation DocumentationLines
 	// Node is the syntax tree object that defined this type/struct.
 	Node *ast.Object
 }
@@ -161,4 +182,11 @@ func (docs DocumentationLines) Trim() DocumentationLines {
 		}
 	}
 	return docs[first : last+1]
+}
+
+func normalizePathSegment(path string) string {
+	path = strings.TrimSpace(path)
+	path = strings.Trim(path, "/")
+	path = strings.TrimSpace(path)
+	return path
 }

@@ -20,15 +20,12 @@ import (
 {{ range .Services }}
 // New{{ .Name }}Client creates an RPC client that conforms to the {{ .Name }} interface, but delegates
 // work to remote instances. You must supply the base address of the remote service gateway instance or
-// the load balancer for that service.
-//
-// You should be able to get a working service using default options (i.e. no options), but you can customize
-// the HTTP client, define middleware, and more using client options. All of the ones that apply to the RPC
-// client are named "WithClientXXX()".
+// the load balancer for that service. {{ range .Documentation }}
+// {{ . }}{{end}}
 func New{{ .Name }}Client(address string, options ...rpc.ClientOption) *{{ .Name }}Client {
-	return &{{ .Name }}Client{
-		Client: rpc.NewClient("{{ .Name }}", address, options...),
-	}
+	rpcClient := rpc.NewClient("{{ .Name }}", address, options...)
+	rpcClient.PathPrefix = "{{ .HTTPPathPrefix }}"
+	return &{{ .Name }}Client{Client: rpcClient} 
 }
 
 // {{ .Name }}Client manages all interaction w/ a remote {{ .Name }} instance by letting you invoke functions

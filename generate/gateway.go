@@ -30,6 +30,7 @@ import (
 func New{{ .Name }}Gateway(service {{ $ctx.Package.Name }}.{{ .Name }}, options ...rpc.GatewayOption) rpc.Gateway {
 	gw := rpc.NewGateway(options...)
 	gw.Name = "{{ .Name }}"
+	gw.PathPrefix = "{{ .HTTPPathPrefix }}"
 
 	{{ $service := . }}
 	{{ range $service.Methods }}

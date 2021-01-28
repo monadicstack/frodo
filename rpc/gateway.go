@@ -17,7 +17,7 @@ func NewGateway(options ...GatewayOption) Gateway {
 		Router:     httprouter.New(),
 		Binder:     jsonBinder{},
 		middleware: middlewarePipeline{},
-		pathPrefix: "",
+		PathPrefix: "",
 		endpoints:  map[string]Endpoint{},
 	}
 	for _, option := range options {
@@ -61,7 +61,7 @@ type Gateway struct {
 	Name       string
 	Router     *httprouter.Router
 	Binder     Binder
-	pathPrefix string
+	PathPrefix string
 	middleware middlewarePipeline
 	endpoints  map[string]Endpoint
 }
@@ -73,10 +73,10 @@ func (gw *Gateway) Register(endpoint Endpoint) {
 	// Path attribute alone. But... the router needs the full path which includes the optional
 	// prefix (e.g. "/v2"). So we'll use the full path for routing and lookups (transparent to
 	// the user), but the user will never have to see the "/v2" portion.
-	fullPath := gw.pathPrefix + endpoint.Path
+	path := toEndpointPath(gw.PathPrefix, endpoint.Path)
 
-	gw.endpoints[fullPath] = endpoint
-	gw.Router.HandlerFunc(endpoint.Method, fullPath, gw.middleware.Then(endpoint.Handler))
+	gw.endpoints[path] = endpoint
+	gw.Router.HandlerFunc(endpoint.Method, path, gw.middleware.Then(endpoint.Handler))
 }
 
 // ServeHTTP is the central HTTP handler that includes all http routing, middleware, service forwarding, etc.
@@ -116,24 +116,6 @@ func EndpointFromContext(ctx context.Context) *Endpoint {
 	return &endpoint
 }
 
-// WithPrefix allows you to specify a custom URL prefix for all endpoints. By default a URL might look
-// like "https://api.foo.com/GroupService.GetByID", but if you create your gateway using `WithPrefix("v2")`
-// then the endpoint would be "https://api.foo.com/v2/GroupService.GetByID".
-func WithPrefix(pathPrefix string) GatewayOption {
-	return func(gateway *Gateway) {
-		switch {
-		case pathPrefix == "":
-			return
-		case pathPrefix == "/":
-			return
-		case strings.HasPrefix(pathPrefix, "/"):
-			gateway.pathPrefix = pathPrefix
-		default:
-			gateway.pathPrefix = "/" + pathPrefix
-		}
-	}
-}
-
 // restoreEndpoint places the *Endpoint data for the current operation onto the request context
 // so your handler can access the RPC details about what is being invoked. Mainly useful for fetching
 // logging/tracing info about the operation.
@@ -168,4 +150,18 @@ func restoreMetadata(w http.ResponseWriter, req *http.Request, next http.Handler
 
 	ctx := metadata.WithValues(req.Context(), values)
 	next(w, req.WithContext(ctx))
+}
+
+// Combines the path to an endpoint (e.g. "/user/:id/contact") and an optional service
+// prefix (e.g. "/v2"). The result is the complete path to this resource.
+func toEndpointPath(prefix string, path string) string {
+	prefix = strings.Trim(prefix, "/")
+	path = strings.Trim(path, "/")
+
+	switch prefix {
+	case "":
+		return "/" + path
+	default:
+		return "/" + prefix + "/" + path
+	}
 }
