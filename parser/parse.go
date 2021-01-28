@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"go/ast"
+	"go/doc"
 	"go/parser"
 	"go/token"
 	"io/ioutil"
@@ -35,6 +36,7 @@ func ParseFile(inputPath string) (*Context, error) {
 	}
 
 	ctx := &Context{
+		FileSet:      fileSet,
 		File:         file,
 		Path:         inputPath,
 		AbsolutePath: absolutePath,
@@ -52,6 +54,10 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.Services, err = ParseServices(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
+	if err = ApplyDocumentation(ctx); err != nil {
+		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
+	}
+
 	return ctx, nil
 }
 
@@ -253,61 +259,13 @@ func ParseServiceMethod(ctx *Context, serviceNode *ast.Object, methodObj *ast.Fi
 	method.Request = ctx.ModelByName(typeName(function.Params.List[1]))
 	method.Response = ctx.ModelByName(typeName(function.Results.List[0]))
 
-	// Check the doc comments for the function to determine if they're providing
-	// a custom method/path for the endpoint as opposed to the default RPC-style we assign.
-	applyMethodCommentOptions(ctx, methodObj, method)
 	return method, nil
-}
-
-// applyMethodCommentOptions looks at all of your GoDoc comments for some of the "super special" ones
-// that actually apply different options to your service method. For instance it looks for comments
-// like "HTTP 202" to change the output HTTP status cod the operation.
-func applyMethodCommentOptions(_ *Context, methodObj *ast.Field, method *ServiceMethodDeclaration) {
-	if methodObj.Doc == nil {
-		return
-	}
-	for _, doc := range methodObj.Doc.List {
-		// The raw strings in the AST still look like "// HTTP 202" so normalize it down to
-		// just "HTTP 202" without slashes/spaces, etc.
-		comment := doc.Text
-		comment = strings.TrimSpace(comment)
-		comment = strings.TrimPrefix(comment, "//")
-		comment = strings.TrimSpace(comment)
-
-		switch {
-		case strings.HasPrefix(comment, "GET /"):
-			method.HTTPMethod = http.MethodGet
-			method.HTTPPath = comment[4:]
-		case strings.HasPrefix(comment, "PUT /"):
-			method.HTTPMethod = http.MethodPut
-			method.HTTPPath = comment[4:]
-		case strings.HasPrefix(comment, "POST /"):
-			method.HTTPMethod = http.MethodPost
-			method.HTTPPath = comment[5:]
-		case strings.HasPrefix(comment, "PATCH /"):
-			method.HTTPMethod = http.MethodPatch
-			method.HTTPPath = comment[6:]
-		case strings.HasPrefix(comment, "DELETE /"):
-			method.HTTPMethod = http.MethodDelete
-			method.HTTPPath = comment[7:]
-		case strings.HasPrefix(comment, "OPTIONS /"):
-			method.HTTPMethod = http.MethodOptions
-			method.HTTPPath = comment[8:]
-		case strings.HasPrefix(comment, "HEAD /"):
-			method.HTTPMethod = http.MethodHead
-			method.HTTPPath = comment[5:]
-		case strings.HasPrefix(comment, "HTTP "):
-			method.HTTPStatus = parseHTTPStatus(comment[5:])
-		default:
-			method.Documentation = append(method.Documentation, comment)
-		}
-	}
-	method.Documentation = method.Documentation.Trim()
 }
 
 // parseHTTPStatus is just a strconv.ParseInt that parses the right hand side of an "HTTP 202"
 // looking comment. If we can't parse it as a number for any reason, we'll default to 200.
 func parseHTTPStatus(statusText string) int {
+	statusText = strings.TrimSpace(statusText)
 	status, err := strconv.ParseInt(statusText, 10, 64)
 	if err != nil {
 		return http.StatusOK
@@ -399,6 +357,140 @@ func IsModelDeclaration(astObj *ast.Object) bool {
 	default:
 		return false
 	}
+}
+
+// ApplyDocumentation runs GoDoc parsing on your context's file and adds all of your source's documentation
+// comments to the services/methods/models in the context. This *does* mutate the values on the context.
+// In addition to regurgitating the comments, this will ultimately parse all of the Doc Options
+// that might appear in the comments.
+func ApplyDocumentation(ctx *Context) error {
+	docs, err := doc.NewFromFiles(ctx.FileSet, []*ast.File{ctx.File}, ctx.Module.Name)
+	if err != nil {
+		return err
+	}
+
+	// Look through all of the top-level type definitions for structs/aliases you used as
+	// request/response models and process their comments.
+	for _, typeDef := range docs.Types {
+		model := ctx.ModelByName(typeDef.Name)
+		ApplyModelDocumentation(ctx, model, typeDef.Doc)
+	}
+
+	// Look through all of the top-level service interface definitions and apply all of the
+	// documentation options/comments to the service and its methods.
+	for _, typeDef := range docs.Types {
+		service := ctx.ServiceByName(typeDef.Name)
+		if service == nil {
+			continue
+		}
+		ApplyServiceDocumentation(ctx, service, typeDef.Doc)
+
+		// You might ask yourself why we're going back to the original syntax tree to iterate
+		// the service methods rather than iterating 'typeDef.Funcs'. Well... because in all of
+		// my testing this stuff out on real .go files, both ".Methods" and ".Funcs" are nil
+		// on the service interface documentation nodes. Even when the functions have GoDoc
+		// comments, they're nil.
+		//
+		// I'm probably doing something wrong to get in this situation or maybe I just don't fully
+		// understand the syntax tree parsing logic well enough (likely both). But here's what I'm
+		// observing: all of the documentation/comment data on the original AST is missing for
+		// the top-level type definitions (services and models), so I need to actually invoke the
+		// GoDoc parser (doc.NewFromFiles() above) to get those comments. For the interface functions,
+		// however, I'm seeing the exact opposite. The original AST *does* have the comments on those
+		// interface functions, but I can't seem to get to them when using the 'docs' tree.
+		//
+		// That's why I'm mixing and matching where I'm getting the docs from. Models/services come
+		// from the GoDoc parser and the function docs come from the original AST nodes. Maybe one day
+		// I'll learn what the heck is going on and deal with it properly, but for now this does
+		// effectively give me what I want - the complete doc comments for all items in my context.
+		for _, methodObj := range service.InterfaceNode().Methods.List {
+			if methodObj.Doc == nil {
+				continue
+			}
+			method := service.MethodByName(fieldName(methodObj))
+			ApplyMethodDocumentation(ctx, method, methodObj.Doc.Text())
+		}
+	}
+	return nil
+}
+
+// ApplyServiceDocumentation takes the documentation comment block above your interface type
+// declaration and applies them to the service snapshot, parsing all Doc Options in the process.
+func ApplyServiceDocumentation(_ *Context, service *ServiceDeclaration, comments string) {
+	if service == nil {
+		return
+	}
+	if comments == "" {
+		return
+	}
+	for _, line := range strings.Split(comments, "\n") {
+		switch {
+		case strings.HasPrefix(line, "PATH "):
+			service.HTTPPathPrefix = normalizePathSegment(line[5:])
+		case strings.HasPrefix(line, "PREFIX "):
+			service.HTTPPathPrefix = normalizePathSegment(line[7:])
+		default:
+			service.Documentation = append(service.Documentation, line)
+		}
+	}
+	service.Documentation = service.Documentation.Trim()
+}
+
+// ApplyMethodDocumentation takes the documentation comment block above your interface function
+// declaration and applies them to the method snapshot, parsing all Doc Options in the process.
+func ApplyMethodDocumentation(_ *Context, method *ServiceMethodDeclaration, comments string) {
+	if method == nil {
+		return
+	}
+	if comments == "" {
+		return
+	}
+	// Notice that "OPTIONS /" is not one of the cases. That's by design. When the gateway
+	// registers your POST operation (or whatever method), we're actually going to register
+	// that method AND an OPTIONS route for you. By default, the OPTIONS route will simply
+	// reject the request (i.e. no default CORS). If bring your own CORS middleware to the
+	// party it will respond affirmatively before the rejection. There's more info in the
+	// comments of gateway.New() that describes why we need this limitation for now.
+	for _, line := range strings.Split(comments, "\n") {
+		switch {
+		case strings.HasPrefix(line, "GET /"):
+			method.HTTPMethod = http.MethodGet
+			method.HTTPPath = normalizePathSegment(line[4:])
+		case strings.HasPrefix(line, "PUT /"):
+			method.HTTPMethod = http.MethodPut
+			method.HTTPPath = normalizePathSegment(line[4:])
+		case strings.HasPrefix(line, "POST /"):
+			method.HTTPMethod = http.MethodPost
+			method.HTTPPath = normalizePathSegment(line[5:])
+		case strings.HasPrefix(line, "PATCH /"):
+			method.HTTPMethod = http.MethodPatch
+			method.HTTPPath = normalizePathSegment(line[6:])
+		case strings.HasPrefix(line, "DELETE /"):
+			method.HTTPMethod = http.MethodDelete
+			method.HTTPPath = normalizePathSegment(line[7:])
+		case strings.HasPrefix(line, "HEAD /"):
+			method.HTTPMethod = http.MethodHead
+			method.HTTPPath = normalizePathSegment(line[5:])
+		case strings.HasPrefix(line, "HTTP "):
+			method.HTTPStatus = parseHTTPStatus(line[5:])
+		default:
+			method.Documentation = append(method.Documentation, line)
+		}
+	}
+	method.Documentation = method.Documentation.Trim()
+}
+
+// ApplyModelDocumentation takes the documentation comment block above your struct/alias type
+// declaration and applies them to the model snapshot, parsing all Doc Options in the process.
+func ApplyModelDocumentation(_ *Context, model *ServiceModelDeclaration, comments string) {
+	if model == nil {
+		return
+	}
+	if comments == "" {
+		return
+	}
+	model.Documentation = strings.Split(comments, "\n")
+	model.Documentation = model.Documentation.Trim()
 }
 
 func fieldName(field *ast.Field) string {

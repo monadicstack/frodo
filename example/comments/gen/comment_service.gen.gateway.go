@@ -25,6 +25,7 @@ import (
 func NewCommentServiceGateway(service comments.CommentService, options ...rpc.GatewayOption) rpc.Gateway {
 	gw := rpc.NewGateway(options...)
 	gw.Name = "CommentService"
+	gw.PathPrefix = ""
 
 	gw.Register(rpc.Endpoint{
 		Method:      "POST",

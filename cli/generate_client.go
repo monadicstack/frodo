@@ -43,7 +43,7 @@ func (c GenerateClient) Exec(request *GenerateClientRequest) error {
 	switch strings.ToLower(request.Language) {
 	case "go", "":
 		return c.generate(request, generate.TemplateClientGo)
-	case "js":
+	case "js", "javascript", "node", "nodejs":
 		return c.generate(request, generate.TemplateClientJS)
 	default:
 		return fmt.Errorf("unsupported client language")

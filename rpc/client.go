@@ -152,7 +152,7 @@ func (c Client) buildURL(method string, path string, serviceRequest interface{})
 	}
 
 	// If we're doing a POST/PUT/PATCH, don't bother adding query string arguments.
-	address := c.BaseURL + c.PathPrefix + "/" + strings.Join(pathSegments, "/")
+	address := c.BaseURL + toEndpointPath(c.PathPrefix, strings.Join(pathSegments, "/"))
 	if shouldEncodeUsingBody(method) {
 		return address
 	}
@@ -183,21 +183,4 @@ func writeMetadataHeader(request *http.Request, next RoundTripperFunc) (*http.Re
 	}
 	request.Header.Set(metadata.RequestHeader, encodedValues)
 	return next(request)
-}
-
-// WithClientPrefix should match what you supply if you call WithPrefix when building your service
-// gateway so that all endpoint URLs will be constructed consistently.
-func WithClientPrefix(pathPrefix string) ClientOption {
-	return func(client *Client) {
-		switch {
-		case pathPrefix == "":
-			return
-		case pathPrefix == "/":
-			return
-		case strings.HasPrefix(pathPrefix, "/"):
-			client.PathPrefix = pathPrefix
-		default:
-			client.PathPrefix = "/" + pathPrefix
-		}
-	}
 }

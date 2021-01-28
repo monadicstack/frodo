@@ -73,7 +73,9 @@ this work done; just which operations are available.
 We actually have enough for `frodo` to
 generate your RPC/API code already, but we'll hold off
 for a moment. Frodo frees you up to focus on building
-features, so let's actually implement service.
+features, so let's actually implement service; no networking,
+no marshaling, no status stuff, just logic to make your
+service behave properly.
 
 ```go
 // calculator_service_handler.go
@@ -346,23 +348,19 @@ func (svc VideoServiceHandler) Download(ctx context.Context, req *DownloadReques
 ## API Versioning
 
 You can prepend a version or any sort of domain prefix to
-every URL in your API by using the `WithPrefix` functional
-parameter when building your gateway. Just remember to include
-that in the base URL when building clients for that service.
+every URL in your service's API by using the `PATH` doc option on your
+service interface.
 ```go
-import (
-    "github.com/robsignorelli/frodo/rpc"
-)
-
-// ...
-gateway := calcrpc.NewCalculatorServiceGateway(service,
-    rpc.WithPrefix("v2"),
-)
-// ...
-client := calcrpc.NewCalculatorServiceClient("http://localhost:9000/v2")
+// CalculatorService provides some basic arithmetic operations.
+//
+// PATH /v2
+type CalculatorService interface {
+    Add(context.Context, *AddRequest) (*AddResponse, error)
+    Sub(context.Context, *SubRequest) (*SubResponse, error)
+}
 ```
 
-Your API and RPC communication will use the "v2" prefix under the
+Your API and RPC clients will be auto-wired to use the "v2" prefix under the
 hood, but if you want to hit the raw HTTP endpoints, here's
 how they look now:
 
@@ -384,8 +382,8 @@ example using [github.com/urfave/negroni](https://github.com/urfave/negroni)
 func main() {
     service := calc.CalculatorServiceHandler{}
     gateway := calcrpc.NewCalculatorServiceGateway(service,
-        rpc.WithMiddleware(
-            negroni.NewLogger(),
+        rpc.WithMiddlewareFunc(
+            negroni.NewLogger().ServeHTTP,
             NotOnMonday,
         ))
 
@@ -394,7 +392,7 @@ func main() {
 
 func NotOnMonday(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
     if time.Now().Weekday() == time.Monday {
-        http.Error(w, "no math on monday", 403)
+        http.Error(w, "garfield says no math on mondays", 403)
         return
     }
     next(w, req)

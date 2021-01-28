@@ -11,14 +11,15 @@ const defaultFetch = fetch.bind(window);
 
 {{ range $service := .Services }}/**
  * Exposes all of the standard operations for the remote {{ .Name }} service. These RPC calls will be
- * sent over http(s) to the backend service instances. 
+ * sent over http(s) to the backend service instances. {{ range .Documentation }}
+ * {{ . }}{{end}}
  */
 class {{ .Name }}Client {
     _baseURL;
     _fetch;
 
-    constructor(baseURL, {pathPrefix, fetch} = {}) {
-        this._baseURL = trimSlashes(trimSlashes(baseURL) + '/' + trimSlashes(pathPrefix));
+    constructor(baseURL, {fetch} = {}) {
+        this._baseURL = trimSlashes(trimSlashes(baseURL) + '/' + trimSlashes('{{ .HTTPPathPrefix}}'));
         this._fetch = fetch || defaultFetch;
     }
 
@@ -169,7 +170,8 @@ function trimSlashes(value) {
 }
 
 {{ range .Models }}
-/**
+/** {{ range .Documentation }}
+ * {{ . }}{{ end }}
  * @typedef {Object|*} {{ .Name }}
  */
 {{ end }}

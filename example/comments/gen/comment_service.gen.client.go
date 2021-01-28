@@ -14,14 +14,12 @@ import (
 // NewCommentServiceClient creates an RPC client that conforms to the CommentService interface, but delegates
 // work to remote instances. You must supply the base address of the remote service gateway instance or
 // the load balancer for that service.
-//
-// You should be able to get a working service using default options (i.e. no options), but you can customize
-// the HTTP client, define middleware, and more using client options. All of the ones that apply to the RPC
-// client are named "WithClientXXX()".
+// CommentService manages reader-submitted comments to posts. It's where horrible people get
+// to spew their vitriol all over the internet and humanity dies a little.
 func NewCommentServiceClient(address string, options ...rpc.ClientOption) *CommentServiceClient {
-	return &CommentServiceClient{
-		Client: rpc.NewClient("CommentService", address, options...),
-	}
+	rpcClient := rpc.NewClient("CommentService", address, options...)
+	rpcClient.PathPrefix = ""
+	return &CommentServiceClient{Client: rpcClient}
 }
 
 // CommentServiceClient manages all interaction w/ a remote CommentService instance by letting you invoke functions
@@ -31,6 +29,7 @@ type CommentServiceClient struct {
 	rpc.Client
 }
 
+// CreateComment adds a comment to a post w/ the given details.
 func (client *CommentServiceClient) CreateComment(ctx context.Context, request *comments.CreateCommentRequest) (*comments.CreateCommentResponse, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
@@ -44,6 +43,7 @@ func (client *CommentServiceClient) CreateComment(ctx context.Context, request *
 	return response, err
 }
 
+// FindByPost lists all comments submitted to the given post.
 func (client *CommentServiceClient) FindByPost(ctx context.Context, request *comments.FindByPostRequest) (*comments.FindByPostResponse, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
