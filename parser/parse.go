@@ -445,6 +445,12 @@ func ApplyMethodDocumentation(_ *Context, method *ServiceMethodDeclaration, comm
 	if comments == "" {
 		return
 	}
+	// Notice that "OPTIONS /" is not one of the cases. That's by design. When the gateway
+	// registers your POST operation (or whatever method), we're actually going to register
+	// that method AND an OPTIONS route for you. By default, the OPTIONS route will simply
+	// reject the request (i.e. no default CORS). If bring your own CORS middleware to the
+	// party it will respond affirmatively before the rejection. There's more info in the
+	// comments of gateway.New() that describes why we need this limitation for now.
 	for _, line := range strings.Split(comments, "\n") {
 		switch {
 		case strings.HasPrefix(line, "GET /"):
@@ -462,9 +468,6 @@ func ApplyMethodDocumentation(_ *Context, method *ServiceMethodDeclaration, comm
 		case strings.HasPrefix(line, "DELETE /"):
 			method.HTTPMethod = http.MethodDelete
 			method.HTTPPath = normalizePathSegment(line[7:])
-		case strings.HasPrefix(line, "OPTIONS /"):
-			method.HTTPMethod = http.MethodOptions
-			method.HTTPPath = normalizePathSegment(line[8:])
 		case strings.HasPrefix(line, "HEAD /"):
 			method.HTTPMethod = http.MethodHead
 			method.HTTPPath = normalizePathSegment(line[5:])

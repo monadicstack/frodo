@@ -42,7 +42,7 @@ func NewPostServiceGateway(service posts.PostService, options ...rpc.GatewayOpti
 			}
 
 			serviceResponse, err := service.GetPost(req.Context(), &serviceRequest)
-			response.Reply(202, serviceResponse, err)
+			response.Reply(200, serviceResponse, err)
 		},
 	})
 
