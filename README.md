@@ -382,8 +382,8 @@ example using [github.com/urfave/negroni](https://github.com/urfave/negroni)
 func main() {
     service := calc.CalculatorServiceHandler{}
     gateway := calcrpc.NewCalculatorServiceGateway(service,
-        rpc.WithMiddleware(
-            negroni.NewLogger(),
+        rpc.WithMiddlewareFunc(
+            negroni.NewLogger().ServeHTTP,
             NotOnMonday,
         ))
 
@@ -392,7 +392,7 @@ func main() {
 
 func NotOnMonday(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
     if time.Now().Weekday() == time.Monday {
-        http.Error(w, "no math on monday", 403)
+        http.Error(w, "garfield says no math on mondays", 403)
         return
     }
     next(w, req)
