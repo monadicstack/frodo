@@ -2,7 +2,7 @@ package posts
 
 import (
 	"context"
-	"time"
+	chrono "time"
 )
 
 // PostService is a service that manages blog/article posts. This is just for example purposes,
@@ -12,19 +12,29 @@ import (
 // PATH /v2
 type PostService interface {
 	// GetPost fetches a Post record by its unique identifier.
+	//
+	// GET /post/:id
 	GetPost(context.Context, *GetPostRequest) (*GetPostResponse, error)
 	// CreatePost creates/stores a new Post record.
+	//
+	// POST /post
 	CreatePost(context.Context, *CreatePostRequest) (*CreatePostResponse, error)
 	// Archive effectively disables a Post from appearing in the article list.
+	// PATCH /post/:id/archive
+	// HTTP 202
 	Archive(context.Context, *ArchiveRequest) (*ArchiveResponse, error)
 }
 
+type ShortText string
+
 type Post struct {
-	ID       string
-	Title    string
-	Text     string
-	Archived bool
-	Date     time.Time
+	ID string
+	// Title is the one-line headline for the post.
+	Title ShortText
+	Text  string
+	// Archived determines if the post is active or not.
+	Archived *bool
+	Date     chrono.Time
 }
 
 type GetPostRequest struct {

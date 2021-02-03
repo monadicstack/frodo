@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"path/filepath"
 	"strings"
 )
@@ -31,6 +32,8 @@ type Context struct {
 	Services []*ServiceDeclaration
 	// Models encapsulates snapshot info for all service request/response structs that were defined in the input file.
 	Models []*ServiceModelDeclaration
+	// TypeInfo contains detailed compiler info about the types in your source file.
+	TypeInfo *types.Info
 }
 
 // ServiceByName looks through "Services" to find the one with the matching interface name.
@@ -45,6 +48,13 @@ func (ctx Context) ServiceByName(name string) *ServiceDeclaration {
 
 // ModelByName looks through "Models" to find the one whose method/function name matches 'name'.
 func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
+	// These lookups likely happen when we perform lookups for service method parameters. Those are
+	// usually pointers (e.g. "*GetPostRequest). The model name we put on the context does not have
+	// any sort of pointer identification, so strip that off.
+	if strings.HasPrefix(name, "*") {
+		name = name[1:]
+	}
+
 	for _, model := range ctx.Models {
 		if model.Name == name {
 			return model
@@ -58,6 +68,9 @@ func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 type ServiceDeclaration struct {
 	// Name is the name of the service/interface.
 	Name string
+	// Version is the (hopefully) semantic version of your API (e.g. 1.2.0). This is NOT the prefix
+	// to all routes in the API for the service. It's just an identifier available to code gen tools.
+	Version string
 	// HTTPPathPrefix is the optional version/domain prefix for all endpoints in the API (e.g. "v2/").
 	HTTPPathPrefix string
 	// Methods are all of the functions explicitly defined on this service.
@@ -120,6 +133,8 @@ type ServiceModelDeclaration struct {
 	Name string
 	// Documentation are all of the comments documenting this operation.
 	Documentation DocumentationLines
+	// Fields are the individual data attributes on this model/struct.
+	Fields Fields
 	// Node is the syntax tree object that defined this type/struct.
 	Node *ast.Object
 }
@@ -127,6 +142,44 @@ type ServiceModelDeclaration struct {
 // String just returns the model type's name.
 func (model ServiceModelDeclaration) String() string {
 	return model.Name
+}
+
+type Fields []*FieldDeclaration
+
+func (f Fields) Empty() bool {
+	return len(f) == 0
+}
+
+func (f Fields) NotEmpty() bool {
+	return len(f) > 0
+}
+
+// FieldDeclaration describes a single field in a request/response model.
+type FieldDeclaration struct {
+	// Name the name of the field/attribute.
+	Name string
+	// Type contains the data type information for this field.
+	Type *FieldType
+	// Documentation are all of the comments documenting this field.
+	Documentation DocumentationLines
+	// Node is the syntax tree object where this field was defined.
+	Node *ast.Field
+}
+
+type FieldType struct {
+	// Name is the fully qualified name/expression for the type (e.g. "uint", "time.Time", "*Foo", "[]byte", etc).
+	Name       string
+	Pointer    bool
+	Type       types.Type
+	Underlying types.Type
+	// Elem is only non-nil for slice/array/chan types. If the slice is this field type, the ElemType
+	// describes what the type of each element describes.
+	Elem *FieldType
+	// Key is only non-nil for tuple/map types where there's some key/value pairing. It describes the type
+	// of all of the keys in the collection whereas ElemType describes the value.
+	Key *FieldType
+	// JSONType is the name of the JS/JSON type that this most naturally maps to (number/string/boolean/object/array).
+	JSONType string
 }
 
 // ModuleDeclaration contains information about the Go module that the service belongs
@@ -159,7 +212,7 @@ type DocumentationLines []string
 
 // Trim removes blank doc lines from the front/back of your list of comments.
 func (docs DocumentationLines) Trim() DocumentationLines {
-	if len(docs) == 0 {
+	if docs.Empty() {
 		return docs
 	}
 	// We want to be able to trim leading and trailing blank lines in a single pass over the
@@ -182,6 +235,14 @@ func (docs DocumentationLines) Trim() DocumentationLines {
 		}
 	}
 	return docs[first : last+1]
+}
+
+func (docs DocumentationLines) NotEmpty() bool {
+	return len(docs) > 0
+}
+
+func (docs DocumentationLines) Empty() bool {
+	return len(docs) == 0
 }
 
 func normalizePathSegment(path string) string {

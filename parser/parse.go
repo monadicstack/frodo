@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"go/ast"
 	"go/doc"
+	"go/importer"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
@@ -48,6 +50,16 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.Package, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
+
+	conf := types.Config{Importer: importer.Default()}
+	ctx.TypeInfo = &types.Info{
+		Types: map[ast.Expr]types.TypeAndValue{},
+	}
+	_, err = conf.Check(ctx.Package.Name, ctx.FileSet, []*ast.File{ctx.File}, ctx.TypeInfo)
+	if err != nil {
+		return nil, fmt.Errorf("[%s] types error: %w", inputPath, err)
+	}
+
 	if ctx.Models, err = ParseServiceModels(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
@@ -155,11 +167,152 @@ func ParseServiceModels(ctx *Context) ([]*ServiceModelDeclaration, error) {
 
 // ParseServiceModel accepts a single 'type XXX' node and generates the model information
 // that we want to capture for the service context.
-func ParseServiceModel(_ *Context, modelNode *ast.Object) (*ServiceModelDeclaration, error) {
-	return &ServiceModelDeclaration{
+func ParseServiceModel(ctx *Context, modelNode *ast.Object) (*ServiceModelDeclaration, error) {
+	model := &ServiceModelDeclaration{
 		Name: modelNode.Name,
 		Node: modelNode,
-	}, nil
+	}
+
+	typeSpec, ok := modelNode.Decl.(*ast.TypeSpec)
+	if !ok {
+		return nil, fmt.Errorf("unable to parse model node that is not a type spec")
+	}
+
+	switch t := typeSpec.Type.(type) {
+	case *ast.StructType:
+		fields, err := parseFields(ctx, t.Fields)
+		model.Fields = fields
+		return model, err
+	case *ast.Ident:
+	}
+
+	return model, nil
+}
+
+func parseFields(ctx *Context, fieldList *ast.FieldList) ([]*FieldDeclaration, error) {
+	var fields []*FieldDeclaration
+	for _, fieldNode := range fieldList.List {
+		fields = append(fields, parseField(ctx, fieldNode))
+	}
+	return fields, nil
+}
+
+func parseField(ctx *Context, fieldNode *ast.Field) *FieldDeclaration {
+	typeInfo, ok := ctx.TypeInfo.Types[fieldNode.Type]
+	if !ok {
+		return nil
+	}
+
+	field := &FieldDeclaration{
+		Name: fieldName(fieldNode),
+		Node: fieldNode,
+		Type: parseFieldType(ctx, typeInfo.Type),
+	}
+
+	ApplyFieldDocumentation(ctx, field, fieldNode.Doc.Text())
+	return field
+}
+
+func parseFieldType(ctx *Context, t types.Type) *FieldType {
+	fieldType := &FieldType{
+		Name:       t.String(),
+		Type:       t,
+		Underlying: underlyingType(t),
+	}
+
+	switch underlying := fieldType.Underlying.(type) {
+	case *types.Pointer:
+		fieldType.Pointer = true
+		fieldType.Type = underlying.Elem()
+		fieldType.Underlying = underlyingType(fieldType.Type)
+	case *types.Array:
+		fieldType.Elem = parseFieldType(ctx, underlying.Elem())
+	case *types.Slice:
+		fieldType.Elem = parseFieldType(ctx, underlying.Elem())
+	case *types.Chan:
+		fieldType.Elem = parseFieldType(ctx, underlying.Elem())
+	case *types.Map:
+		fieldType.Key = parseFieldType(ctx, underlying.Key())
+		fieldType.Elem = parseFieldType(ctx, underlying.Elem())
+	}
+
+	fieldType.JSONType = toJSON(ctx, fieldType.Underlying)
+	return fieldType
+}
+
+func toJSON(ctx *Context, t types.Type) string {
+	switch raw := t.(type) {
+	case *types.Pointer:
+		return toJSON(ctx, raw.Elem())
+	case *types.Array, *types.Slice:
+		return "array"
+	case *types.Chan:
+		return "object"
+	case *types.Map:
+		return "object"
+	}
+
+	jsonType, ok := jsonTypeMapping[t.String()]
+	if ok {
+		return jsonType
+	}
+	return "*"
+}
+
+var jsonTypeMapping = map[string]string{
+	"string":    "string",
+	"bool":      "boolean",
+	"rune":      "number",
+	"byte":      "number",
+	"int8":      "number",
+	"int16":     "number",
+	"int32":     "number",
+	"int64":     "number",
+	"uint":      "number",
+	"uint8":     "number",
+	"uint16":    "number",
+	"uint32":    "number",
+	"uint64":    "number",
+	"uintptr":   "number",
+	"float32":   "number",
+	"float64":   "number",
+	"time.Time": "string",
+}
+
+func underlyingType(fieldType types.Type) types.Type {
+	name := fieldType.String()
+
+	// In an idea world we'd know if the type implemented MarshalJSON/UnmarshalJSON so
+	// that we know if the RPC transport for struct types is an object or some other type.
+	// In most cases, the transport for "time.Time" is an ISO8601 string, so we need to short
+	// circuit the recursion and stop here rather than going deeper to the "struct{}" type
+	// which is not how time is marshaled in Go.
+	if name == "time.Time" || name == "*time.Time" {
+		return fieldType
+	}
+
+	pointer, ok := fieldType.(*types.Pointer)
+	if ok {
+		return pointer.Elem()
+	}
+
+	underlying := fieldType.Underlying()
+	if underlying != fieldType {
+		return underlyingType(underlying)
+	}
+	return fieldType
+
+	/*
+		func (b *Basic) Underlying() Type     { return b }
+		func (a *Array) Underlying() Type     { return a }
+		func (s *Slice) Underlying() Type     { return s }
+		func (s *Struct) Underlying() Type    { return s }
+		func (p *Pointer) Underlying() Type   { return p }
+		func (t *Interface) Underlying() Type { return t }
+		func (m *Map) Underlying() Type       { return m }
+		func (c *Chan) Underlying() Type      { return c }
+		func (t *Named) Underlying() Type     { return t.underlying }
+	*/
 }
 
 // ParseServices looks for all 'type XxxService interface' declarations and extracts all
@@ -187,8 +340,9 @@ func ParseServices(ctx *Context) ([]*ServiceDeclaration, error) {
 // info is packaged up in a service declaration which you can add to your Context.
 func ParseService(ctx *Context, serviceObj *ast.Object) (*ServiceDeclaration, error) {
 	service := &ServiceDeclaration{
-		Name: serviceObj.Name,
-		Node: serviceObj,
+		Name:    serviceObj.Name,
+		Node:    serviceObj,
+		Version: "0.1.0",
 	}
 
 	methods, err := ParseServiceMethods(ctx, serviceObj)
@@ -429,6 +583,8 @@ func ApplyServiceDocumentation(_ *Context, service *ServiceDeclaration, comments
 			service.HTTPPathPrefix = normalizePathSegment(line[5:])
 		case strings.HasPrefix(line, "PREFIX "):
 			service.HTTPPathPrefix = normalizePathSegment(line[7:])
+		case strings.HasPrefix(line, "VERSION "):
+			service.Version = strings.TrimSpace(line[8:])
 		default:
 			service.Documentation = append(service.Documentation, line)
 		}
@@ -493,6 +649,18 @@ func ApplyModelDocumentation(_ *Context, model *ServiceModelDeclaration, comment
 	model.Documentation = model.Documentation.Trim()
 }
 
+// ApplyFieldDocumentation
+func ApplyFieldDocumentation(_ *Context, fields *FieldDeclaration, comments string) {
+	if fields == nil {
+		return
+	}
+	if comments == "" {
+		return
+	}
+	fields.Documentation = strings.Split(comments, "\n")
+	fields.Documentation = fields.Documentation.Trim()
+}
+
 func fieldName(field *ast.Field) string {
 	if len(field.Names) == 0 {
 		return ""
@@ -501,14 +669,18 @@ func fieldName(field *ast.Field) string {
 }
 
 func typeName(field *ast.Field) string {
-	switch fieldType := field.Type.(type) {
-	case *ast.Ident:
-		return fieldType.Name
-	case *ast.SelectorExpr:
-		return fmt.Sprintf("%v.%v", fieldType.X, fieldType.Sel)
-	case *ast.StarExpr:
-		return fmt.Sprintf("%v", fieldType.X)
-	default:
-		return ""
-	}
+	return types.ExprString(field.Type)
+
+	/*
+		switch fieldType := field.Type.(type) {
+		case *ast.Ident:
+			return fieldType.Name
+		case *ast.SelectorExpr:
+			return fmt.Sprintf("%v.%v", fieldType.X, fieldType.Sel)
+		case *ast.StarExpr:
+			return fmt.Sprintf("%v", fieldType.X)
+		default:
+			return ""
+		}
+	*/
 }

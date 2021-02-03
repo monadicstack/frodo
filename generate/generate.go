@@ -81,4 +81,41 @@ var templateFuncs = template.FuncMap{
 	"HTTPMethodSupportsBody": func(method string) bool {
 		return method == "POST" || method == "PUT" || method == "PATCH"
 	},
+	"LeadingSlash": func(value string) string {
+		if strings.HasPrefix(value, "/") {
+			return value
+		}
+		return "/" + value
+	},
+	"NonPointer": func(value string) string {
+		if strings.HasPrefix(value, "*") {
+			return value[1:]
+		}
+		if strings.HasPrefix(value, "&") {
+			return value[1:]
+		}
+		return value
+	},
+	"ToLower": func(value string) string {
+		return strings.ToLower(value)
+	},
+	"EmptyString": func(value string) bool {
+		return value == ""
+	},
+	"NotEmptyString": func(value string) bool {
+		return value != ""
+	},
+	"OpenAPIPath": func(path string) string {
+		segments := strings.Split(path, "/")
+		for i, segment := range segments {
+			if strings.HasPrefix(segment, ":") {
+				segments[i] = "{" + segment[1:] + "}"
+			}
+		}
+		path = strings.Join(segments, "/")
+		if strings.HasPrefix(path, "/") {
+			return path
+		}
+		return "/" + path
+	},
 }
