@@ -1,5 +1,5 @@
 // !!!!!!! DO NOT EDIT !!!!!!!
-// Auto-generated client code from post_service.go
+// Auto-generated client code from example/posts/post_service.go
 // !!!!!!! DO NOT EDIT !!!!!!!
 package postsrpc
 
@@ -40,7 +40,7 @@ func (client *PostServiceClient) GetPost(ctx context.Context, request *posts.Get
 	}
 
 	response := &posts.GetPostResponse{}
-	err := client.Invoke(ctx, "POST", "/PostService.GetPost", request, response)
+	err := client.Invoke(ctx, "GET", "post/:id", request, response)
 	return response, err
 }
 
@@ -54,7 +54,7 @@ func (client *PostServiceClient) CreatePost(ctx context.Context, request *posts.
 	}
 
 	response := &posts.CreatePostResponse{}
-	err := client.Invoke(ctx, "POST", "/PostService.CreatePost", request, response)
+	err := client.Invoke(ctx, "POST", "post", request, response)
 	return response, err
 }
 
@@ -68,7 +68,7 @@ func (client *PostServiceClient) Archive(ctx context.Context, request *posts.Arc
 	}
 
 	response := &posts.ArchiveResponse{}
-	err := client.Invoke(ctx, "POST", "/PostService.Archive", request, response)
+	err := client.Invoke(ctx, "PATCH", "post/:id/archive", request, response)
 	return response, err
 }
 

@@ -39,7 +39,7 @@ type {{ .Name }}Client struct {
 {{ range .Methods }}
 {{ range .Documentation }}
 // {{ . }}{{ end }}
-func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, request *{{ $ctx.Package.Name }}.{{ .Request.Name }}) (*{{ $ctx.Package.Name }}.{{ .Response.Name }}, error) {
+func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, request *{{ $ctx.Package.Name }}.{{ .Request.Name | NonPointer }}) (*{{ $ctx.Package.Name }}.{{ .Response.Name | NonPointer }}, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
 	}
