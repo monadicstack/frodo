@@ -23,7 +23,7 @@ class {{ .Name }}Client {
         this._fetch = fetch || defaultFetch;
     }
 
-    {{ range .Methods }}
+    {{ range .Functions }}
     /**{{ range $doc := .Documentation }}
      * {{ . }} {{ end }}
      *

@@ -81,24 +81,26 @@ type ServiceDeclaration struct {
 	Version string
 	// HTTPPathPrefix is the optional version/domain prefix for all endpoints in the API (e.g. "v2/").
 	HTTPPathPrefix string
-	// Methods are all of the functions explicitly defined on this service.
-	Methods []*ServiceMethodDeclaration
+	// Functions are all of the functions explicitly defined on this service.
+	Functions []*ServiceFunctionDeclaration
 	// Documentation are all of the comments documenting this service.
 	Documentation DocumentationLines
 	// Node is the syntax tree object for the interface that described this service.
 	Node *ast.Object
 }
 
+// InterfaceNode traverses the AST node for the service, returning the properly-cast InterfaceType
+// declaration which defined this service.
 func (service ServiceDeclaration) InterfaceNode() *ast.InterfaceType {
 	return service.Node.
 		Decl.(*ast.TypeSpec).
 		Type.(*ast.InterfaceType)
 }
 
-// MethodByName fetches the service operation with the given function name. This returns nil when there
+// FunctionByName fetches the service operation with the given function name. This returns nil when there
 // are no functions in this interface/service by that name.
-func (service ServiceDeclaration) MethodByName(name string) *ServiceMethodDeclaration {
-	for _, m := range service.Methods {
+func (service ServiceDeclaration) FunctionByName(name string) *ServiceFunctionDeclaration {
+	for _, m := range service.Functions {
 		if m.Name == name {
 			return m
 		}
@@ -106,8 +108,8 @@ func (service ServiceDeclaration) MethodByName(name string) *ServiceMethodDeclar
 	return nil
 }
 
-// ServiceMethodDeclaration defines a single operation/function within a service (one of the interface functions).
-type ServiceMethodDeclaration struct {
+// ServiceFunctionDeclaration defines a single operation/function within a service (one of the interface functions).
+type ServiceFunctionDeclaration struct {
 	// Name is the name of the function defined in the service interface (the function name to call this operation).
 	Name string
 	// Request contains the details about the model/type/struct for this operation's input/request value.
@@ -126,19 +128,19 @@ type ServiceMethodDeclaration struct {
 	Node *ast.Field
 }
 
-// HTTPPathFields looks at all of the ":xxx" path parameters in HTTPPath and returns the fields on
+// HTTPPathParameters looks at all of the ":xxx" path parameters in HTTPPath and returns the fields on
 // the request struct that will be bound by those values at runtime. For instance, if the path
 // was "/user/:userID/address/:addressID", this will return a 2-element slice containing the request's
 // UserID and AddressID fields.
-func (method ServiceMethodDeclaration) HTTPPathParameters() GatewayParameters {
+func (f ServiceFunctionDeclaration) HTTPPathParameters() GatewayParameters {
 	var results GatewayParameters
-	for _, segment := range strings.Split(method.HTTPPath, "/") {
+	for _, segment := range strings.Split(f.HTTPPath, "/") {
 		if !strings.HasPrefix(segment, ":") {
 			continue
 		}
 
 		paramName := segment[1:]
-		field := method.Request.Fields.FieldByName(paramName)
+		field := f.Request.Fields.FieldByName(paramName)
 		if field == nil {
 			continue
 		}
@@ -151,12 +153,12 @@ func (method ServiceMethodDeclaration) HTTPPathParameters() GatewayParameters {
 	return results
 }
 
-// String returns the method signature for this operation.
-func (method ServiceMethodDeclaration) String() string {
+// String returns the function signature for this operation for debugging purposes.
+func (f ServiceFunctionDeclaration) String() string {
 	return fmt.Sprintf("%s(context.Context, %v) (%v, error)",
-		method.Name,
-		method.Request,
-		method.Response,
+		f.Name,
+		f.Request,
+		f.Response,
 	)
 }
 
@@ -179,16 +181,21 @@ func (model ServiceModelDeclaration) String() string {
 	return model.Name
 }
 
+// FieldDeclarations collects the fields/attributes on a service model.
 type FieldDeclarations []*FieldDeclaration
 
+// Empty returns true if there are zero fields in this set.
 func (fields FieldDeclarations) Empty() bool {
 	return len(fields) == 0
 }
 
+// NotEmpty returns true if there is at least one field in this set
 func (fields FieldDeclarations) NotEmpty() bool {
 	return len(fields) > 0
 }
 
+// FieldByName looks up the declaration for the field that matches the given name. This name
+// comparison is CASE INSENSITIVE, so "id" will find the field "ID".
 func (fields FieldDeclarations) FieldByName(name string) *FieldDeclaration {
 	for _, field := range fields {
 		if strings.EqualFold(field.Name, name) {
@@ -303,7 +310,7 @@ func normalizePathSegment(path string) string {
 	return path
 }
 
-// GatewayParameters is an overlay of a service method's path and request type/field info. It helps you
+// GatewayParameters is an overlay of a service function's path and request type/field info. It helps you
 // indicate how a given field will be bound when handling incoming requests (e.g. path params vs query params).
 type GatewayParameters []*GatewayParameter
 

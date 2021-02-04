@@ -33,7 +33,7 @@ func New{{ .Name }}Gateway(service {{ $ctx.Package.Name }}.{{ .Name }}, options 
 	gw.PathPrefix = "{{ .HTTPPathPrefix }}"
 
 	{{ $service := . }}
-	{{ range $service.Methods }}
+	{{ range $service.Functions }}
 	gw.Register(rpc.Endpoint{
 		Method:      "{{ .HTTPMethod }}",
 		Path:        "{{ .HTTPPath }}",

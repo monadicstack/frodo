@@ -18,7 +18,7 @@ import (
 )
 
 // ParseFile parses a source code file containing a service interface declaration as well as the
-// structs for the request/response inputs and outputs. It will aggregate all of the services/methods/models
+// structs for the request/response inputs and outputs. It will aggregate all of the services/ops/models
 // described in the source code in a much more simple/direct Context.
 //
 // The resulting Context contains all of the information from the source code that we need to generate
@@ -395,75 +395,75 @@ func ParseService(ctx *Context, serviceObj *ast.Object) (*ServiceDeclaration, er
 		Version: "0.1.0",
 	}
 
-	methods, err := ParseServiceMethods(ctx, serviceObj)
+	operations, err := ParseServiceFunctions(ctx, serviceObj)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", serviceObj.Name, err)
 	}
-	service.Methods = methods
+	service.Functions = operations
 	return service, nil
 }
 
-// ParseServiceMethods accepts the syntax tree node for a 'type XxxService interface' declaration,
+// ParseServiceFunctions accepts the syntax tree node for a 'type XxxService interface' declaration,
 // iterates the functions it defines and creates declarations for each one with just the info from
 // it that we need when building clients/gateways for the service.
-func ParseServiceMethods(ctx *Context, serviceNode *ast.Object) ([]*ServiceMethodDeclaration, error) {
+func ParseServiceFunctions(ctx *Context, serviceNode *ast.Object) ([]*ServiceFunctionDeclaration, error) {
 	interfaceType, _ := serviceNode.
 		Decl.(*ast.TypeSpec).
 		Type.(*ast.InterfaceType)
 
-	var methods []*ServiceMethodDeclaration
-	for _, methodObj := range interfaceType.Methods.List {
-		method, err := ParseServiceMethod(ctx, serviceNode, methodObj)
+	var functions []*ServiceFunctionDeclaration
+	for _, functionNode := range interfaceType.Methods.List {
+		function, err := ParseServiceFunction(ctx, serviceNode, functionNode)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", serviceNode.Name, err)
 		}
-		methods = append(methods, method)
+		functions = append(functions, function)
 	}
-	return methods, nil
+	return functions, nil
 }
 
-// ParseServiceMethod accepts the ast node for a service interface and one if its functions, then
+// ParseServiceFunction accepts the ast node for a service interface and one if its functions, then
 // aggregates all of the information about that service operation for the context. It captures
 // the name as well as HTTP-related info (status, method, path) to use in the gateway.
-func ParseServiceMethod(ctx *Context, serviceNode *ast.Object, methodObj *ast.Field) (*ServiceMethodDeclaration, error) {
-	name := fieldName(methodObj)
-	method := &ServiceMethodDeclaration{
+func ParseServiceFunction(ctx *Context, serviceNode *ast.Object, functionNode *ast.Field) (*ServiceFunctionDeclaration, error) {
+	name := fieldName(functionNode)
+	function := &ServiceFunctionDeclaration{
 		Name:       name,
-		Node:       methodObj,
+		Node:       functionNode,
 		HTTPStatus: http.StatusOK,
 		HTTPMethod: "POST",
-		HTTPPath:   "/" + serviceNode.Name + "." + fieldName(methodObj),
+		HTTPPath:   "/" + serviceNode.Name + "." + fieldName(functionNode),
 	}
 
-	function := methodObj.Type.(*ast.FuncType)
+	funcType := functionNode.Type.(*ast.FuncType)
 
 	// Check to make sure that we have 2 parameters w/ the correct types (context and your request)
-	if len(function.Params.List) != 2 {
+	if len(funcType.Params.List) != 2 {
 		return nil, fmt.Errorf("%s: does not have 2 parameters", name)
 	}
-	if !isValidParam1(ctx, function.Params.List[0]) {
+	if !isValidParam1(ctx, funcType.Params.List[0]) {
 		return nil, fmt.Errorf("%s: first param is not a context.Context", name)
 	}
-	if !isValidParam2(ctx, function.Params.List[1]) {
+	if !isValidParam2(ctx, funcType.Params.List[1]) {
 		return nil, fmt.Errorf("%s: second param type is defined in this file", name)
 	}
 
 	// Check to make sure that we have 2 return values (your response type and an error)
-	if len(function.Results.List) != 2 {
+	if len(funcType.Results.List) != 2 {
 		return nil, fmt.Errorf("%s: does not return 2 values", name)
 	}
-	if !isValidReturnValue1(ctx, function.Results.List[0]) {
+	if !isValidReturnValue1(ctx, funcType.Results.List[0]) {
 		return nil, fmt.Errorf("%s: first return value is not deifned in this file", name)
 	}
-	if !isValidReturnValue2(ctx, function.Results.List[1]) {
+	if !isValidReturnValue2(ctx, funcType.Results.List[1]) {
 		return nil, fmt.Errorf("%s: second return value is not an error", name)
 	}
 
-	// Connect the model/struct declarations for request/response to this method.
-	method.Request = ctx.ModelByName(typeName(function.Params.List[1]))
-	method.Response = ctx.ModelByName(typeName(function.Results.List[0]))
+	// Connect the model/struct declarations for request/response to this function.
+	function.Request = ctx.ModelByName(typeName(funcType.Params.List[1]))
+	function.Response = ctx.ModelByName(typeName(funcType.Results.List[0]))
 
-	return method, nil
+	return function, nil
 }
 
 // parseHTTPStatus is just a strconv.ParseInt that parses the right hand side of an "HTTP 202"
@@ -477,7 +477,7 @@ func parseHTTPStatus(statusText string) int {
 	return int(status)
 }
 
-// The first param to all service methods should be a standard "context.Context"
+// The first param to all service functions should be a standard "context.Context"
 func isValidParam1(ctx *Context, param *ast.Field) bool {
 	// Look up the real type from the Go parser rather than reading the type info directly
 	// off of the 'param'. This ensures that if you aliased the "context" package, we can
@@ -573,7 +573,7 @@ func IsModelDeclaration(astObj *ast.Object) bool {
 }
 
 // ApplyDocumentation runs GoDoc parsing on your context's file and adds all of your source's documentation
-// comments to the services/methods/models in the context. This *does* mutate the values on the context.
+// comments to the services/functions/models in the context. This *does* mutate the values on the context.
 // In addition to regurgitating the comments, this will ultimately parse all of the Doc Options
 // that might appear in the comments.
 func ApplyDocumentation(ctx *Context) error {
@@ -597,7 +597,7 @@ func ApplyDocumentation(ctx *Context) error {
 	}
 
 	// Look through all of the top-level service interface definitions and apply all of the
-	// documentation options/comments to the service and its methods.
+	// documentation options/comments to the service and its functions.
 	for _, typeDef := range docs.Types {
 		service := ctx.ServiceByName(typeDef.Name)
 		if service == nil {
@@ -606,8 +606,8 @@ func ApplyDocumentation(ctx *Context) error {
 		ApplyServiceDocumentation(ctx, service, typeDef.Doc)
 
 		// You might ask yourself why we're going back to the original syntax tree to iterate
-		// the service methods rather than iterating 'typeDef.Funcs'. Well... because in all of
-		// my testing this stuff out on real .go files, both ".Methods" and ".Funcs" are nil
+		// the service functions rather than iterating 'typeDef.Funcs'. Well... because in all of
+		// my testing this stuff out on real .go files, both ".Functions" and ".Funcs" are nil
 		// on the service interface documentation nodes. Even when the functions have GoDoc
 		// comments, they're nil.
 		//
@@ -623,12 +623,12 @@ func ApplyDocumentation(ctx *Context) error {
 		// from the GoDoc parser and the function docs come from the original AST nodes. Maybe one day
 		// I'll learn what the heck is going on and deal with it properly, but for now this does
 		// effectively give me what I want - the complete doc comments for all items in my context.
-		for _, methodObj := range service.InterfaceNode().Methods.List {
-			if methodObj.Doc == nil {
+		for _, functionNode := range service.InterfaceNode().Methods.List {
+			if functionNode.Doc == nil {
 				continue
 			}
-			method := service.MethodByName(fieldName(methodObj))
-			ApplyMethodDocumentation(ctx, method, methodObj.Doc.Text())
+			function := service.FunctionByName(fieldName(functionNode))
+			ApplyFunctionDocumentation(ctx, function, functionNode.Doc.Text())
 		}
 	}
 	return nil
@@ -658,10 +658,10 @@ func ApplyServiceDocumentation(_ *Context, service *ServiceDeclaration, comments
 	service.Documentation = service.Documentation.Trim()
 }
 
-// ApplyMethodDocumentation takes the documentation comment block above your interface function
-// declaration and applies them to the method snapshot, parsing all Doc Options in the process.
-func ApplyMethodDocumentation(_ *Context, method *ServiceMethodDeclaration, comments string) {
-	if method == nil {
+// ApplyFunctionDocumentation takes the documentation comment block above your interface function
+// declaration and applies them to the function snapshot, parsing all Doc Options in the process.
+func ApplyFunctionDocumentation(_ *Context, function *ServiceFunctionDeclaration, comments string) {
+	if function == nil {
 		return
 	}
 	if comments == "" {
@@ -676,30 +676,30 @@ func ApplyMethodDocumentation(_ *Context, method *ServiceMethodDeclaration, comm
 	for _, line := range strings.Split(comments, "\n") {
 		switch {
 		case strings.HasPrefix(line, "GET /"):
-			method.HTTPMethod = http.MethodGet
-			method.HTTPPath = normalizePathSegment(line[4:])
+			function.HTTPMethod = http.MethodGet
+			function.HTTPPath = normalizePathSegment(line[4:])
 		case strings.HasPrefix(line, "PUT /"):
-			method.HTTPMethod = http.MethodPut
-			method.HTTPPath = normalizePathSegment(line[4:])
+			function.HTTPMethod = http.MethodPut
+			function.HTTPPath = normalizePathSegment(line[4:])
 		case strings.HasPrefix(line, "POST /"):
-			method.HTTPMethod = http.MethodPost
-			method.HTTPPath = normalizePathSegment(line[5:])
+			function.HTTPMethod = http.MethodPost
+			function.HTTPPath = normalizePathSegment(line[5:])
 		case strings.HasPrefix(line, "PATCH /"):
-			method.HTTPMethod = http.MethodPatch
-			method.HTTPPath = normalizePathSegment(line[6:])
+			function.HTTPMethod = http.MethodPatch
+			function.HTTPPath = normalizePathSegment(line[6:])
 		case strings.HasPrefix(line, "DELETE /"):
-			method.HTTPMethod = http.MethodDelete
-			method.HTTPPath = normalizePathSegment(line[7:])
+			function.HTTPMethod = http.MethodDelete
+			function.HTTPPath = normalizePathSegment(line[7:])
 		case strings.HasPrefix(line, "HEAD /"):
-			method.HTTPMethod = http.MethodHead
-			method.HTTPPath = normalizePathSegment(line[5:])
+			function.HTTPMethod = http.MethodHead
+			function.HTTPPath = normalizePathSegment(line[5:])
 		case strings.HasPrefix(line, "HTTP "):
-			method.HTTPStatus = parseHTTPStatus(line[5:])
+			function.HTTPStatus = parseHTTPStatus(line[5:])
 		default:
-			method.Documentation = append(method.Documentation, line)
+			function.Documentation = append(function.Documentation, line)
 		}
 	}
-	method.Documentation = method.Documentation.Trim()
+	function.Documentation = function.Documentation.Trim()
 }
 
 // ApplyModelDocumentation takes the documentation comment block above your struct/alias type

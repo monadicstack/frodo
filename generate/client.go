@@ -36,7 +36,7 @@ type {{ .Name }}Client struct {
 }
 
 {{ $service := . }}
-{{ range .Methods }}
+{{ range .Functions }}
 {{ range .Documentation }}
 // {{ . }}{{ end }}
 func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, request *{{ $ctx.Package.Name }}.{{ .Request.Name | NonPointer }}) (*{{ $ctx.Package.Name }}.{{ .Response.Name | NonPointer }}, error) {
@@ -64,7 +64,7 @@ type {{ .Name }}Proxy struct {
 	Service {{ $ctx.Package.Name }}.{{ .Name }}
 }
 
-{{ range .Methods }}
+{{ range .Functions }}
 func (proxy *{{ $service.Name }}Proxy) {{ .Name }} (ctx context.Context, request *{{ $ctx.Package.Name }}.{{ .Request.Name }}) (*{{ $ctx.Package.Name }}.{{ .Response.Name }}, error) {
 	return proxy.Service.{{ .Name }}(ctx, request)
 }

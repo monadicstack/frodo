@@ -11,7 +11,7 @@ servers:
     - url: {{ .HTTPPathPrefix | LeadingSlash }}
 
 paths:
-{{ range $method := .Methods }}
+{{ range $method := .Functions }}
 {{ $pathFields := .HTTPPathParameters }}
     "{{ .HTTPPath | OpenAPIPath }}":
         {{ .HTTPMethod | ToLower }}:
