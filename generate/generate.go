@@ -78,9 +78,6 @@ func parseArtifactTemplate(name string, text string) *template.Template {
 // templateFuncs are all of pipe functions we want available when evaluating the Go template
 // to generate an artifact's source code.
 var templateFuncs = template.FuncMap{
-	"HTTPMethodSupportsBody": func(method string) bool {
-		return method == "POST" || method == "PUT" || method == "PATCH"
-	},
 	"LeadingSlash": func(value string) string {
 		if strings.HasPrefix(value, "/") {
 			return value

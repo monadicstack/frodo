@@ -8,29 +8,41 @@ info:
     version: "{{ .Version }}"
 
 servers:
-    - url: {{ .HTTPPathPrefix | LeadingSlash }}
+    - url: {{ .Gateway.PathPrefix | LeadingSlash }}
 
 paths:
-{{ range $method := .Methods }}
-{{ $pathFields := .HTTPPathParameters }}
-    "{{ .HTTPPath | OpenAPIPath }}":
-        {{ .HTTPMethod | ToLower }}:
+{{ range $method := .Functions }}
+{{ $pathFields := .Gateway.PathParameters }}
+{{ $queryFields := .Gateway.QueryParameters }}
+    "{{ .Gateway.Path | OpenAPIPath }}":
+        {{ .Gateway.Method | ToLower }}:
             description: > {{ range .Documentation }}
                 {{ . }}{{ end }}
-            {{ if $pathFields.NotEmpty }}
+            {{ if or $pathFields.NotEmpty $queryFields.NotEmpty }}
             parameters:
                 {{ range $pathFields }}
                 - in: path
                   name: {{ .Name }}
                   required: true
                   {{ if .Field.Documentation.NotEmpty }}
-                  description: {{ .Field.Documentation.Summary }}
+                  description:  > {{ range .Field.Documentation }} 
+                      {{ . }}{{ end }}
+                  {{ end }}
+                  schema:
+                      type: {{ .Field.Type.JSONType }}
+                {{ end }}
+                {{ range $queryFields }}
+                - in: query
+                  name: {{ .Name }}
+                  {{ if .Field.Documentation.NotEmpty }}
+                  description:  > {{ range .Field.Documentation }} 
+                      {{ . }}{{ end }}
                   {{ end }}
                   schema:
                       type: {{ .Field.Type.JSONType }}
                 {{ end }}
             {{ end }}
-            {{ if .HTTPMethod | HTTPMethodSupportsBody }}
+            {{ if .Gateway.SupportsBody }}
             requestBody:
                 content:
                      application/json:
@@ -39,7 +51,7 @@ paths:
             {{ end }}
                 
             responses:
-                {{ .HTTPStatus }}:
+                {{ .Gateway.Status }}:
                     description: Success
                     content:
                         application/json:

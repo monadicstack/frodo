@@ -19,11 +19,11 @@ class {{ .Name }}Client {
     _fetch;
 
     constructor(baseURL, {fetch} = {}) {
-        this._baseURL = trimSlashes(trimSlashes(baseURL) + '/' + trimSlashes('{{ .HTTPPathPrefix}}'));
+        this._baseURL = trimSlashes(trimSlashes(baseURL) + '/' + trimSlashes('{{ .Gateway.PathPrefix}}'));
         this._fetch = fetch || defaultFetch;
     }
 
-    {{ range .Methods }}
+    {{ range .Functions }}
     /**{{ range $doc := .Documentation }}
      * {{ . }} {{ end }}
      *
@@ -31,16 +31,16 @@ class {{ .Name }}Client {
      * @returns {Promise<{{ .Response.Name }}>} The JSON-encoded return value of the operation.
      */
     async {{ .Name }}(serviceRequest) {
-        const url = this._baseURL + buildRequestPath('{{ .HTTPMethod }}', '{{ .HTTPPath }}', serviceRequest);
-        {{ if .HTTPMethod | HTTPMethodSupportsBody }}const bodyJSON = JSON.stringify(serviceRequest);{{ end }}
+        const url = this._baseURL + buildRequestPath('{{ .Gateway.Method }}', '{{ .Gateway.Path }}', serviceRequest);
+        {{ if .Gateway.SupportsBody }}const bodyJSON = JSON.stringify(serviceRequest);{{ end }}
 
         const options = {
-            method: '{{ .HTTPMethod }}',
+            method: '{{ .Gateway.Method }}',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json; charset=utf-8',
             },
-            {{ if .HTTPMethod | HTTPMethodSupportsBody }}body: bodyJSON,{{ end }}
+            {{ if .Gateway.SupportsBody }}body: bodyJSON,{{ end }}
         };
         const response = await this._fetch(url, options);
         return handleResponse(response);
@@ -172,8 +172,8 @@ function trimSlashes(value) {
 {{ range .Models }}
 /** {{ range .Documentation }}
  * {{ . }}{{ end }}
- * @typedef {Object|*} {{ .Name }}{{ range .Fields }}
- * @property {*|{{ .Type.JSONType }} } {{ .Name }}{{ end }}
+ * @typedef { {{ .Type.JSONType }} } {{ .Name }}{{ range .Fields }}
+ * @property { {{ .Type.JSONType }} } {{ .Name }}{{ end }}
  */
 {{ end }}
 

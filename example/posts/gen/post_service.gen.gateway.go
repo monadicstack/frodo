@@ -1,5 +1,5 @@
 // !!!!!!! DO NOT EDIT !!!!!!!
-// Auto-generated server code from post_service.go
+// Auto-generated server code from example/posts/post_service.go
 // !!!!!!! DO NOT EDIT !!!!!!!
 package postsrpc
 
@@ -28,8 +28,8 @@ func NewPostServiceGateway(service posts.PostService, options ...rpc.GatewayOpti
 	gw.PathPrefix = "v2"
 
 	gw.Register(rpc.Endpoint{
-		Method:      "POST",
-		Path:        "/PostService.GetPost",
+		Method:      "GET",
+		Path:        "post/:id",
 		ServiceName: "PostService",
 		Name:        "GetPost",
 		Handler: func(w http.ResponseWriter, req *http.Request) {
@@ -48,7 +48,7 @@ func NewPostServiceGateway(service posts.PostService, options ...rpc.GatewayOpti
 
 	gw.Register(rpc.Endpoint{
 		Method:      "POST",
-		Path:        "/PostService.CreatePost",
+		Path:        "post",
 		ServiceName: "PostService",
 		Name:        "CreatePost",
 		Handler: func(w http.ResponseWriter, req *http.Request) {
@@ -66,8 +66,8 @@ func NewPostServiceGateway(service posts.PostService, options ...rpc.GatewayOpti
 	})
 
 	gw.Register(rpc.Endpoint{
-		Method:      "POST",
-		Path:        "/PostService.Archive",
+		Method:      "PATCH",
+		Path:        "post/:id/archive",
 		ServiceName: "PostService",
 		Name:        "Archive",
 		Handler: func(w http.ResponseWriter, req *http.Request) {
@@ -80,7 +80,7 @@ func NewPostServiceGateway(service posts.PostService, options ...rpc.GatewayOpti
 			}
 
 			serviceResponse, err := service.Archive(req.Context(), &serviceRequest)
-			response.Reply(200, serviceResponse, err)
+			response.Reply(202, serviceResponse, err)
 		},
 	})
 

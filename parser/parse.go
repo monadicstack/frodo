@@ -18,7 +18,7 @@ import (
 )
 
 // ParseFile parses a source code file containing a service interface declaration as well as the
-// structs for the request/response inputs and outputs. It will aggregate all of the services/methods/models
+// structs for the request/response inputs and outputs. It will aggregate all of the services/ops/models
 // described in the source code in a much more simple/direct Context.
 //
 // The resulting Context contains all of the information from the source code that we need to generate
@@ -50,16 +50,9 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.Package, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-
-	conf := types.Config{Importer: importer.Default()}
-	ctx.TypeInfo = &types.Info{
-		Types: map[ast.Expr]types.TypeAndValue{},
+	if ctx.TypeInfo, err = ParseTypeInformation(ctx); err != nil {
+		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	_, err = conf.Check(ctx.Package.Name, ctx.FileSet, []*ast.File{ctx.File}, ctx.TypeInfo)
-	if err != nil {
-		return nil, fmt.Errorf("[%s] types error: %w", inputPath, err)
-	}
-
 	if ctx.Models, err = ParseServiceModels(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
@@ -71,6 +64,21 @@ func ParseFile(inputPath string) (*Context, error) {
 	}
 
 	return ctx, nil
+}
+
+// ParseTypeInformation runs the syntax tree through the "go/types" processor so that we get detailed
+// type information on all of the structs/types we defined, their fields, and the parameters/outputs
+// of our service functions.
+func ParseTypeInformation(ctx *Context) (*types.Info, error) {
+	conf := types.Config{Importer: importer.Default()}
+	typeInfo := &types.Info{
+		Types: map[ast.Expr]types.TypeAndValue{},
+	}
+	_, err := conf.Check(ctx.Package.Name, ctx.FileSet, []*ast.File{ctx.File}, typeInfo)
+	if err != nil {
+		return nil, err
+	}
+	return typeInfo, nil
 }
 
 // ParsePackageInfo overlays your project's "go.mod" file and your input file/path to figure
@@ -168,52 +176,105 @@ func ParseServiceModels(ctx *Context) ([]*ServiceModelDeclaration, error) {
 // ParseServiceModel accepts a single 'type XXX' node and generates the model information
 // that we want to capture for the service context.
 func ParseServiceModel(ctx *Context, modelNode *ast.Object) (*ServiceModelDeclaration, error) {
+	typeInfo, err := ctx.LookupType(modelNode.Decl.(*ast.TypeSpec).Type)
+	if err != nil {
+		return nil, err
+	}
+
 	model := &ServiceModelDeclaration{
 		Name: modelNode.Name,
 		Node: modelNode,
+		Type: ParseFieldType(ctx, typeInfo),
 	}
 
-	typeSpec, ok := modelNode.Decl.(*ast.TypeSpec)
-	if !ok {
-		return nil, fmt.Errorf("unable to parse model node that is not a type spec")
+	fieldList, err := lookupFieldList(modelNode)
+	if err != nil {
+		return nil, err
+	}
+	if fieldList == nil { // e.g. type alias to non-struct (e.g. 'type ISODate time.Time')
+		return model, nil
 	}
 
-	switch t := typeSpec.Type.(type) {
-	case *ast.StructType:
-		fields, err := parseFields(ctx, t.Fields)
-		model.Fields = fields
-		return model, err
-	case *ast.Ident:
+	for _, fieldNode := range fieldList {
+		field, err := ParseField(ctx, fieldNode)
+		if err != nil {
+			return nil, err
+		}
+		model.Fields = append(model.Fields, field)
 	}
-
 	return model, nil
 }
 
-func parseFields(ctx *Context, fieldList *ast.FieldList) ([]*FieldDeclaration, error) {
-	var fields []*FieldDeclaration
-	for _, fieldNode := range fieldList.List {
-		fields = append(fields, parseField(ctx, fieldNode))
-	}
-	return fields, nil
-}
-
-func parseField(ctx *Context, fieldNode *ast.Field) *FieldDeclaration {
-	typeInfo, ok := ctx.TypeInfo.Types[fieldNode.Type]
-	if !ok {
-		return nil
+// ParseField looks at a single attribute on a model struct and builds the complete
+// field/type declaration with all of the info you might need when building clients/docs.
+func ParseField(ctx *Context, fieldNode *ast.Field) (*FieldDeclaration, error) {
+	fieldType, err := ctx.LookupType(fieldNode.Type)
+	if err != nil {
+		return nil, err
 	}
 
-	field := &FieldDeclaration{
+	return &FieldDeclaration{
 		Name: fieldName(fieldNode),
 		Node: fieldNode,
-		Type: parseFieldType(ctx, typeInfo.Type),
-	}
-
-	ApplyFieldDocumentation(ctx, field, fieldNode.Doc.Text())
-	return field
+		Type: ParseFieldType(ctx, fieldType),
+	}, nil
 }
 
-func parseFieldType(ctx *Context, t types.Type) *FieldType {
+// lookupFieldList accepts the AST node for a type definition and returns a slice of all
+// fields/attributes that belong to this type.
+//
+// IMPORTANT! The resulting slice will contain the attributes of all embedded types as well.
+// As a result, the slice should contain explicitly defined attributes as well as those it
+// sugar-coats due to embedding.
+func lookupFieldList(modelNode *ast.Object) ([]*ast.Field, error) {
+	if modelNode == nil {
+		return nil, nil
+	}
+	typeSpec, ok := modelNode.Decl.(*ast.TypeSpec)
+	if !ok {
+		return nil, fmt.Errorf("unable to look up fields for non-type spec")
+	}
+	return lookupFieldListForType(typeSpec.Type)
+}
+
+// lookupFieldListForType behaves the same as lookupFieldList, but works by taking an AST type
+// expression that you already have in-hand.
+func lookupFieldListForType(typeExpr ast.Expr) ([]*ast.Field, error) {
+	switch t := typeExpr.(type) {
+	case *ast.StructType:
+		return flattenEmbeddedFields(t.Fields.List)
+	case *ast.Ident:
+		return lookupFieldList(t.Obj)
+	case *ast.SelectorExpr:
+		return lookupFieldList(t.Sel.Obj)
+	default:
+		return nil, nil
+	}
+}
+
+// flattenEmbeddedFields takes the exact list of fields defined on a struct and expands the list
+// to include any "inherited" fields that came from fields that were actually embedded types.
+func flattenEmbeddedFields(fields []*ast.Field) ([]*ast.Field, error) {
+	var results []*ast.Field
+	for _, field := range fields {
+		if !embeddedField(field) {
+			results = append(results, field)
+			continue
+		}
+
+		embeddedFields, err := lookupFieldListForType(field.Type)
+		if err != nil {
+			return nil, fmt.Errorf("embedded field lookup error: %s: %v", fieldName(field), err)
+		}
+		results = append(results, embeddedFields...)
+	}
+	return results, nil
+}
+
+// ParseFieldType looks at the Go parser's type information for a given model attribute and extracts
+// all of the various info we need to get a complete picture of the type and how to unravel any
+// aliasing that might be going on.
+func ParseFieldType(ctx *Context, t types.Type) *FieldType {
 	fieldType := &FieldType{
 		Name:       t.String(),
 		Type:       t,
@@ -226,20 +287,21 @@ func parseFieldType(ctx *Context, t types.Type) *FieldType {
 		fieldType.Type = underlying.Elem()
 		fieldType.Underlying = underlyingType(fieldType.Type)
 	case *types.Array:
-		fieldType.Elem = parseFieldType(ctx, underlying.Elem())
+		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
 	case *types.Slice:
-		fieldType.Elem = parseFieldType(ctx, underlying.Elem())
+		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
 	case *types.Chan:
-		fieldType.Elem = parseFieldType(ctx, underlying.Elem())
+		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
 	case *types.Map:
-		fieldType.Key = parseFieldType(ctx, underlying.Key())
-		fieldType.Elem = parseFieldType(ctx, underlying.Elem())
+		fieldType.Key = ParseFieldType(ctx, underlying.Key())
+		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
 	}
 
 	fieldType.JSONType = toJSON(ctx, fieldType.Underlying)
 	return fieldType
 }
 
+// toJSON maps the raw Go type to the closest JSON equivalent type (e.g. uint32 -> "number").
 func toJSON(ctx *Context, t types.Type) string {
 	switch raw := t.(type) {
 	case *types.Pointer:
@@ -256,7 +318,7 @@ func toJSON(ctx *Context, t types.Type) string {
 	if ok {
 		return jsonType
 	}
-	return "*"
+	return "object"
 }
 
 var jsonTypeMapping = map[string]string{
@@ -264,6 +326,7 @@ var jsonTypeMapping = map[string]string{
 	"bool":      "boolean",
 	"rune":      "number",
 	"byte":      "number",
+	"int":       "number",
 	"int8":      "number",
 	"int16":     "number",
 	"int32":     "number",
@@ -301,18 +364,6 @@ func underlyingType(fieldType types.Type) types.Type {
 		return underlyingType(underlying)
 	}
 	return fieldType
-
-	/*
-		func (b *Basic) Underlying() Type     { return b }
-		func (a *Array) Underlying() Type     { return a }
-		func (s *Slice) Underlying() Type     { return s }
-		func (s *Struct) Underlying() Type    { return s }
-		func (p *Pointer) Underlying() Type   { return p }
-		func (t *Interface) Underlying() Type { return t }
-		func (m *Map) Underlying() Type       { return m }
-		func (c *Chan) Underlying() Type      { return c }
-		func (t *Named) Underlying() Type     { return t.underlying }
-	*/
 }
 
 // ParseServices looks for all 'type XxxService interface' declarations and extracts all
@@ -343,77 +394,82 @@ func ParseService(ctx *Context, serviceObj *ast.Object) (*ServiceDeclaration, er
 		Name:    serviceObj.Name,
 		Node:    serviceObj,
 		Version: "0.1.0",
+		Gateway: &GatewayServiceOptions{},
 	}
+	service.Gateway.Service = service
 
-	methods, err := ParseServiceMethods(ctx, serviceObj)
+	operations, err := ParseServiceFunctions(ctx, serviceObj)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", serviceObj.Name, err)
 	}
-	service.Methods = methods
+	service.Functions = operations
 	return service, nil
 }
 
-// ParseServiceMethods accepts the syntax tree node for a 'type XxxService interface' declaration,
+// ParseServiceFunctions accepts the syntax tree node for a 'type XxxService interface' declaration,
 // iterates the functions it defines and creates declarations for each one with just the info from
 // it that we need when building clients/gateways for the service.
-func ParseServiceMethods(ctx *Context, serviceNode *ast.Object) ([]*ServiceMethodDeclaration, error) {
+func ParseServiceFunctions(ctx *Context, serviceNode *ast.Object) ([]*ServiceFunctionDeclaration, error) {
 	interfaceType, _ := serviceNode.
 		Decl.(*ast.TypeSpec).
 		Type.(*ast.InterfaceType)
 
-	var methods []*ServiceMethodDeclaration
-	for _, methodObj := range interfaceType.Methods.List {
-		method, err := ParseServiceMethod(ctx, serviceNode, methodObj)
+	var functions []*ServiceFunctionDeclaration
+	for _, functionNode := range interfaceType.Methods.List {
+		function, err := ParseServiceFunction(ctx, serviceNode, functionNode)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", serviceNode.Name, err)
 		}
-		methods = append(methods, method)
+		functions = append(functions, function)
 	}
-	return methods, nil
+	return functions, nil
 }
 
-// ParseServiceMethod accepts the ast node for a service interface and one if its functions, then
+// ParseServiceFunction accepts the ast node for a service interface and one if its functions, then
 // aggregates all of the information about that service operation for the context. It captures
 // the name as well as HTTP-related info (status, method, path) to use in the gateway.
-func ParseServiceMethod(ctx *Context, serviceNode *ast.Object, methodObj *ast.Field) (*ServiceMethodDeclaration, error) {
-	name := fieldName(methodObj)
-	method := &ServiceMethodDeclaration{
-		Name:       name,
-		Node:       methodObj,
-		HTTPStatus: http.StatusOK,
-		HTTPMethod: "POST",
-		HTTPPath:   "/" + serviceNode.Name + "." + fieldName(methodObj),
+func ParseServiceFunction(ctx *Context, serviceNode *ast.Object, functionNode *ast.Field) (*ServiceFunctionDeclaration, error) {
+	name := fieldName(functionNode)
+	function := &ServiceFunctionDeclaration{
+		Name: name,
+		Node: functionNode,
+		Gateway: &GatewayFunctionOptions{
+			Status: http.StatusOK,
+			Method: http.MethodPost,
+			Path:   "/" + serviceNode.Name + "." + fieldName(functionNode),
+		},
 	}
+	function.Gateway.Function = function
 
-	function := methodObj.Type.(*ast.FuncType)
+	funcType := functionNode.Type.(*ast.FuncType)
 
 	// Check to make sure that we have 2 parameters w/ the correct types (context and your request)
-	if len(function.Params.List) != 2 {
+	if len(funcType.Params.List) != 2 {
 		return nil, fmt.Errorf("%s: does not have 2 parameters", name)
 	}
-	if !isValidParam1(ctx, function.Params.List[0]) {
+	if !isValidParam1(ctx, funcType.Params.List[0]) {
 		return nil, fmt.Errorf("%s: first param is not a context.Context", name)
 	}
-	if !isValidParam2(ctx, function.Params.List[1]) {
+	if !isValidParam2(ctx, funcType.Params.List[1]) {
 		return nil, fmt.Errorf("%s: second param type is defined in this file", name)
 	}
 
 	// Check to make sure that we have 2 return values (your response type and an error)
-	if len(function.Results.List) != 2 {
+	if len(funcType.Results.List) != 2 {
 		return nil, fmt.Errorf("%s: does not return 2 values", name)
 	}
-	if !isValidReturnValue1(ctx, function.Results.List[0]) {
+	if !isValidReturnValue1(ctx, funcType.Results.List[0]) {
 		return nil, fmt.Errorf("%s: first return value is not deifned in this file", name)
 	}
-	if !isValidReturnValue2(ctx, function.Results.List[1]) {
+	if !isValidReturnValue2(ctx, funcType.Results.List[1]) {
 		return nil, fmt.Errorf("%s: second return value is not an error", name)
 	}
 
-	// Connect the model/struct declarations for request/response to this method.
-	method.Request = ctx.ModelByName(typeName(function.Params.List[1]))
-	method.Response = ctx.ModelByName(typeName(function.Results.List[0]))
+	// Connect the model/struct declarations for request/response to this function.
+	function.Request = ctx.ModelByName(typeName(funcType.Params.List[1]))
+	function.Response = ctx.ModelByName(typeName(funcType.Results.List[0]))
 
-	return method, nil
+	return function, nil
 }
 
 // parseHTTPStatus is just a strconv.ParseInt that parses the right hand side of an "HTTP 202"
@@ -427,13 +483,22 @@ func parseHTTPStatus(statusText string) int {
 	return int(status)
 }
 
-// The first param to all service methods should be a standard "context.Context"
-func isValidParam1(_ *Context, param *ast.Field) bool {
-	// I know... doesn't handle if you decided to alias the context class, but that
-	// should be a fairly infrequent case. I'm going to wait for feedback to determine
-	// if there's a valid need to compare the X in the selector expression to your
-	// file's imports and see if they resolve to the right context class.
-	return typeName(param) == "context.Context"
+// The first param to all service functions should be a standard "context.Context"
+func isValidParam1(ctx *Context, param *ast.Field) bool {
+	// Look up the real type from the Go parser rather than reading the type info directly
+	// off of the 'param'. This ensures that if you aliased the "context" package, we can
+	// still properly identify it. If you aliased it to "foo" your function might look like this:
+	//
+	//     GetByID(foo.Context, *GetByIDRequest) (*GetByIDResponse, error)
+	//
+	// According to the 'param' the type name is "foo.Context". We have no idea what "foo" is, so
+	// we go back to the Go parser's type info table to identify the un-aliased type name
+	// which is "context.Context"; and that's what we look for.
+	typeInfo, err := ctx.LookupType(param.Type)
+	if err != nil {
+		return false
+	}
+	return typeInfo.String() == "context.Context"
 }
 
 // The parameter should be a "request" struct/type that is defined in the file we're parsing,
@@ -514,7 +579,7 @@ func IsModelDeclaration(astObj *ast.Object) bool {
 }
 
 // ApplyDocumentation runs GoDoc parsing on your context's file and adds all of your source's documentation
-// comments to the services/methods/models in the context. This *does* mutate the values on the context.
+// comments to the services/functions/models in the context. This *does* mutate the values on the context.
 // In addition to regurgitating the comments, this will ultimately parse all of the Doc Options
 // that might appear in the comments.
 func ApplyDocumentation(ctx *Context) error {
@@ -527,11 +592,18 @@ func ApplyDocumentation(ctx *Context) error {
 	// request/response models and process their comments.
 	for _, typeDef := range docs.Types {
 		model := ctx.ModelByName(typeDef.Name)
+		if model == nil {
+			continue
+		}
 		ApplyModelDocumentation(ctx, model, typeDef.Doc)
+
+		for _, field := range model.Fields {
+			ApplyFieldDocumentation(ctx, field, field.Node.Doc.Text())
+		}
 	}
 
 	// Look through all of the top-level service interface definitions and apply all of the
-	// documentation options/comments to the service and its methods.
+	// documentation options/comments to the service and its functions.
 	for _, typeDef := range docs.Types {
 		service := ctx.ServiceByName(typeDef.Name)
 		if service == nil {
@@ -540,8 +612,8 @@ func ApplyDocumentation(ctx *Context) error {
 		ApplyServiceDocumentation(ctx, service, typeDef.Doc)
 
 		// You might ask yourself why we're going back to the original syntax tree to iterate
-		// the service methods rather than iterating 'typeDef.Funcs'. Well... because in all of
-		// my testing this stuff out on real .go files, both ".Methods" and ".Funcs" are nil
+		// the service functions rather than iterating 'typeDef.Funcs'. Well... because in all of
+		// my testing this stuff out on real .go files, both ".Functions" and ".Funcs" are nil
 		// on the service interface documentation nodes. Even when the functions have GoDoc
 		// comments, they're nil.
 		//
@@ -557,12 +629,12 @@ func ApplyDocumentation(ctx *Context) error {
 		// from the GoDoc parser and the function docs come from the original AST nodes. Maybe one day
 		// I'll learn what the heck is going on and deal with it properly, but for now this does
 		// effectively give me what I want - the complete doc comments for all items in my context.
-		for _, methodObj := range service.InterfaceNode().Methods.List {
-			if methodObj.Doc == nil {
+		for _, functionNode := range service.InterfaceNode().Methods.List {
+			if functionNode.Doc == nil {
 				continue
 			}
-			method := service.MethodByName(fieldName(methodObj))
-			ApplyMethodDocumentation(ctx, method, methodObj.Doc.Text())
+			function := service.FunctionByName(fieldName(functionNode))
+			ApplyFunctionDocumentation(ctx, function, functionNode.Doc.Text())
 		}
 	}
 	return nil
@@ -580,9 +652,9 @@ func ApplyServiceDocumentation(_ *Context, service *ServiceDeclaration, comments
 	for _, line := range strings.Split(comments, "\n") {
 		switch {
 		case strings.HasPrefix(line, "PATH "):
-			service.HTTPPathPrefix = normalizePathSegment(line[5:])
+			service.Gateway.PathPrefix = normalizePathSegment(line[5:])
 		case strings.HasPrefix(line, "PREFIX "):
-			service.HTTPPathPrefix = normalizePathSegment(line[7:])
+			service.Gateway.PathPrefix = normalizePathSegment(line[7:])
 		case strings.HasPrefix(line, "VERSION "):
 			service.Version = strings.TrimSpace(line[8:])
 		default:
@@ -592,10 +664,10 @@ func ApplyServiceDocumentation(_ *Context, service *ServiceDeclaration, comments
 	service.Documentation = service.Documentation.Trim()
 }
 
-// ApplyMethodDocumentation takes the documentation comment block above your interface function
-// declaration and applies them to the method snapshot, parsing all Doc Options in the process.
-func ApplyMethodDocumentation(_ *Context, method *ServiceMethodDeclaration, comments string) {
-	if method == nil {
+// ApplyFunctionDocumentation takes the documentation comment block above your interface function
+// declaration and applies them to the function snapshot, parsing all Doc Options in the process.
+func ApplyFunctionDocumentation(_ *Context, function *ServiceFunctionDeclaration, comments string) {
+	if function == nil {
 		return
 	}
 	if comments == "" {
@@ -610,30 +682,30 @@ func ApplyMethodDocumentation(_ *Context, method *ServiceMethodDeclaration, comm
 	for _, line := range strings.Split(comments, "\n") {
 		switch {
 		case strings.HasPrefix(line, "GET /"):
-			method.HTTPMethod = http.MethodGet
-			method.HTTPPath = normalizePathSegment(line[4:])
+			function.Gateway.Method = http.MethodGet
+			function.Gateway.Path = normalizePathSegment(line[4:])
 		case strings.HasPrefix(line, "PUT /"):
-			method.HTTPMethod = http.MethodPut
-			method.HTTPPath = normalizePathSegment(line[4:])
+			function.Gateway.Method = http.MethodPut
+			function.Gateway.Path = normalizePathSegment(line[4:])
 		case strings.HasPrefix(line, "POST /"):
-			method.HTTPMethod = http.MethodPost
-			method.HTTPPath = normalizePathSegment(line[5:])
+			function.Gateway.Method = http.MethodPost
+			function.Gateway.Path = normalizePathSegment(line[5:])
 		case strings.HasPrefix(line, "PATCH /"):
-			method.HTTPMethod = http.MethodPatch
-			method.HTTPPath = normalizePathSegment(line[6:])
+			function.Gateway.Method = http.MethodPatch
+			function.Gateway.Path = normalizePathSegment(line[6:])
 		case strings.HasPrefix(line, "DELETE /"):
-			method.HTTPMethod = http.MethodDelete
-			method.HTTPPath = normalizePathSegment(line[7:])
+			function.Gateway.Method = http.MethodDelete
+			function.Gateway.Path = normalizePathSegment(line[7:])
 		case strings.HasPrefix(line, "HEAD /"):
-			method.HTTPMethod = http.MethodHead
-			method.HTTPPath = normalizePathSegment(line[5:])
+			function.Gateway.Method = http.MethodHead
+			function.Gateway.Path = normalizePathSegment(line[5:])
 		case strings.HasPrefix(line, "HTTP "):
-			method.HTTPStatus = parseHTTPStatus(line[5:])
+			function.Gateway.Status = parseHTTPStatus(line[5:])
 		default:
-			method.Documentation = append(method.Documentation, line)
+			function.Documentation = append(function.Documentation, line)
 		}
 	}
-	method.Documentation = method.Documentation.Trim()
+	function.Documentation = function.Documentation.Trim()
 }
 
 // ApplyModelDocumentation takes the documentation comment block above your struct/alias type
@@ -649,7 +721,8 @@ func ApplyModelDocumentation(_ *Context, model *ServiceModelDeclaration, comment
 	model.Documentation = model.Documentation.Trim()
 }
 
-// ApplyFieldDocumentation
+// ApplyFieldDocumentation takes the documentation comment block above your struct field
+// declaration and applies them to the model snapshot, parsing all Doc Options in the process.
 func ApplyFieldDocumentation(_ *Context, field *FieldDeclaration, comments string) {
 	if field == nil {
 		return
@@ -661,26 +734,34 @@ func ApplyFieldDocumentation(_ *Context, field *FieldDeclaration, comments strin
 	field.Documentation = field.Documentation.Trim()
 }
 
+// fieldName returns the actual field name that should be used for this attribute within a struct.
 func fieldName(field *ast.Field) string {
-	if len(field.Names) == 0 {
-		return ""
+	if embeddedField(field) {
+		return noPointer(noPackage(typeName(field)))
 	}
 	return field.Names[0].Name
 }
 
+// embeddedField returns true if it looks as though this struct field does not have a name; it just
+// has the type information.
+func embeddedField(field *ast.Field) bool {
+	return len(field.Names) == 0
+}
+
+// noPackage strips of any package prefixes from an identifier (e.g. "context.Context" -> "Context")
+func noPackage(ident string) string {
+	period := strings.LastIndex(ident, ".")
+	if period < 0 {
+		return ident
+	}
+	return ident[period+1:]
+}
+
+// noPointer strips off any "*" prefix your type identifier might have (e.g. "*Foo" -> "Foo")
+func noPointer(ident string) string {
+	return strings.TrimLeft(ident, "*")
+}
+
 func typeName(field *ast.Field) string {
 	return types.ExprString(field.Type)
-
-	/*
-		switch fieldType := field.Type.(type) {
-		case *ast.Ident:
-			return fieldType.Name
-		case *ast.SelectorExpr:
-			return fmt.Sprintf("%v.%v", fieldType.X, fieldType.Sel)
-		case *ast.StarExpr:
-			return fmt.Sprintf("%v", fieldType.X)
-		default:
-			return ""
-		}
-	*/
 }

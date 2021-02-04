@@ -1,7 +1,7 @@
 package posts
 
 import (
-	"context"
+	real "context"
 	chrono "time"
 )
 
@@ -14,15 +14,15 @@ type PostService interface {
 	// GetPost fetches a Post record by its unique identifier.
 	//
 	// GET /post/:id
-	GetPost(context.Context, *GetPostRequest) (*GetPostResponse, error)
+	GetPost(real.Context, *GetPostRequest) (*GetPostResponse, error)
 	// CreatePost creates/stores a new Post record.
 	//
 	// POST /post
-	CreatePost(context.Context, *CreatePostRequest) (*CreatePostResponse, error)
+	CreatePost(real.Context, *CreatePostRequest) (*CreatePostResponse, error)
 	// Archive effectively disables a Post from appearing in the article list.
 	// PATCH /post/:id/archive
 	// HTTP 202
-	Archive(context.Context, *ArchiveRequest) (*ArchiveResponse, error)
+	Archive(real.Context, *ArchiveRequest) (*ArchiveResponse, error)
 }
 
 type ShortText string
@@ -40,7 +40,10 @@ type Post struct {
 
 type GetPostRequest struct {
 	// ID is the unique identifier of the post to fetch.
-	ID string
+	ID    string
+	Limit int
+	// Offset is like the SQL offset, dummy.
+	Offset int
 }
 
 // GetPostResponse describes a single post in the blog.
@@ -51,7 +54,9 @@ type CreatePostRequest struct {
 	Text  string
 }
 
-type CreatePostResponse Post
+type CreatePostResponse struct {
+	Post
+}
 
 type ArchiveRequest struct {
 	ID string
@@ -59,3 +64,5 @@ type ArchiveRequest struct {
 
 type ArchiveResponse struct {
 }
+
+type ISODate chrono.Time

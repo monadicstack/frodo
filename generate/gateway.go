@@ -30,13 +30,13 @@ import (
 func New{{ .Name }}Gateway(service {{ $ctx.Package.Name }}.{{ .Name }}, options ...rpc.GatewayOption) rpc.Gateway {
 	gw := rpc.NewGateway(options...)
 	gw.Name = "{{ .Name }}"
-	gw.PathPrefix = "{{ .HTTPPathPrefix }}"
+	gw.PathPrefix = "{{ .Gateway.PathPrefix }}"
 
 	{{ $service := . }}
-	{{ range $service.Methods }}
+	{{ range $service.Functions }}
 	gw.Register(rpc.Endpoint{
-		Method:      "{{ .HTTPMethod }}",
-		Path:        "{{ .HTTPPath }}",
+		Method:      "{{ .Gateway.Method }}",
+		Path:        "{{ .Gateway.Path }}",
 		ServiceName: "{{ $service.Name }}",
 		Name:        "{{ .Name }}",
 		Handler:     func(w http.ResponseWriter, req *http.Request) {
@@ -49,7 +49,7 @@ func New{{ .Name }}Gateway(service {{ $ctx.Package.Name }}.{{ .Name }}, options 
 			}
 
 			serviceResponse, err := service.{{ .Name }}(req.Context(), &serviceRequest)
-			response.Reply({{ .HTTPStatus }}, serviceResponse, err)
+			response.Reply({{ .Gateway.Status }}, serviceResponse, err)
 		},
 	})
 	{{ end }}
