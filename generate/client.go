@@ -24,7 +24,7 @@ import (
 // {{ . }}{{end}}
 func New{{ .Name }}Client(address string, options ...rpc.ClientOption) *{{ .Name }}Client {
 	rpcClient := rpc.NewClient("{{ .Name }}", address, options...)
-	rpcClient.PathPrefix = "{{ .HTTPPathPrefix }}"
+	rpcClient.PathPrefix = "{{ .Gateway.PathPrefix }}"
 	return &{{ .Name }}Client{Client: rpcClient} 
 }
 
@@ -48,7 +48,7 @@ func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, reque
 	}
 
 	response := &{{ $ctx.Package.Name }}.{{ .Response.Name }}{}
-	err := client.Invoke(ctx, "{{ .HTTPMethod }}", "{{ .HTTPPath }}", request, response)
+	err := client.Invoke(ctx, "{{ .Gateway.Method }}", "{{ .Gateway.Path }}", request, response)
 	return response, err
 }
 {{ end }}

@@ -326,6 +326,7 @@ var jsonTypeMapping = map[string]string{
 	"bool":      "boolean",
 	"rune":      "number",
 	"byte":      "number",
+	"int":       "number",
 	"int8":      "number",
 	"int16":     "number",
 	"int32":     "number",
@@ -393,7 +394,9 @@ func ParseService(ctx *Context, serviceObj *ast.Object) (*ServiceDeclaration, er
 		Name:    serviceObj.Name,
 		Node:    serviceObj,
 		Version: "0.1.0",
+		Gateway: &GatewayServiceOptions{},
 	}
+	service.Gateway.Service = service
 
 	operations, err := ParseServiceFunctions(ctx, serviceObj)
 	if err != nil {
@@ -428,12 +431,15 @@ func ParseServiceFunctions(ctx *Context, serviceNode *ast.Object) ([]*ServiceFun
 func ParseServiceFunction(ctx *Context, serviceNode *ast.Object, functionNode *ast.Field) (*ServiceFunctionDeclaration, error) {
 	name := fieldName(functionNode)
 	function := &ServiceFunctionDeclaration{
-		Name:       name,
-		Node:       functionNode,
-		HTTPStatus: http.StatusOK,
-		HTTPMethod: "POST",
-		HTTPPath:   "/" + serviceNode.Name + "." + fieldName(functionNode),
+		Name: name,
+		Node: functionNode,
+		Gateway: &GatewayFunctionOptions{
+			Status: http.StatusOK,
+			Method: http.MethodPost,
+			Path:   "/" + serviceNode.Name + "." + fieldName(functionNode),
+		},
 	}
+	function.Gateway.Function = function
 
 	funcType := functionNode.Type.(*ast.FuncType)
 
@@ -646,9 +652,9 @@ func ApplyServiceDocumentation(_ *Context, service *ServiceDeclaration, comments
 	for _, line := range strings.Split(comments, "\n") {
 		switch {
 		case strings.HasPrefix(line, "PATH "):
-			service.HTTPPathPrefix = normalizePathSegment(line[5:])
+			service.Gateway.PathPrefix = normalizePathSegment(line[5:])
 		case strings.HasPrefix(line, "PREFIX "):
-			service.HTTPPathPrefix = normalizePathSegment(line[7:])
+			service.Gateway.PathPrefix = normalizePathSegment(line[7:])
 		case strings.HasPrefix(line, "VERSION "):
 			service.Version = strings.TrimSpace(line[8:])
 		default:
@@ -676,25 +682,25 @@ func ApplyFunctionDocumentation(_ *Context, function *ServiceFunctionDeclaration
 	for _, line := range strings.Split(comments, "\n") {
 		switch {
 		case strings.HasPrefix(line, "GET /"):
-			function.HTTPMethod = http.MethodGet
-			function.HTTPPath = normalizePathSegment(line[4:])
+			function.Gateway.Method = http.MethodGet
+			function.Gateway.Path = normalizePathSegment(line[4:])
 		case strings.HasPrefix(line, "PUT /"):
-			function.HTTPMethod = http.MethodPut
-			function.HTTPPath = normalizePathSegment(line[4:])
+			function.Gateway.Method = http.MethodPut
+			function.Gateway.Path = normalizePathSegment(line[4:])
 		case strings.HasPrefix(line, "POST /"):
-			function.HTTPMethod = http.MethodPost
-			function.HTTPPath = normalizePathSegment(line[5:])
+			function.Gateway.Method = http.MethodPost
+			function.Gateway.Path = normalizePathSegment(line[5:])
 		case strings.HasPrefix(line, "PATCH /"):
-			function.HTTPMethod = http.MethodPatch
-			function.HTTPPath = normalizePathSegment(line[6:])
+			function.Gateway.Method = http.MethodPatch
+			function.Gateway.Path = normalizePathSegment(line[6:])
 		case strings.HasPrefix(line, "DELETE /"):
-			function.HTTPMethod = http.MethodDelete
-			function.HTTPPath = normalizePathSegment(line[7:])
+			function.Gateway.Method = http.MethodDelete
+			function.Gateway.Path = normalizePathSegment(line[7:])
 		case strings.HasPrefix(line, "HEAD /"):
-			function.HTTPMethod = http.MethodHead
-			function.HTTPPath = normalizePathSegment(line[5:])
+			function.Gateway.Method = http.MethodHead
+			function.Gateway.Path = normalizePathSegment(line[5:])
 		case strings.HasPrefix(line, "HTTP "):
-			function.HTTPStatus = parseHTTPStatus(line[5:])
+			function.Gateway.Status = parseHTTPStatus(line[5:])
 		default:
 			function.Documentation = append(function.Documentation, line)
 		}

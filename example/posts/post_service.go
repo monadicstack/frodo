@@ -40,7 +40,10 @@ type Post struct {
 
 type GetPostRequest struct {
 	// ID is the unique identifier of the post to fetch.
-	ID string
+	ID    string
+	Limit int
+	// Offset is like the SQL offset, dummy.
+	Offset int
 }
 
 // GetPostResponse describes a single post in the blog.
