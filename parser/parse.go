@@ -650,15 +650,15 @@ func ApplyModelDocumentation(_ *Context, model *ServiceModelDeclaration, comment
 }
 
 // ApplyFieldDocumentation
-func ApplyFieldDocumentation(_ *Context, fields *FieldDeclaration, comments string) {
-	if fields == nil {
+func ApplyFieldDocumentation(_ *Context, field *FieldDeclaration, comments string) {
+	if field == nil {
 		return
 	}
 	if comments == "" {
 		return
 	}
-	fields.Documentation = strings.Split(comments, "\n")
-	fields.Documentation = fields.Documentation.Trim()
+	field.Documentation = strings.Split(comments, "\n")
+	field.Documentation = field.Documentation.Trim()
 }
 
 func fieldName(field *ast.Field) string {

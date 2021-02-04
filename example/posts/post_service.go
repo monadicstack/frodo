@@ -28,6 +28,7 @@ type PostService interface {
 type ShortText string
 
 type Post struct {
+	// ID is the unique record identifier of the post.
 	ID string
 	// Title is the one-line headline for the post.
 	Title ShortText
@@ -38,6 +39,7 @@ type Post struct {
 }
 
 type GetPostRequest struct {
+	// ID is the unique identifier of the post to fetch.
 	ID string
 }
 

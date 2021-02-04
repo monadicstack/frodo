@@ -118,6 +118,32 @@ type ServiceMethodDeclaration struct {
 	Node *ast.Field
 }
 
+// HTTPPathFields looks at all of the ":xxx" path parameters in HTTPPath and returns the fields on
+// the request struct that will be bound by those values at runtime. For instance, if the path
+// was "/user/:userID/address/:addressID", this will return a 2-element slice containing the request's
+// UserID and AddressID fields.
+func (method ServiceMethodDeclaration) HTTPPathParameters() GatewayParameters {
+	var results GatewayParameters
+	for _, segment := range strings.Split(method.HTTPPath, "/") {
+		if !strings.HasPrefix(segment, ":") {
+			continue
+		}
+
+		paramName := segment[1:]
+		field := method.Request.Fields.FieldByName(paramName)
+		if field == nil {
+			continue
+		}
+
+		fmt.Println(">>>>>> Param:", paramName, field.Documentation)
+		results = append(results, &GatewayParameter{
+			Name:  paramName,
+			Field: field,
+		})
+	}
+	return results
+}
+
 // String returns the method signature for this operation.
 func (method ServiceMethodDeclaration) String() string {
 	return fmt.Sprintf("%s(context.Context, %v) (%v, error)",
@@ -152,6 +178,15 @@ func (f Fields) Empty() bool {
 
 func (f Fields) NotEmpty() bool {
 	return len(f) > 0
+}
+
+func (f Fields) FieldByName(name string) *FieldDeclaration {
+	for _, field := range f {
+		if strings.EqualFold(field.Name, name) {
+			return field
+		}
+	}
+	return nil
 }
 
 // FieldDeclaration describes a single field in a request/response model.
@@ -245,9 +280,35 @@ func (docs DocumentationLines) Empty() bool {
 	return len(docs) == 0
 }
 
+func (docs DocumentationLines) Summary() string {
+	text := strings.Join(docs, " ")
+	fmt.Println(">>>>> Summarizing:", text)
+	if len(text) < 70 {
+		fmt.Println(">>>>>>> Whole thing...")
+		return text
+	}
+	fmt.Println(">>>>>>> Shorten...")
+	return text[:70] + "..."
+}
+
 func normalizePathSegment(path string) string {
 	path = strings.TrimSpace(path)
 	path = strings.Trim(path, "/")
 	path = strings.TrimSpace(path)
 	return path
+}
+
+type GatewayParameters []*GatewayParameter
+
+func (params GatewayParameters) Empty() bool {
+	return len(params) == 0
+}
+
+func (params GatewayParameters) NotEmpty() bool {
+	return !params.Empty()
+}
+
+type GatewayParameter struct {
+	Name  string
+	Field *FieldDeclaration
 }

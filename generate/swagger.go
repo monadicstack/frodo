@@ -12,11 +12,24 @@ servers:
 
 paths:
 {{ range $method := .Methods }}
-    "{{ .HTTPPath | OpenAPIPath}}":
+{{ $pathFields := .HTTPPathParameters }}
+    "{{ .HTTPPath | OpenAPIPath }}":
         {{ .HTTPMethod | ToLower }}:
             description: > {{ range .Documentation }}
-                {{ . }}
-{{ end }}
+                {{ . }}{{ end }}
+            {{ if $pathFields.NotEmpty }}
+            parameters:
+                {{ range $pathFields }}
+                - in: path
+                  name: {{ .Name }}
+                  required: true
+                  {{ if .Field.Documentation.NotEmpty }}
+                  description: {{ .Field.Documentation.Summary }}
+                  {{ end }}
+                  schema:
+                      type: {{ .Field.Type.JSONType }}
+                {{ end }}
+            {{ end }}
             {{ if .HTTPMethod | HTTPMethodSupportsBody }}
             requestBody:
                 content:
