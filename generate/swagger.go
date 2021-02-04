@@ -24,7 +24,8 @@ paths:
                   name: {{ .Name }}
                   required: true
                   {{ if .Field.Documentation.NotEmpty }}
-                  description: {{ .Field.Documentation.Summary }}
+                  description:  > {{ range .Field.Documentation }} 
+                      {{ . }}{{ end }}
                   {{ end }}
                   schema:
                       type: {{ .Field.Type.JSONType }}

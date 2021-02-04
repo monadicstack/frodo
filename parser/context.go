@@ -63,6 +63,14 @@ func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 	return nil
 }
 
+func (ctx Context) LookupType(typeExpr ast.Expr) (types.Type, error) {
+	info, ok := ctx.TypeInfo.Types[typeExpr]
+	if !ok {
+		return nil, fmt.Errorf("unable to find type info for %v", types.ExprString(typeExpr))
+	}
+	return info.Type, nil
+}
+
 // ServiceDeclaration wrangles all of the information we could grab about the service from the
 // interface that defined it.
 type ServiceDeclaration struct {
@@ -135,7 +143,6 @@ func (method ServiceMethodDeclaration) HTTPPathParameters() GatewayParameters {
 			continue
 		}
 
-		fmt.Println(">>>>>> Param:", paramName, field.Documentation)
 		results = append(results, &GatewayParameter{
 			Name:  paramName,
 			Field: field,
@@ -160,7 +167,9 @@ type ServiceModelDeclaration struct {
 	// Documentation are all of the comments documenting this operation.
 	Documentation DocumentationLines
 	// Fields are the individual data attributes on this model/struct.
-	Fields Fields
+	Fields FieldDeclarations
+	// Type contains the runtime type data about this model.
+	Type *FieldType
 	// Node is the syntax tree object that defined this type/struct.
 	Node *ast.Object
 }
@@ -170,18 +179,18 @@ func (model ServiceModelDeclaration) String() string {
 	return model.Name
 }
 
-type Fields []*FieldDeclaration
+type FieldDeclarations []*FieldDeclaration
 
-func (f Fields) Empty() bool {
-	return len(f) == 0
+func (fields FieldDeclarations) Empty() bool {
+	return len(fields) == 0
 }
 
-func (f Fields) NotEmpty() bool {
-	return len(f) > 0
+func (fields FieldDeclarations) NotEmpty() bool {
+	return len(fields) > 0
 }
 
-func (f Fields) FieldByName(name string) *FieldDeclaration {
-	for _, field := range f {
+func (fields FieldDeclarations) FieldByName(name string) *FieldDeclaration {
+	for _, field := range fields {
 		if strings.EqualFold(field.Name, name) {
 			return field
 		}
@@ -201,11 +210,16 @@ type FieldDeclaration struct {
 	Node *ast.Field
 }
 
+// FieldType captures a whole bunch of type data related to a single filed on a request/response struct.
 type FieldType struct {
 	// Name is the fully qualified name/expression for the type (e.g. "uint", "time.Time", "*Foo", "[]byte", etc).
-	Name       string
-	Pointer    bool
-	Type       types.Type
+	Name string
+	// Pointer indicates if the field's type is a pointer or not.
+	Pointer bool
+	// Type is the raw, parsed type that is the right-hand-side of the line where the field is defined.
+	Type types.Type
+	// Underlying peels away all of the type aliases of 'Type' until we get to the raw primitive or struct
+	// that truly indicates what this field represents.
 	Underlying types.Type
 	// Elem is only non-nil for slice/array/chan types. If the slice is this field type, the ElemType
 	// describes what the type of each element describes.
@@ -272,23 +286,14 @@ func (docs DocumentationLines) Trim() DocumentationLines {
 	return docs[first : last+1]
 }
 
+// NotEmpty returns true when there is at least 1 line of documentation/comments.
 func (docs DocumentationLines) NotEmpty() bool {
 	return len(docs) > 0
 }
 
+// Empty returns true when there are no lines of documentation/comments for the service/field/function/etc.
 func (docs DocumentationLines) Empty() bool {
 	return len(docs) == 0
-}
-
-func (docs DocumentationLines) Summary() string {
-	text := strings.Join(docs, " ")
-	fmt.Println(">>>>> Summarizing:", text)
-	if len(text) < 70 {
-		fmt.Println(">>>>>>> Whole thing...")
-		return text
-	}
-	fmt.Println(">>>>>>> Shorten...")
-	return text[:70] + "..."
 }
 
 func normalizePathSegment(path string) string {
@@ -298,17 +303,26 @@ func normalizePathSegment(path string) string {
 	return path
 }
 
+// GatewayParameters is an overlay of a service method's path and request type/field info. It helps you
+// indicate how a given field will be bound when handling incoming requests (e.g. path params vs query params).
 type GatewayParameters []*GatewayParameter
 
+// Empty returns true when there are zero parameters defined in this set.
 func (params GatewayParameters) Empty() bool {
 	return len(params) == 0
 }
 
+// NotEmpty returns true when there is at least one parameter mapping defined.
 func (params GatewayParameters) NotEmpty() bool {
 	return !params.Empty()
 }
 
+// GatewayParameter defines how a path/query parameter will be bound to a field in your request struct.
 type GatewayParameter struct {
-	Name  string
+	// Name is the identifier of the path param (e.g "id" in "/user/:id") or query string value that
+	// will be bound to the Field.
+	Name string
+	// Field indicates which model attribute will be populated when this parameter goes
+	// through the request binder.
 	Field *FieldDeclaration
 }

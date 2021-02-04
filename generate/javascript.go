@@ -172,8 +172,8 @@ function trimSlashes(value) {
 {{ range .Models }}
 /** {{ range .Documentation }}
  * {{ . }}{{ end }}
- * @typedef {Object|*} {{ .Name }}{{ range .Fields }}
- * @property {*|{{ .Type.JSONType }} } {{ .Name }}{{ end }}
+ * @typedef { {{ .Type.JSONType }} } {{ .Name }}{{ range .Fields }}
+ * @property { {{ .Type.JSONType }} } {{ .Name }}{{ end }}
  */
 {{ end }}
 
