@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -214,10 +215,39 @@ func ParseField(ctx *Context, fieldNode *ast.Field) (*FieldDeclaration, error) {
 	}
 
 	return &FieldDeclaration{
-		Name: fieldName(fieldNode),
-		Node: fieldNode,
-		Type: ParseFieldType(ctx, fieldType),
+		Name:    fieldName(fieldNode),
+		Node:    fieldNode,
+		Type:    ParseFieldType(ctx, fieldType),
+		Binding: parseBindingOptions(ctx, fieldNode),
 	}, nil
+}
+
+func parseBindingOptions(_ *Context, fieldNode *ast.Field) *FieldBindingOptions {
+	options := &FieldBindingOptions{
+		Omit: false,
+		Name: fieldName(fieldNode),
+	}
+	if fieldNode.Tag == nil {
+		return options
+	}
+
+	// The field doesn't have a 'json' tag assigned or they weirdly defined `json:""`, then
+	// the default binding options reign supreme.
+	tag := reflect.StructTag(strings.Trim(fieldNode.Tag.Value, "`")).Get("json")
+	if tag == "" {
+		return options
+	}
+
+	// We don't care about 'omitempty' or anything other than the remapped name. The
+	// runtime binder cares, but not the syntax parser.
+	switch name := strings.Split(tag, ",")[0]; name {
+	case "-":
+		options.Omit = true
+		return options
+	default:
+		options.Name = name
+		return options
+	}
 }
 
 // lookupFieldList accepts the AST node for a type definition and returns a slice of all
