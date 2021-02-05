@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/robsignorelli/frodo/internal/reflection"
+	"github.com/robsignorelli/frodo/rpc/errors"
 	"github.com/robsignorelli/frodo/rpc/metadata"
 )
 
@@ -116,8 +117,7 @@ func (c Client) Invoke(ctx context.Context, method string, path string, serviceR
 	// Step 5: Based on the status code, either fill in the "out" struct (service response) with the
 	// unmarshaled JSON or respond a properly formed error.
 	if response.StatusCode >= 400 {
-		errData, _ := ioutil.ReadAll(response.Body)
-		return fmt.Errorf("rpc: http status %v: %s", response.StatusCode, string(errData))
+		return c.newStatusError(response)
 	}
 
 	err = json.NewDecoder(response.Body).Decode(serviceResponse)
@@ -125,6 +125,40 @@ func (c Client) Invoke(ctx context.Context, method string, path string, serviceR
 		return fmt.Errorf("rpc: unable to decode response: %w", err)
 	}
 	return nil
+}
+
+// newStatusError takes the response (assumed to be a 400+ status already) and creates
+// an RPCError with the proper HTTP status as it tries to preserve the original error's message.
+func (c Client) newStatusError(r *http.Response) error {
+	errData, _ := ioutil.ReadAll(r.Body)
+	contentType := r.Header.Get("Content-Type")
+
+	// If the server didn't return JSON, assume that it's just plain text w/ the message to propagate
+	// as you'd get if you invoked `http.Error()`
+	if !strings.HasPrefix(contentType, "application/json") {
+		return errors.New(r.StatusCode, "rpc: %s", string(errData))
+	}
+
+	// As JSON, it's likely that the JSON is one of these formats:
+	//
+	// "Just the message"
+	//    or
+	// {"status":404, "message": "not found, dummy"}
+	//
+	// Based on what it looks like, unmarshal accordingly.
+	if strings.HasPrefix(string(errData), `"`) {
+		err := ""
+		_ = json.Unmarshal(errData, &err)
+		return errors.New(r.StatusCode, "rpc error: %s", err)
+	}
+	if strings.HasPrefix(string(errData), `{`) {
+		err := errors.RPCError{}
+		_ = json.Unmarshal(errData, &err)
+		return errors.New(r.StatusCode, "rpc error: %s", err.Error())
+	}
+
+	// It's JSON, but it's a format we don't recognize, so no message for you. Keep the status, though.
+	return errors.New(r.StatusCode, "rpc error")
 }
 
 func (c Client) createRequestBody(method string, serviceRequest interface{}) (io.Reader, error) {
@@ -137,18 +171,29 @@ func (c Client) createRequestBody(method string, serviceRequest interface{}) (io
 }
 
 func (c Client) buildURL(method string, path string, serviceRequest interface{}) string {
-	attributes := reflection.StructToMap(serviceRequest)
+	attributes := reflection.ToAttributes(serviceRequest)
 
 	path = strings.TrimPrefix(path, "/")
 	path = strings.TrimSuffix(path, "/")
 	pathSegments := strings.Split(path, "/")
 
 	for i, pathSegment := range pathSegments {
-		if strings.HasPrefix(pathSegment, ":") {
-			paramName := pathSegment[1:]
-			pathSegments[i] = fmt.Sprintf("%v", attributes[paramName])
-			delete(attributes, paramName) // so it doesn't also get encoded in the query string
+		// Leave fixed segments alone (e.g. "user" in "/user/:id/messages")
+		if !strings.HasPrefix(pathSegment, ":") {
+			continue
 		}
+
+		// Replace path param variables w/ the equivalent value from the service request.
+		paramName := pathSegment[1:]
+		attr := attributes.Find(paramName)
+		if attr == nil {
+			pathSegments[i] = ""
+		} else {
+			pathSegments[i] = fmt.Sprintf("%v", attr.Value)
+		}
+
+		// Remove the attribute so it doesn't also get encoded in the query string, also.
+		attributes = attributes.Remove(paramName)
 	}
 
 	// If we're doing a POST/PUT/PATCH, don't bother adding query string arguments.
@@ -159,8 +204,8 @@ func (c Client) buildURL(method string, path string, serviceRequest interface{})
 
 	// We're doing a GET/DELETE/etc, so all request values must come via query string args
 	queryString := url.Values{}
-	for name, value := range attributes {
-		queryString.Set(name, fmt.Sprintf("%v", value))
+	for _, attr := range attributes {
+		queryString.Set(attr.Name, fmt.Sprintf("%v", attr.Value))
 	}
 	return address + "?" + queryString.Encode()
 }
