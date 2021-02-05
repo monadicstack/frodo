@@ -8,10 +8,23 @@ generate all of your client/server communication code.
 * No .proto files. Your services are just idiomatic Go code.
 * Auto-generate APIs that play nicely with `net/http`, middleware, and other standard library compatible API solutions.  
 * Auto-generate RPC clients in multiple languages like Go and JavaScript.
+* Auto-generate OpenAPI documentation so others know how to interact with your API (if they can't use the client).
 
 Frodo automates all the boilerplate associated with service
 communication, data marshaling, routing, error handling, etc. so you
 can focus on writing features right now.
+
+Tools like gRPC solve similar problems by giving you an
+airplane cockpit filled with knobs and dials most of us don't want/need.
+Frodo is the autopilot button that gets most of us where we need to go.
+
+*PROJECT STATUS: This is still in fairly early development.
+I've tried to keep 'main' stable enough, but I'm tweaking the
+API and refactoring as the patterns/problems make themselves
+clear. I still need to write crazy amounts of tests, but I'm trying
+to stabilize the API more before doing so. I will start semver tagging releases once I'm confident
+that I'm not going to pull the rug from under you. If you have any thoughts/questions, feel free
+to reach out or add an issue.*
 
 ## Getting Started
 
@@ -31,7 +44,7 @@ will "just work".
 
 #### Step 1: Define Your Service
 
-Your first step is to define a .go file that simply defines
+Your first step is to write a .go file that just defines
 the contract for your service; the interface as well as the
 inputs/outputs.
 
@@ -116,7 +129,7 @@ frodo gateway calculator_service.go
 frodo client  calculator_service.go
 ```
 
-### Step 3: Run Your Calculator API Server
+#### Step 3: Run Your Calculator API Server
 
 Let's fire up an HTTP server on port 9000 that makes your service
 available for consumption (you can choose any port you want, obviously).  
@@ -151,7 +164,7 @@ curl -d '{"A":5, "B":2}' http://localhost:9000/CalculatorService.Sub
 # {"Result":3}
 ```
 
-#### Step 4: Consume Your Greeter Service
+#### Step 4: Consume Your Calculator Service
 
 While you can use raw HTTP to communicate with the service,
 let's use our auto-generated client to hide the gory
@@ -528,6 +541,29 @@ The makefile has some convenience targets for building/running/testing
 your new service as you make updates. The `build` target even
 makes sure that your latest service updates get re-frodo'd so
 your gateway/client are always in sync.
+
+## Generate OpenAPI/Swagger Documentation (Experimental)
+
+Definitely a work in progress, but in addition to generating
+your backend and frontend assets, Frodo can generate OpenAPI 3.0 YAML
+files to describe your API. It uses the name/type information from
+your Go code as well as the GoDoc comments that you (hopefully)
+write. Document your code in Go and you can get online API docs for free:
+
+```shell
+$ frodo client calculator_service.go --language=openapi
+  # or
+$ frodo client calculator_service.go --language=swagger
+```
+
+Now you can feed the file `gen/calculator_service.gen.swagger.yaml`
+to your favorite Swagger tools. You can try it out by just pasting
+the output on https://editor.swagger.io.
+
+Not gonna lie... this is still a work in progress. I've still
+got some issues to work out with nested request/response structs.
+It spits out enough good stuff that it should describe your services
+better than no documentation at all, though.
 
 ## Why Not Just Use gRPC?
 
