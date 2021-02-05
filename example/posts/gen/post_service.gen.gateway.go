@@ -1,5 +1,5 @@
 // !!!!!!! DO NOT EDIT !!!!!!!
-// Auto-generated server code from example/posts/post_service.go
+// Auto-generated server code from post_service.go
 // !!!!!!! DO NOT EDIT !!!!!!!
 package postsrpc
 

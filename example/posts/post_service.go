@@ -31,10 +31,9 @@ type Post struct {
 	// ID is the unique record identifier of the post.
 	ID string
 	// Title is the one-line headline for the post.
-	Title ShortText
-	Text  string
-	// Archived determines if the post is active or not.
-	Archived *bool
+	Title    string
+	Text     string
+	Archived bool
 	Date     chrono.Time
 }
 
@@ -54,9 +53,7 @@ type CreatePostRequest struct {
 	Text  string
 }
 
-type CreatePostResponse struct {
-	Post
-}
+type CreatePostResponse Post
 
 type ArchiveRequest struct {
 	ID string
