@@ -11,9 +11,9 @@ servers:
     - url: {{ .Gateway.PathPrefix | LeadingSlash }}
 
 paths:
-{{ range $method := .Functions }}
-{{ $pathFields := .Gateway.PathParameters }}
-{{ $queryFields := .Gateway.QueryParameters }}
+    {{ range $method := .Functions }}
+    {{ $pathFields := .Gateway.PathParameters }}
+    {{ $queryFields := .Gateway.QueryParameters }}
     "{{ .Gateway.Path | OpenAPIPath }}":
         {{ .Gateway.Method | ToLower }}:
             description: > {{ range .Documentation }}
@@ -42,6 +42,7 @@ paths:
                       type: {{ .Field.Type.JSONType }}
                 {{ end }}
             {{ end }}
+
             {{ if .Gateway.SupportsBody }}
             requestBody:
                 content:
@@ -57,23 +58,25 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/{{ .Response.Name }}'
-{{ end }}
-
-{{ end }}
+    {{ end }}
+    {{ end }}
 
 components:
     schemas:
-{{ range $model := .Models }}
+        {{ range $model := .Models }}
         {{ .Name }}:
-            type: object
-            {{ if .Fields.NotEmpty }}properties:
-{{ range $field := .Fields }}
-                {{ .Name }}:
+            type: {{ .Type.JSONType }}
+            {{ if .Fields.NotEmpty }}
+            properties:
+                {{ range $field := .Fields }}
+                {{ if not .Binding.Omit }}
+                {{ .Binding.Name }}:
                     type: {{ .Type.JSONType }}
                     {{ if .Documentation.NotEmpty }}description: > {{ range .Documentation }} 
                         {{ . }}{{ end }}
                     {{ end }}
+                {{ end }}
             {{ end }}
-{{ end }}
-{{ end }}
+            {{ end }}
+        {{ end }}
 `)

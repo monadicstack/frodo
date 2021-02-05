@@ -177,6 +177,15 @@ func (fields FieldDeclarations) FieldByName(name string) *FieldDeclaration {
 	return nil
 }
 
+func (fields FieldDeclarations) FieldByBindingName(name string) *FieldDeclaration {
+	for _, field := range fields {
+		if strings.EqualFold(field.Binding.Name, name) {
+			return field
+		}
+	}
+	return nil
+}
+
 // FieldDeclaration describes a single field in a request/response model.
 type FieldDeclaration struct {
 	// Name the name of the field/attribute.
@@ -186,7 +195,23 @@ type FieldDeclaration struct {
 	// Documentation are all of the comments documenting this field.
 	Documentation DocumentationLines
 	// Node is the syntax tree object where this field was defined.
-	Node *ast.Field
+	Node    *ast.Field
+	Binding *FieldBindingOptions
+}
+
+// FieldBindingOptions provides hints to the generation tools about how the runtime binder will
+// map request parameters to an attribute of the request struct.
+type FieldBindingOptions struct {
+	// Omit will be true if you provided the `json:"-"` tag saying that this is not part of JSON marshaling.
+	Omit bool
+	// Name is the remapped JSON attribute for the associated field (e.g. `json:"user_id"` -> user_id).
+	Name string
+}
+
+// NotOmit is a convenience for templates that returns true when we should expose this field to
+// client and documentation templates/tooling.
+func (opts FieldBindingOptions) NotOmit() bool {
+	return !opts.Omit
 }
 
 // FieldType captures a whole bunch of type data related to a single filed on a request/response struct.
@@ -322,7 +347,7 @@ func (opts GatewayFunctionOptions) PathParameters() GatewayParameters {
 		}
 
 		paramName := segment[1:]
-		field := opts.Function.Request.Fields.FieldByName(paramName)
+		field := opts.Function.Request.Fields.FieldByBindingName(paramName)
 		if field == nil {
 			continue
 		}
@@ -335,6 +360,10 @@ func (opts GatewayFunctionOptions) PathParameters() GatewayParameters {
 	return results
 }
 
+// QueryParameters describes all of the request struct attributes that can be bound by specifying
+// them in the query string of the URL when making a request. For instance, if your request struct
+// had an attribute "Limit uint64", then this includes a GatewayParameter that describes the
+// caller's ability to include "&Limit=123" in the query string.
 func (opts GatewayFunctionOptions) QueryParameters() GatewayParameters {
 	var results GatewayParameters
 
@@ -348,12 +377,12 @@ func (opts GatewayFunctionOptions) QueryParameters() GatewayParameters {
 
 	for _, field := range opts.Function.Request.Fields {
 		// Exclude any fields that will be bound using path parameters.
-		if pathParams.ByName(field.Name) != nil {
+		if pathParams.ByName(field.Binding.Name) != nil {
 			continue
 		}
 
 		results = append(results, &GatewayParameter{
-			Name:  field.Name,
+			Name:  field.Binding.Name,
 			Field: field,
 		})
 	}
