@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -42,6 +41,7 @@ func NewGateway(options ...GatewayOption) Gateway {
 	//
 	// Since the router goes first, 'restoreEndpoint' has the info it needs to properly populate the context.
 	mw := middlewarePipeline{
+		MiddlewareFunc(recoverFromPanic),
 		MiddlewareFunc(restoreEndpoint),
 		MiddlewareFunc(restoreMetadata),
 	}
@@ -125,6 +125,17 @@ func EndpointFromContext(ctx context.Context) *Endpoint {
 	return &endpoint
 }
 
+// recoverFromPanic automatically recovers from a panic thrown by your handler so that if you nil-pointer
+// or something else unexpected, we'll safely just return a 500-style error.
+func recoverFromPanic(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+	defer func() {
+		if err := recover(); err != nil {
+			respond.To(w, req).InternalServerError("%v", err)
+		}
+	}()
+	next(w, req)
+}
+
 // restoreEndpoint places the *Endpoint data for the current operation onto the request context
 // so your handler can access the RPC details about what is being invoked. Mainly useful for fetching
 // logging/tracing info about the operation.
@@ -153,7 +164,7 @@ func restoreMetadata(w http.ResponseWriter, req *http.Request, next http.Handler
 
 	values, err := metadata.FromJSON(encodedValues)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("rpc metadata error: %v", err.Error()), 400)
+		respond.To(w, req).BadRequest("rpc metadata error: %v", err.Error())
 		return
 	}
 

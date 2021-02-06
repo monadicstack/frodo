@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -93,7 +92,6 @@ type Client struct {
 func (c Client) Invoke(ctx context.Context, method string, path string, serviceRequest interface{}, serviceResponse interface{}) error {
 	// Step 1: Fill in the URL path and query string w/ fields from the request. (e.g. /user/:id -> /user/abc)
 	address := c.buildURL(method, path, serviceRequest)
-	log.Printf("Invoking %s -> %s %s", c.Name, method, address)
 
 	// Step 2: Create a JSON reader for the request body (POST/PUT/PATCH only).
 	body, err := c.createRequestBody(method, serviceRequest)
