@@ -42,6 +42,7 @@ func NewGateway(options ...GatewayOption) Gateway {
 	//
 	// Since the router goes first, 'restoreEndpoint' has the info it needs to properly populate the context.
 	mw := middlewarePipeline{
+		MiddlewareFunc(recoverFromPanic),
 		MiddlewareFunc(restoreEndpoint),
 		MiddlewareFunc(restoreMetadata),
 	}
@@ -123,6 +124,17 @@ func EndpointFromContext(ctx context.Context) *Endpoint {
 		return nil
 	}
 	return &endpoint
+}
+
+// recoverFromPanic automatically recovers from a panic thrown by your handler so that if you nil-pointer
+// or something else unexpected, we'll safely just return a 500-style error.
+func recoverFromPanic(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+	defer func() {
+		if err := recover(); err != nil {
+			respond.To(w, req).InternalServerError("%v", err)
+		}
+	}()
+	next(w, req)
 }
 
 // restoreEndpoint places the *Endpoint data for the current operation onto the request context
