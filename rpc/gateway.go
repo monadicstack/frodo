@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -165,7 +164,7 @@ func restoreMetadata(w http.ResponseWriter, req *http.Request, next http.Handler
 
 	values, err := metadata.FromJSON(encodedValues)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("rpc metadata error: %v", err.Error()), 400)
+		respond.To(w, req).BadRequest("rpc metadata error: %v", err.Error())
 		return
 	}
 
