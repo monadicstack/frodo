@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/robsignorelli/frodo/example/posts"
-	"github.com/robsignorelli/frodo/example/posts/gen"
+	postsrpc "github.com/robsignorelli/frodo/example/posts/gen"
 )
 
 func main() {
@@ -20,8 +20,6 @@ func main() {
 			}
 			return &posts.GetPostResponse{ID: request.ID}, nil
 		},
-		CreatePostFunc: nil,
-		ArchiveFunc:    nil,
 	}
 
 	gateway := postsrpc.NewPostServiceGateway(&postService)

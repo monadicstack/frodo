@@ -97,7 +97,7 @@ func ParsePackageInfo(ctx *Context) (input *PackageDeclaration, output *PackageD
 		Directory: filepath.Dir(ctx.Path),
 	}
 	output = &PackageDeclaration{
-		Name:      packageName + "rpc",
+		Name:      packageName,
 		Import:    filepath.Join(input.Import, "gen"),
 		Directory: filepath.Join(input.Directory, "gen"),
 	}

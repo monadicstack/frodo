@@ -8,7 +8,8 @@ generate all of your client/server communication code.
 * No .proto files. Your services are just idiomatic Go code.
 * Auto-generate APIs that play nicely with `net/http`, middleware, and other standard library compatible API solutions.  
 * Auto-generate RPC clients in multiple languages like Go and JavaScript.
-* Auto-generate OpenAPI documentation so others know how to interact with your API (if they can't use the client).
+* Auto-generate strongly-typed mock implementations of your service for unit testing.
+* Create OpenAPI documentation so others know how to interact with your API (if they can't use the client).
 
 Frodo automates all the boilerplate associated with service
 communication, data marshaling, routing, error handling, etc. so you
@@ -16,7 +17,8 @@ can focus on writing features right now.
 
 Tools like gRPC solve similar problems by giving you an
 airplane cockpit filled with knobs and dials most of us don't want/need.
-Frodo is the autopilot button that gets most of us where we need to go.
+Frodo is the autopilot button that gets most of us where we need to go
+with as little fuss as possible.
 
 *PROJECT STATUS: This is still in fairly early development.
 I've tried to keep 'main' stable enough, but I'm tweaking the

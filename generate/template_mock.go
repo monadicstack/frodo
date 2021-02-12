@@ -37,6 +37,8 @@ type Mock{{ .Name }} struct {
 }
 
 {{ range $function := .Functions }}
+/* ---- {{ $service.Name }}.{{ .Name }} Mock Support For  ---- */
+
 func (mock *Mock{{ $service.Name }}) {{ .Name }}(ctx context.Context, request *{{ $ctx.Package.Name }}.{{ .Request.Name }}) (*{{ $ctx.Package.Name }}.{{ .Response.Name }}, error) {
 	mock.Calls.{{ .Name }} = mock.Calls.{{ .Name }}.invoked(*request) 
 	if mock.{{ .Name }}Func == nil {
@@ -57,10 +59,7 @@ type {{ $callType }} struct {
 type {{ $callsType }} []{{ $callType }}
 
 func (calls {{ $callsType }}) invoked(request {{ $requestType }}) {{ $callsType }} {
-	return append(calls, {{ $callType }}{
-		Time:    time.Now(),
-		Request: request,
-	})
+	return append(calls, {{ $callType }}{Time: time.Now(), Request: request})
 }
 
 // Times return the total number of times that {{ .Name }} was invoked with any request arguments.
