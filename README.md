@@ -28,6 +28,22 @@ to stabilize the API more before doing so. I will start semver tagging releases 
 that I'm not going to pull the rug from under you. If you have any thoughts/questions, feel free
 to reach out or add an issue.*
 
+## Table of Contents
+
+* [Getting Started](https://github.com/monadicstack/frodo#getting-started)
+* [Example](https://github.com/monadicstack/frodo#example)
+* [Customize HTTP Route, Status, etc](https://github.com/monadicstack/frodo#doc-comments-custom-urls-status-etc)
+* [Error Handling](https://github.com/monadicstack/frodo#error-handling)
+* [HTTP Redirects](https://github.com/monadicstack/frodo#http-redirects)
+* [Middleware](https://github.com/monadicstack/frodo#middleware)
+* [Request Scoped Metadata](https://github.com/monadicstack/frodo#request-scoped-metadata)
+* [Create a JavaScript Client](https://github.com/monadicstack/frodo#creating-a-javascript-client)
+* [Mocking Services](https://github.com/monadicstack/frodo#mocking-services)
+* [Generating OpenAPI Documentation](https://github.com/monadicstack/frodo#generate-openapiswagger-documentation-experimental)
+* [Go Generate Support](https://github.com/monadicstack/frodo#go-generate-support)
+* [New Service Scaffolding](https://github.com/monadicstack/frodo#create-a-new-service-w-frodo-create)
+* [Why Not gRPC?](https://github.com/monadicstack/frodo#why-not-just-use-grpc) (motivation for this project)
+
 ## Getting Started
 
 ```shell
@@ -37,14 +53,9 @@ This will fetch the `frodo` code generation executable as well
 as the runtime libraries that allow your services to
 communicate with each other.
 
-## Example Service
+## Example
 
-The `frodo` tool doesn't use .proto files or any other archaic DSL
-files to work its magic. If you follow a few idiomatic
-practices for service development in your code, `frodo`
-will "just work".
-
-#### Step 1: Define Your Service
+#### Step 1: Describe Your Service
 
 Your first step is to write a .go file that just defines
 the contract for your service; the interface as well as the
@@ -385,7 +396,7 @@ example using [github.com/urfave/negroni](https://github.com/urfave/negroni)
 func main() {
     service := calc.CalculatorServiceHandler{}
     gateway := calcrpc.NewCalculatorServiceGateway(service,
-        rpc.WithMiddlewareFunc(
+        rpc.WithMiddleware(
             negroni.NewLogger().ServeHTTP,
             NotOnMonday,
         ))
@@ -402,7 +413,29 @@ func NotOnMonday(w http.ResponseWriter, req *http.Request, next http.HandlerFunc
 }
 ```
 
-## Context Metadata
+You might think to yourself... wait a minute; I thought the gateway
+*was* an HTTP handler, so couldn't I just wrap the gateway in middleware
+like this?
+
+```go
+gateway := calcrpc.NewCalculatorServiceGateway(service)
+handler := negroni.New(
+    negroni.NewLogger(),
+    negroni.WrapFunc(NotOnMonday),
+)
+handler.UseHandler(gateway)
+http.ListenAndServe(":9000", handler)
+```
+
+You absolutely can, and it will work great... mostly. Frodo's gateway
+performs a few book-keeping tasks before it executes your
+middleware and the eventual service function. One of these tasks is
+restoring request-scoped metadata headers passed from the caller (next section).
+If you don't actually need that information, then this works. If you want
+the full arsenal of Frodo functionality in your middleware functions,
+be sure to use `.WithMiddleware()` like in the first example.
+
+## Request Scoped Metadata
 
 When you make an RPC call from Service A to Service B, none
 of the values stored on the `context.Context` will be
@@ -468,7 +501,7 @@ import {CalculatorService} from 'lib/calculator_service.gen.client';
 // The service client is a class that exposes all of the
 // operations as 'async' functions that resolve with the
 // result of the service call.
-const service = new CalculatorService("http://localhost:9000")
+const service = new CalculatorService('http://localhost:9000')
 const add = await service.Add({A:5, B:2})
 const sub = await service.Sub({A:5, B:2})
 
@@ -484,6 +517,24 @@ service/function documentation follows you in the generated code.
 It's included in the JSDoc of the client so all of your service/API
 documentation should be available to your IDE even when writing
 your frontend code.
+
+#### Node Support
+
+You can actually use this client in your Node
+server-side code as well to call service functions in your Go API.
+The client uses the 'fetch' API to handle the HTTP layer. In the browser,
+it will just use the window-scoped 'fetch' instance, but you can supply
+your own to the constructor of your service client:
+
+```js
+const fetch = require('node-fetch');
+
+// Just inject your 'fetch' implementation to the construtor and everything
+// should work exactly the same.
+const service = new CalculatorService('http://localhost:9000', {fetch})
+const add = await service.Add({A:5, B:2})
+const sub = await service.Sub({A:5, B:2})
+```
 
 ## Mocking Services
 

@@ -6,11 +6,12 @@ import (
 
 	"github.com/monadicstack/frodo/example/posts"
 	postsrpc "github.com/monadicstack/frodo/example/posts/gen"
+	"github.com/monadicstack/frodo/rpc"
 )
 
 func main() {
 	postService := posts.PostServiceHandler{}
-	gateway := postsrpc.NewPostServiceGateway(&postService)
+	gateway := postsrpc.NewPostServiceGateway(&postService, rpc.WithMiddleware(Echo, Echo2, Echo3))
 	http.ListenAndServe(":9001", gateway)
 }
 
