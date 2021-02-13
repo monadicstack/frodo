@@ -221,19 +221,26 @@ For more examples of how to write services that let Frodo take
 care of the RPC/API boilerplate, take a look in the [example/](https://github.com/robsignorelli/frodo/tree/main/example)
 directory of this repo.
 
-## RESTful URLs/Endpoints
+## Doc Comments: Custom URLs, Status, etc
 
-You might have noticed that the URLs in the curl sample
-of our calculator service were all HTTP POSTs whose URLs
-followed the format: `ServiceName.FunctionName`. If you
-prefer RESTful endpoints, it's easy to change the HTTP
-method and path using "Doc Options"...
+Frodo gives you a remote service/API that "just works" out of the
+box. You can, however customize the API routes for individual operations,
+set a prefix for all routes in a service, and more using "Doc Options"...
 worst Spider-Man villain ever.
 
+Here's an example with all the available options. They are all
+independent, so you can specify a custom status without specifying
+a custom route and so on.
+
 ```go
+// CalculatorService provides some basic arithmetic operations.
+//
+// VERSION 0.1.3
+// PATH /v1
 type CalculatorService interface {
     // Add calculates the sum of A + B.
     //
+    // HTTP 202
     // GET /addition/:A/:B
     Add(context.Context, *AddRequest) (*AddResponse, error)
 
@@ -244,44 +251,52 @@ type CalculatorService interface {
 }
 ```
 
-When Frodo sees a comment line for one of your service functions
-of the format `METHOD /PATH`, it will use those in the HTTP
-router instead of the default. The path parameters `:A` and `:B`
-will be bound to the equivalent attributes on your request value.
+#### Service: PATH
 
-Here are the updated curl
-calls after we generate the new gateway code:
+This prepends your custom value on every route in the API. It applies
+to the standard `ServiceName.FunctionName` routes as well as custom routes
+as we'll cover in a moment. 
+
+Your generated API and RPC clients will be auto-wired to use the prefix "v1" under the
+hood, so you don't need to change your code any further. If you want
+to hit the raw HTTP endpoints, however, here's how they look now:
 
 ```shell
-curl http://localhost:9000/addition/5/2
+curl -d '{"A":5, "B":2}' http://localhost:9000/v1/CalculatorService.Add
 # {"Result":7}
-curl http://localhost:9000/subtraction/5/2
+
+curl -d '{"A":5, "B":2}' http://localhost:9000/v1/CalculatorService.Sub
 # {"Result":3}
 ```
 
-## Non-200 Status Codes
+#### Service: VERSION
 
-Let's say that you want to return a "202 Accepted"
-response for some asynchronous operation in your service instead
-of the standard "200 Ok". You can use another "Doc Option" just like we used above to
-customize the method/path:
+Annotate your service to track its current version. This doesn't affect
+the behavior of your service in any way. It's currently only used if you
+generate documentation using `frodo docs`
 
-```go
-type SomeJobberService interface {
-    // SubmitJob places your task at the end of the queue.
-    //
-    // HTTP 202
-    SubmitJob(context.Context, *SubmitJobRequest) (*SubmitJobResponse, error)
-    // DeleteJob removes your task from the queue.
-    //
-    // HTTP 204
-    DeleteJob(context.Context, *SubmitJobRequest) (*SubmitJobResponse, error)
-}
+#### Function: GET/POST/PUT/PATCH/DELETE
+
+You can replace the default `POST ServiceName.FunctionName` route for any
+service operation with the route of your choice. In the example, the path parameters `:A` and `:B`
+will be bound to the equivalent A and B attributes on the request struct.
+
+Here are the updated curl calls after we generate the new
+gateway code. Notice it's also taking into account the service's PATH
+prefix as well:
+
+```shell
+curl http://localhost:9000/v1/addition/5/2
+# {"Result":7}
+curl http://localhost:9000/v1/subtraction/5/2
+# {"Result":3}
 ```
 
-Now, whenever someone submits a job they'll receive a 202,
-and when they delete a job they'll receive a 204 rather
-than good old-fashioned 200s.
+#### Function: HTTP
+
+This lets you have the API return a non-200 status code on success.
+For instance, the Add function's route will return a "202 Accepted"
+status when it responds with the answer instead of "200 OK".
 
 ## Error Handling
 
@@ -358,33 +373,6 @@ func (svc VideoServiceHandler) Download(ctx context.Context, req *DownloadReques
         Key:    file.Key, 
     }, nil
 }
-```
-
-## API Versioning
-
-You can prepend a version or any sort of domain prefix to
-every URL in your service's API by using the `PATH` doc option on your
-service interface.
-```go
-// CalculatorService provides some basic arithmetic operations.
-//
-// PATH /v2
-type CalculatorService interface {
-    Add(context.Context, *AddRequest) (*AddResponse, error)
-    Sub(context.Context, *SubRequest) (*SubResponse, error)
-}
-```
-
-Your API and RPC clients will be auto-wired to use the "v2" prefix under the
-hood, but if you want to hit the raw HTTP endpoints, here's
-how they look now:
-
-```shell
-curl -d '{"A":5, "B":2}' http://localhost:9000/v2/CalculatorService.Add
-# {"Result":7}
-
-curl -d '{"A":5, "B":2}' http://localhost:9000/v2/CalculatorService.Sub
-# {"Result":3}
 ```
 
 ## Middleware
@@ -497,6 +485,79 @@ It's included in the JSDoc of the client so all of your service/API
 documentation should be available to your IDE even when writing
 your frontend code.
 
+## Mocking Services
+
+When you write tests that rely on your services, Frodo can generate mock instances of your
+them so that you can customize their behaviors:
+
+```shell
+$ frodo mock calculator_service.go
+```
+
+Now, you can do the following in your tests:
+
+```go
+import (
+    "context"
+    "fmt"
+
+    "github.com/example/calc"
+    mocks "github.com/example/calc/gen"
+)
+
+func TestSomethingThatDependsOnAddFailure(t *testing.T) {
+    // You can program behaviors for Add(). If the test code calls Sub()
+    // it will panic since you didn't define a behavior for that operation.
+    svc := mocks.MockCalculatorService{
+        AddFunc: func(ctx context.Context, req *calc.AddRequest) (*calc.AddResponse, error) {
+            return nil, fmt.Errorf("barf...")
+        },	
+    }
+
+    // Feed your mock service to the thing you're testing
+    something := NewSomething(svc)
+    _, err := something.BlahBlah(100)
+    assertError(err)
+    ...
+
+    // You can also verify invocations on your service:
+    assertEquals(0, svc.Calls.Sub.Times)
+    assertEquals(5, svc.Calls.Add.Times)
+    assertEquals(1, svc.Calls.Add.TimesFor(calc.Request{A: 4, B: 2}))
+    assertEquals(2, svc.Calls.Add.TimesMatching(func(r calc.Request) bool {
+        return r.A > 2
+    }))
+}
+```
+
+Frodo's mocks are not as fully featured as other Go mocking frameworks
+out there, but it's good enough for most standard use cases. Your
+services are just interfaces, so it's easy enough to bring your own
+mocking framework if this won't work for you.
+
+## Generate OpenAPI/Swagger Documentation (Experimental)
+
+Definitely a work in progress, but in addition to generating
+your backend and frontend assets, Frodo can generate OpenAPI 3.0 YAML
+files to describe your API. It uses the name/type information from
+your Go code as well as the GoDoc comments that you (hopefully)
+write. Document your code in Go and you can get online API docs for free:
+
+```shell
+$ frodo client calculator_service.go --language=openapi
+  # or
+$ frodo client calculator_service.go --language=swagger
+```
+
+Now you can feed the file `gen/calculator_service.gen.swagger.yaml`
+to your favorite Swagger tools. You can try it out by just pasting
+the output on https://editor.swagger.io.
+
+Not gonna lie... this is still a work in progress. I've still
+got some issues to work out with nested request/response structs.
+It spits out enough good stuff that it should describe your services
+better than no documentation at all, though.
+
 ## Create a New Service w/ `frodo create`
 
 This is 100% optional. As we saw in the initial example,
@@ -543,29 +604,6 @@ The makefile has some convenience targets for building/running/testing
 your new service as you make updates. The `build` target even
 makes sure that your latest service updates get re-frodo'd so
 your gateway/client are always in sync.
-
-## Generate OpenAPI/Swagger Documentation (Experimental)
-
-Definitely a work in progress, but in addition to generating
-your backend and frontend assets, Frodo can generate OpenAPI 3.0 YAML
-files to describe your API. It uses the name/type information from
-your Go code as well as the GoDoc comments that you (hopefully)
-write. Document your code in Go and you can get online API docs for free:
-
-```shell
-$ frodo client calculator_service.go --language=openapi
-  # or
-$ frodo client calculator_service.go --language=swagger
-```
-
-Now you can feed the file `gen/calculator_service.gen.swagger.yaml`
-to your favorite Swagger tools. You can try it out by just pasting
-the output on https://editor.swagger.io.
-
-Not gonna lie... this is still a work in progress. I've still
-got some issues to work out with nested request/response structs.
-It spits out enough good stuff that it should describe your services
-better than no documentation at all, though.
 
 ## Why Not Just Use gRPC?
 
