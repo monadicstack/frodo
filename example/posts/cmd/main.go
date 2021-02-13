@@ -1,45 +1,16 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/robsignorelli/frodo/example/posts"
 	postsrpc "github.com/robsignorelli/frodo/example/posts/gen"
 )
 
 func main() {
-	//postService := posts.PostServiceHandler{}
-
-	postService := postsrpc.MockPostService{
-		GetPostFunc: func(ctx context.Context, request *posts.GetPostRequest) (*posts.GetPostResponse, error) {
-			if request.ID == "donnie" {
-				return nil, fmt.Errorf("you're out of your element")
-			}
-			return &posts.GetPostResponse{ID: request.ID}, nil
-		},
-	}
-
+	postService := posts.PostServiceHandler{}
 	gateway := postsrpc.NewPostServiceGateway(&postService)
-
-	go func() {
-		time.Sleep(15 * time.Second)
-		fmt.Println(">>>>>> Times Get", postService.Calls.GetPost.Times())
-		fmt.Println(">>>>>> Times Get:1", postService.Calls.GetPost.TimesFor(posts.GetPostRequest{ID: "1"}))
-		fmt.Println(">>>>>> Times Get:2", postService.Calls.GetPost.TimesFor(posts.GetPostRequest{ID: "2"}))
-		fmt.Println(">>>>>> Times Get:donnie", postService.Calls.GetPost.TimesFor(posts.GetPostRequest{ID: "donnie"}))
-		fmt.Println(">>>>>> Times Get:len=1", postService.Calls.GetPost.TimesMatching(func(request posts.GetPostRequest) bool {
-			return len(request.ID) == 1
-		}))
-		fmt.Println(">>>>>> Times Get:len=2", postService.Calls.GetPost.TimesMatching(func(request posts.GetPostRequest) bool {
-			return len(request.ID) == 2
-		}))
-		fmt.Println(">>>>>> Times Create", postService.Calls.CreatePost.Times())
-		fmt.Println(">>>>>> Times Create:none", postService.Calls.CreatePost.TimesFor(posts.CreatePostRequest{Title: "asldjfk"}))
-	}()
-
 	http.ListenAndServe(":9001", gateway)
 }
 
