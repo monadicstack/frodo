@@ -9,7 +9,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/robsignorelli/frodo/parser"
+	"github.com/monadicstack/frodo/parser"
 	"github.com/spf13/cobra"
 )
 
@@ -202,7 +202,7 @@ var createHandlerTemplate = template.Must(template.New("service_handler.go").Par
 import (
 	"context"
 
-	"github.com/robsignorelli/frodo/rpc/errors"
+	"github.com/monadicstack/frodo/rpc/errors"
 )
 
 // {{ .HandlerName }} implements all of the "real" functionality for the {{ .ServiceName }}.

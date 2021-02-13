@@ -6,8 +6,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/robsignorelli/frodo/generate"
-	"github.com/robsignorelli/frodo/parser"
+	"github.com/monadicstack/frodo/generate"
+	"github.com/monadicstack/frodo/parser"
 	"github.com/spf13/cobra"
 )
 

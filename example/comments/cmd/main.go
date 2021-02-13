@@ -3,9 +3,9 @@ package main
 import (
 	"net/http"
 
-	"github.com/robsignorelli/frodo/example/comments"
-	commentsrpc "github.com/robsignorelli/frodo/example/comments/gen"
-	"github.com/robsignorelli/frodo/example/posts/gen"
+	"github.com/monadicstack/frodo/example/comments"
+	commentsrpc "github.com/monadicstack/frodo/example/comments/gen"
+	"github.com/monadicstack/frodo/example/posts/gen"
 )
 
 func main() {

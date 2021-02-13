@@ -16,7 +16,7 @@ import (
 // status that corresponds to the closest HTTP status code. For instance if the failure
 // was due to an inability to find a resource/record/etc, status would be 404.
 //
-// This type of error can be recognized by 'github.com/robsignorelli/respond' in order to
+// This type of error can be recognized by 'github.com/monadicstack/respond' in order to
 // automatically send proper failures and statuses without extra lifting.
 type RPCError struct {
 	// HTTPStatus is the HTTP status code that most closely describes this error.

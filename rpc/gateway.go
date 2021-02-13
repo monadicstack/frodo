@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
-	"github.com/robsignorelli/frodo/rpc/metadata"
-	"github.com/robsignorelli/respond"
+	"github.com/monadicstack/frodo/rpc/metadata"
+	"github.com/monadicstack/respond"
 )
 
 // NewGateway creates a wrapper around your raw service to expose it via HTTP for RPC calls.

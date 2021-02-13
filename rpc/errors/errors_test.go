@@ -3,7 +3,7 @@ package errors_test
 import (
 	"testing"
 
-	"github.com/robsignorelli/frodo/rpc/errors"
+	"github.com/monadicstack/frodo/rpc/errors"
 	"github.com/stretchr/testify/suite"
 )
 

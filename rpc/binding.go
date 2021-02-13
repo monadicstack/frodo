@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
-	"github.com/robsignorelli/frodo/internal/reflection"
-	"github.com/robsignorelli/frodo/rpc/errors"
+	"github.com/monadicstack/frodo/internal/reflection"
+	"github.com/monadicstack/frodo/rpc/errors"
 )
 
 // Binder performs the work of taking all meaningful values from an incoming request (body,

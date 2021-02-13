@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/robsignorelli/frodo/internal/reflection"
-	"github.com/robsignorelli/frodo/rpc/errors"
-	"github.com/robsignorelli/frodo/rpc/metadata"
+	"github.com/monadicstack/frodo/internal/reflection"
+	"github.com/monadicstack/frodo/rpc/errors"
+	"github.com/monadicstack/frodo/rpc/metadata"
 )
 
 // NewClient constructs the RPC client that does the "heavy lifting" when communicating

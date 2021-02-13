@@ -31,7 +31,7 @@ to reach out or add an issue.*
 ## Getting Started
 
 ```shell
-go install github.com/robsignorelli/frodo
+go install github.com/monadicstack/frodo
 ```
 This will fetch the `frodo` code generation executable as well
 as the runtime libraries that allow your services to
@@ -218,7 +218,7 @@ Sub(5, 2) -> 3
 That's it!
 
 For more examples of how to write services that let Frodo take
-care of the RPC/API boilerplate, take a look in the [example/](https://github.com/robsignorelli/frodo/tree/main/example)
+care of the RPC/API boilerplate, take a look in the [example/](https://github.com/monadicstack/frodo/tree/main/example)
 directory of this repo.
 
 ## Doc Comments: Custom URLs, Status, etc
@@ -310,7 +310,7 @@ package when you encounter a failure case:
 
 ```go
 import (
-    "github.com/robsignorelli/frodo/rpc/errors"
+    "github.com/monadicstack/frodo/rpc/errors"
 )
 
 func (svc UserService) Get(ctx context.Context, req *GetRequest) (*GetResponse, error) {
@@ -334,7 +334,7 @@ id, and a 500 if any other type of error occurs.
 
 While the error categories in Frodo's errors package is
 probably good enough for most people, take a look at the
-documentation for [github.com/robsignorelli/respond](https://github.com/robsignorelli/respond#how-does-it-know-which-4xx5xx-status-to-use)
+documentation for [github.com/monadicstack/respond](https://github.com/monadicstack/respond#how-does-it-know-which-4xx5xx-status-to-use)
 to see how you can roll your own custom errors, but still
 drive which 4XX/5XX status your service generates.
 
@@ -346,7 +346,7 @@ S3, CloudFront, or some other CDN to actually serve up
 the raw asset.
 
 In Frodo, it's pretty simple. If your XxxResponse struct implements
-the `respond.Redirector` interface from [github.com/robsignorelli/respond](https://github.com/robsignorelli/respond)
+the `respond.Redirector` interface from [github.com/monadicstack/respond](https://github.com/monadicstack/respond)
 then the gateway will respond with a 307-style redirect
 to the URL of your choice:
 

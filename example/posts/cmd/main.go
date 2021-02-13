@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/robsignorelli/frodo/example/posts"
-	postsrpc "github.com/robsignorelli/frodo/example/posts/gen"
+	"github.com/monadicstack/frodo/example/posts"
+	postsrpc "github.com/monadicstack/frodo/example/posts/gen"
 )
 
 func main() {
