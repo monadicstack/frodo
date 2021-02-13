@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/robsignorelli/frodo/example/posts"
-	"github.com/robsignorelli/frodo/example/posts/gen"
+	postsrpc "github.com/robsignorelli/frodo/example/posts/gen"
 )
 
 func main() {

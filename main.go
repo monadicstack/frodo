@@ -15,6 +15,8 @@ func main() {
 	}
 	rootCmd.AddCommand(cli.GenerateGateway{}.Command())
 	rootCmd.AddCommand(cli.GenerateClient{}.Command())
+	rootCmd.AddCommand(cli.GenerateMock{}.Command())
+	rootCmd.AddCommand(cli.GenerateDocs{}.Command())
 	rootCmd.AddCommand(cli.CreateService{}.Command())
 
 	if err := rootCmd.Execute(); err != nil {
