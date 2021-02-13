@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/robsignorelli/frodo/example/posts"
-	"github.com/robsignorelli/frodo/rpc/errors"
+	"github.com/monadicstack/frodo/example/posts"
+	"github.com/monadicstack/frodo/rpc/errors"
 )
 
 // CommentServiceHandler implements all of the "real" functionality for the CommentService. Just like

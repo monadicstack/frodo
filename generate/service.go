@@ -134,7 +134,7 @@ var serviceHandlerTemplate = parseArtifactTemplate("service_handler.go", `packag
 import (
 	"context"
 
-	"github.com/robsignorelli/frodo/rpc/errors"
+	"github.com/monadicstack/frodo/rpc/errors"
 )
 
 // {{ .HandlerName }} implements all of the "real" functionality for the {{ .InterfaceName }}.

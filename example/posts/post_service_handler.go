@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/robsignorelli/frodo/rpc/errors"
+	"github.com/monadicstack/frodo/rpc/errors"
 )
 
 // PostServiceHandler implements all of the "real" functionality for the PostService. In a

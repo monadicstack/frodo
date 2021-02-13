@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/robsignorelli/frodo/cli"
+	"github.com/monadicstack/frodo/cli"
 	"github.com/spf13/cobra"
 )
 

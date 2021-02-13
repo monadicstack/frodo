@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/robsignorelli/frodo/parser"
+	"github.com/monadicstack/frodo/parser"
 )
 
 // Artifact runs the parsed service information through the code template to
