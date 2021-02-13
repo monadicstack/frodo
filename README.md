@@ -7,32 +7,25 @@ generate all of your client/server communication code.
 
 * No .proto files. Your services are just idiomatic Go code.
 * Auto-generate APIs that play nicely with `net/http`, middleware, and other standard library compatible API solutions.  
-* Auto-generate RPC clients in multiple languages like Go and JavaScript.
+* Auto-generate RPC-style clients in multiple languages like Go and JavaScript.
 * Auto-generate strongly-typed mock implementations of your service for unit testing.
 * Create OpenAPI documentation so others know how to interact with your API (if they can't use the client).
 
 Frodo automates all the boilerplate associated with service
-communication, data marshaling, routing, error handling, etc. so you
-can focus on writing features right now.
+communication, data marshaling, routing, error handling, etc. You
+get to focus on writing business logic and features while Frodo gives
+you all of that other stuff to turn it into a distributed system for free.
 
-Tools like gRPC solve similar problems by giving you an
+Tools like gRPC solve similar problems by giving you a complex
 airplane cockpit filled with knobs and dials most of us don't want/need.
 Frodo is the autopilot button that gets most of us where we need to go
 with as little fuss as possible.
-
-*PROJECT STATUS: This is still in fairly early development.
-I've tried to keep 'main' stable enough, but I'm tweaking the
-API and refactoring as the patterns/problems make themselves
-clear. I still need to write crazy amounts of tests, but I'm trying
-to stabilize the API more before doing so. I will start semver tagging releases once I'm confident
-that I'm not going to pull the rug from under you. If you have any thoughts/questions, feel free
-to reach out or add an issue.*
 
 ## Table of Contents
 
 * [Getting Started](https://github.com/monadicstack/frodo#getting-started)
 * [Example](https://github.com/monadicstack/frodo#example)
-* [Customize HTTP Route, Status, etc](https://github.com/monadicstack/frodo#doc-comments-custom-urls-status-etc)
+* [Customize HTTP Route, Status, etc](https://github.com/monadicstack/frodo#doc-options-custom-urls-status-etc)
 * [Error Handling](https://github.com/monadicstack/frodo#error-handling)
 * [HTTP Redirects](https://github.com/monadicstack/frodo#http-redirects)
 * [Middleware](https://github.com/monadicstack/frodo#middleware)
@@ -232,7 +225,7 @@ For more examples of how to write services that let Frodo take
 care of the RPC/API boilerplate, take a look in the [example/](https://github.com/monadicstack/frodo/tree/main/example)
 directory of this repo.
 
-## Doc Comments: Custom URLs, Status, etc
+## Doc Options: Custom URLs, Status, etc
 
 Frodo gives you a remote service/API that "just works" out of the
 box. You can, however customize the API routes for individual operations,
@@ -687,29 +680,63 @@ your gateway/client are always in sync.
 
 ## Why Not Just Use gRPC?
 
-Simply put... complexity. gRPC solves a lot of hard problems
+Simply put... complexity. gRPC and grpc-gateway solve a lot of hard problems
 related to distributed systems at massive scale, but those solutions come at
-the cost of simplicity. There's a huge learning curve, a lot
-of setup pains, and finding documentation to solve the
-specific problem you have (if there even is a solution) is
-incredibly difficult. It's an airlplane cockpit of knobs and
-dials when most of us just want/need the autopilot button.
+the cost of simplicity. Countless hours have been lost debugging issues
+resolving missing dependencies in proto files, or trying to get a load balancing
+solution to work, or figuring out whether to write logic in HTTP middleware or
+a gRPC interceptor (just to name a few common pain points).
 
-Frodo is the autopilot button.
+If many of us are honest with ourselves, a lot of
+what gRPC and its ecosystem offers falls into the [YAGNI](https://en.wikipedia.org/wiki/You_aren%27t_gonna_need_it)
+realm (you ain't gonna need it).
 
-Here are some ways that Frodo tries to improve on
-the developer experience over gRPC:
+Simple solutions that create JSON-based HTTP APIs are good enough
+for most of us. In those cases gRPC tends to introduce a lot of complexity without
+giving as much in return. Frodo strives to have a much better developer
+experience that takes you from your first line of code to a solid
+set of services/APIs that are easy to maintain, test, deploy, and scale.
 
-* No proto files or other quirky DSLs to learn. Just describe your services
-  as plain old Go interfaces; something you were likely to do anyway.
-* Easy to set up. Just "go install" it and you're done.
-* A CLI you can easily understand. Even a simple gRPC service
-  with an API gateway requires 10 or 12 arguments to `protoc` in order
+For the vast majority of projects, JSON (un)marshaling is probably not a performance bottleneck for you. Protobufs
+are a great solution for a very specific problem, but it's one that
+very, very few applications actually have. I've seen REST APIs handle hundreds
+of millions of requests per day using Go's `encoding/json` package. While
+cool tech, protobufs just do not solve a problem that most of us have, so
+we might was well avoid the complexity that comes along with them.
+
+Even if you get things working on your development machine, gRPC introduces
+a series of other problems that you're left having to solve such as
+load balancing. You could do client-side load balancing, but that involves
+you having to also figure out etcd, Consul, or some other service
+discovery solution. You could do server-side load balancing, but
+you're going to need something like Linkerd, Envoy, or some other
+not-so-simple service mesh solution. Frodo's services work the same as any other
+API you might build by hand with the standard library, Gin, Chi, Echo, etc., so
+the load balancers provided by AWS/GCP/Azure
+just work.
+
+Ultimately, Frodo tries to take as much the "good" from gRPC and its
+ecosystem while eliminating as much of the "bad" as possible. Frodo
+focuses more on the developer experience and less on giving you options
+galore. It tries to provide simple solutions and sane defaults for common
+problems so you spend less time figuring out how to make Frodo work and
+more time solving your users' problems.
+
+Here are a few conscious deviations from how gRPC does things:
+
+* No proto files or other quirky DSLs to learn. Just write a Go interfaces/structs
+  and Frodo will figure out automatically.
+* Setup is as easy as one `go install` to get every feature. gRPC requires you to manually install protoc
+  then fetch 3 or 4 grpc-related/Go dependencies, and not all have properly
+  adopted Go modules yet.
+* The CLI is much less complex. Even a simple gRPC service
+  with an API gateway requires around 9 or 10 arguments to `protoc` in order
   to function. Contrast that with `frodo gateway foo/service.go`.
+* If you don't like the CLI, you can hook into `go:generate` instead.
 * The RPC layer is just JSON over HTTP. Your frontend can consume
   your services the exact same way that other backend services do.
-* Because it's just HTTP, you've got an entire ecosystem
-  of off-the-shelf solutions for middleware for logging, security, etc regardless of
+* You've got an entire ecosystem of off-the-shelf solutions for middleware
+  for logging, security, etc regardless of
   where the request comes from. With gRPC, the rules are
   different if the request came from another service vs
   through your API gateway (e.g. from your frontend).
@@ -717,19 +744,14 @@ the developer experience over gRPC:
   want anything other than a status of 200 for success 500 for failure.
   With Frodo, you can use idiomatic errors and one-line changes
   to customize this behavior.
-* Getting gRPC services to work on your development machine is
-  only one hurdle. Once you start deploying them
-  in production, load balancing becomes another pain point.
-  You need to figure out and implement service mesh solutions like
-  Linkerd, Envoy, or other non-trivial components. Since
-  Frodo uses standard-library HTTP, traditional load balancing
+* Since Frodo uses standard-library HTTP, traditional load balancing
   solutions like nginx or your cloud provider's load balancer
-  gets the job done for free.
-* Better metadata. Request-scoped data in gRPC is basically a map
-  of string values. This forces you to marshal/unmarshal your code
-  manually if you want to pass around anything more complex. Frodo's
-  metadata lets you pass around any type of data you want as
-  you hop from service to service.
+  gets the job done. No need to introduce etcd, Consul, Linkerd, Envoy,
+  or any other technology into your architecture.
+* Better metadata. Request-scoped metadata in gRPC is basically a map
+  of string values. This forces you to marshal/unmarshal other types yourself.
+  Frodo's metadata lets you pass around any type of data you want as
+  you hop from service to service and will handle all that noise for you.
 * Frodo has a stronger focus on generated code that is actually
   readable. If you want to treat Frodo RPC like a black box,
   you can. If you want to peek under the hood, however, you can
