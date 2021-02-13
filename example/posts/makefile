@@ -7,6 +7,9 @@ frodo:
 	../../out/frodo mock    post_service.go && \
 	../../out/frodo docs    post_service.go
 
+generate:
+	go generate .
+
 build: frodo
 	go build -o out/post-service cmd/main.go
 
