@@ -558,6 +558,35 @@ got some issues to work out with nested request/response structs.
 It spits out enough good stuff that it should describe your services
 better than no documentation at all, though.
 
+## Go Generate Support
+
+If you prefer to stick to the standard Go toolchain for generating
+code, you can use `//go:generate` comments to hook Frodo code
+generation into your build process. Here's how you can set up your
+service to generate the gateway, mock service, Go client, and JS client. 
+
+```go
+import (
+   ...
+)
+
+//go:generate frodo gateway $GOFILE
+//go:generate frodo client  $GOFILE
+//go:generate frodo client  $GOFILE --language=js
+//go:generate frodo mock    $GOFILE
+
+type CalculatorService interface {
+    ...
+}
+```
+
+Now when you want to re-create your RPC artifacts, you can run a
+single command (assuming you're already in the 'calc' directory):
+
+```shell
+$ go generate .
+```
+
 ## Create a New Service w/ `frodo create`
 
 This is 100% optional. As we saw in the initial example,

@@ -236,6 +236,13 @@ frodo:
 	frodo client  {{ .ShortNameLower }}_service.go
 
 #
+# If you add Frodo-based "//go:generate" comments to your service, generate your Frodo
+# artifacts using that method instead.
+#
+generate:
+	go generate .
+
+#
 # Rebuilds the binary for this service. We will "re-frodo" the service declaration beforehand
 # so that any modifications to your service are always reflected in your client/gateway code
 # without you having to think about it.
