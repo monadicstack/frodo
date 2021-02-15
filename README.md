@@ -529,6 +529,105 @@ const add = await service.Add({A:5, B:2})
 const sub = await service.Sub({A:5, B:2})
 ```
 
+## Authorization
+
+Since you probably want your services to do some sort of authentication
+and authorization, Frodo helps you manage the HTTP `Authorization` header.
+When the gateway accepts a request, it stores the header in a context value
+that you can fetch in middleware or your handler, so you can decide how
+to utilize that info.
+
+```go
+import (
+    "github.com/monadicstack/frodo/rpc/authorization"
+    "github.com/monadicstack/frodo/rpc/errors"
+)
+
+func (a *ServiceA) Hello(ctx contex.Context, req *HelloRequest) (*HelloResponse, error) {
+    auth := authorization.FromContext(ctx)
+    if auth.Empty() {
+        return nil, errors.BadCredentials("missing authorization header")
+    }
+    if auth.String() == "Donny" {
+        return nil, errors.PermissionDenied("you're out of your element")	
+    }
+    return &HelloResponse{Text: "Hello"+req.Name}, nil
+}
+```
+Ignore the awful security of hardcoding valid/invalid credentials;
+the value for `auth` should be the value
+of the `Authorization` header on the incoming HTTP request. The whole
+idea is that your business logic exists independent of HTTP-related stuff,
+so Frodo takes that HTTP-provided data and puts it on the context. This
+allows your handler to deal with credentials in a transport-independent fashion.
+
+
+Frodo, however, just makes sure that you have the value that was given. With that
+value in hand, you can feed that to your favorite OAuth2, JWT, or whatever
+library/middleware to do something meaningful with it. 
+
+### Supplying Authorization Credentials
+
+In the previous example we assumed that the caller supplied authorization
+credentials and just retrieved/used them. Since authorization is just a value stored
+on the context, you can supply them fairly easily:
+
+```go
+// Supply "Authorization: Token 12345" when calling the Hello endpoint
+auth := authorization.New("Token 12345") 
+ctx = authorization.WithHeader(ctx, auth)
+clientA.Hello(ctx, &servicea.HelloRequest{Name: "Bob"})
+```
+
+This works when you are making the initial call, but to make life easier,
+Frodo will also include that authorization on every other RPC-driven service call you make in that
+request scope:
+
+
+```go
+func (a *ServiceA) Hello(ctx contex.Context, req *HelloRequest) (*HelloResponse, error) {
+    fmt.Printf("Authorization A: %v\n", authorization.FromContext(ctx))
+    clientB.EatTacos(ctx, &serviceb.EatTacosRequest{})
+    ...
+}
+
+func (b *ServiceB) EatTacos(ctx contex.Context, req *EatTacosRequest) (*EatTacosResponse, error) {
+    fmt.Printf("Authorization B: %v\n", authorization.FromContext(ctx))
+    clientC.Goodbye(ctx, &serviceb.EatTacosRequest{})
+    ...
+}
+
+func (c *ServiceC) Goodbye(ctx contex.Context, req *GoodbyeRequest) (*GoodbyeResponse, error) {
+    fmt.Printf("Authorization C: %v\n", authorization.FromContext(ctx))
+    ...
+}
+
+// Output
+// Authorization A: Token 12345
+// Authorization B: Token 12345
+// Authorization C: Token 12345
+```
+
+Again, ignore the poor architecture - if you have this many dependent
+calls, you probably need some asynchronous pub/sub in your life. The
+point of the example, however, is that the credentials "Token 12345" was
+only explicitly provided to the initial call to `Hello()`, but it was automatically propagated to service B and C because
+you threaded the context through the whole thing.
+
+### Authorization Using the JavaScript Client
+
+When making the original call to `ServiceA.Hello()`, the JS client
+doesn't utilize a "context" like Go does. To stay idiomatic to JS,
+you supply it via an options argument when making your
+service call:
+
+```js
+client = new ServiceAClient('...');
+client.Hello({ Name: 'Bob' }, {
+    authorization: 'Token 12345'
+});
+```
+
 ## Mocking Services
 
 When you write tests that rely on your services, Frodo can generate mock instances of your
@@ -733,6 +832,11 @@ Here are a few conscious deviations from how gRPC does things:
   with an API gateway requires around 9 or 10 arguments to `protoc` in order
   to function. Contrast that with `frodo gateway foo/service.go`.
 * If you don't like the CLI, you can hook into `go:generate` instead.
+* In gRPC, the client it generates does not implement the service interface. It's
+  really close but not enough for a strongly typed language like Go. Frodo
+  makes it so that clients/gateways both implement your service interface. This
+  gives you more flexibility to swap interacting with a local vs remote
+  instance of the service w/ no code changes.
 * The RPC layer is just JSON over HTTP. Your frontend can consume
   your services the exact same way that other backend services do.
 * You've got an entire ecosystem of off-the-shelf solutions for middleware
