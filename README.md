@@ -31,6 +31,7 @@ with as little fuss as possible.
 * [Middleware](https://github.com/monadicstack/frodo#middleware)
 * [Request Scoped Metadata](https://github.com/monadicstack/frodo#request-scoped-metadata)
 * [Create a JavaScript Client](https://github.com/monadicstack/frodo#creating-a-javascript-client)
+* [Authorization](https://github.com/monadicstack/frodo#authorization)
 * [Mocking Services](https://github.com/monadicstack/frodo#mocking-services)
 * [Generating OpenAPI Documentation](https://github.com/monadicstack/frodo#generate-openapiswagger-documentation-experimental)
 * [Go Generate Support](https://github.com/monadicstack/frodo#go-generate-support)
