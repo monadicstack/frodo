@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/monadicstack/frodo/rpc/authorization"
 	"github.com/monadicstack/frodo/rpc/metadata"
 	"github.com/monadicstack/respond"
 )
@@ -44,6 +45,7 @@ func NewGateway(options ...GatewayOption) Gateway {
 		MiddlewareFunc(recoverFromPanic),
 		MiddlewareFunc(restoreEndpoint),
 		MiddlewareFunc(restoreMetadata),
+		MiddlewareFunc(restoreAuthorization),
 	}
 	gw.middleware = append(mw, gw.middleware...)
 	gw.Router.SaveMatchedRoutePath = true
@@ -169,6 +171,16 @@ func restoreMetadata(w http.ResponseWriter, req *http.Request, next http.Handler
 	}
 
 	ctx := metadata.WithValues(req.Context(), values)
+	next(w, req.WithContext(ctx))
+}
+
+// restoreAuthorization grabs the "Authorization" header from the request and puts it in the context so that
+// it can be propagated across service calls. The idea is that if you call Service A with "Authorization: Bearer foo"
+// and the handler ends up calling Service B, we want the underlying HTTP call to Service B to *also* have
+// the same authorization header. This preserves that value so that we
+func restoreAuthorization(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+	auth := authorization.New(req.Header.Get("Authorization"))
+	ctx := authorization.WithHeader(req.Context(), auth)
 	next(w, req.WithContext(ctx))
 }
 

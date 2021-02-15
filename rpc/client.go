@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/monadicstack/frodo/internal/reflection"
+	"github.com/monadicstack/frodo/rpc/authorization"
 	"github.com/monadicstack/frodo/rpc/errors"
 	"github.com/monadicstack/frodo/rpc/metadata"
 )
@@ -41,6 +42,7 @@ func NewClient(name string, addr string, options ...ClientOption) Client {
 
 	mw := clientMiddlewarePipeline{
 		writeMetadataHeader,
+		writeAuthorizationHeader,
 	}
 	client.middleware = append(mw, client.middleware...)
 	client.roundTrip = client.middleware.Then(client.HTTP.Do)
@@ -225,5 +227,16 @@ func writeMetadataHeader(request *http.Request, next RoundTripperFunc) (*http.Re
 		return nil, err
 	}
 	request.Header.Set(metadata.RequestHeader, encodedValues)
+	return next(request)
+}
+
+// writeAuthorizationHeader takes the authorization information on the context (if present) and applies it
+// to the "Authorization" header on the request. This ensures that the credentials used to authenticate/authorize
+// the request to this service are automatically applied this upstream service call, too.
+func writeAuthorizationHeader(request *http.Request, next RoundTripperFunc) (*http.Response, error) {
+	auth := authorization.FromContext(request.Context())
+	if auth.NotEmpty() {
+		request.Header.Set("Authorization", auth.String())
+	}
 	return next(request)
 }

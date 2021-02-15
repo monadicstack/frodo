@@ -66,7 +66,6 @@ func (svc *CommentServiceHandler) FindByPost(ctx context.Context, request *FindB
 	// some sort of `errors.NotFound()` error if it doesn't exist.
 	_, err := svc.PostService.GetPost(ctx, &posts.GetPostRequest{ID: request.PostID})
 	if err != nil {
-		fmt.Printf(">>>>>> FAIL: [%+v]\n", err)
 		return nil, fmt.Errorf("unable to retrieve post: %w", err)
 	}
 
