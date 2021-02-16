@@ -50,10 +50,13 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.Package, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.PackageInfo, err = ParseTypeInformation(ctx); err != nil {
+	if ctx.TypeInfo, err = ParseTypeInformation(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
 	if ctx.Documentation, ctx.Tags, err = ParseDocumentation(ctx); err != nil {
+		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
+	}
+	if ctx.Models, err = ParseModels(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
 	if ctx.Services, err = ParseServices(ctx); err != nil {
@@ -274,6 +277,9 @@ var jsonTypeMapping = map[string]string{
 	"float32":   "number",
 	"float64":   "number",
 	"time.Time": "string",
+
+	// Special case for 'time.Time' when you've dug down to the underlying root type.
+	"struct{wall uint64; ext int64; loc *time.Location}": "string",
 }
 
 func underlyingType(fieldType types.Type) types.Type {
@@ -301,7 +307,7 @@ func underlyingType(fieldType types.Type) types.Type {
 }
 
 func ParseDocumentation(ctx *Context) (Documentation, Tags, error) {
-	packageDocs, err := doc.NewFromFiles(ctx.PackageInfo.Fset, ctx.PackageInfo.Syntax, ctx.Module.Name)
+	packageDocs, err := doc.NewFromFiles(ctx.TypeInfo.Fset, ctx.TypeInfo.Syntax, ctx.Module.Name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -376,6 +382,10 @@ func ToServiceInterface(typeObj types.Object) (*types.Interface, bool) {
 	return underlyingInterface(typeObj.Type())
 }
 
+func ToModelStruct(typeObj types.Object) (*types.Struct, bool) {
+	return underlyingStruct(typeObj.Type())
+}
+
 // ParseServices looks for all 'type XxxService interface' declarations and extracts all
 // service/operation info from it that we need to generate our artifacts. Most of the time
 // the resulting slice will only contain 1 item since its generally good design to only define
@@ -429,8 +439,6 @@ func ParseServiceFunctions(ctx *Context, service *ServiceDeclaration, interfaceT
 }
 
 func ParseServiceFunction(ctx *Context, service *ServiceDeclaration, funcType *types.Func) (*ServiceFunctionDeclaration, error) {
-	var err error
-
 	function := &ServiceFunctionDeclaration{
 		Name:    funcType.Name(),
 		Service: service,
@@ -469,24 +477,40 @@ func ParseServiceFunction(ctx *Context, service *ServiceDeclaration, funcType *t
 		return nil, fmt.Errorf("%s: return value 2 is not an error", function.Name)
 	}
 
-	if function.Request, err = ParseModel(ctx, function, signature.Params().At(1)); err != nil {
-		return nil, fmt.Errorf("%s: invalid request param: %v", function.Name, err)
-	}
-	if function.Response, err = ParseModel(ctx, function, signature.Results().At(0)); err != nil {
-		return nil, fmt.Errorf("%s: invalid response param: %v", function.Name, err)
-	}
+	function.Request = ctx.ModelByName(signature.Params().At(1).Type().String())
+	function.Response = ctx.ModelByName(signature.Results().At(0).Type().String())
 
 	ApplyFunctionDocumentation(ctx, function)
 	return function, nil
 }
 
-func ParseModel(ctx *Context, function *ServiceFunctionDeclaration, param *types.Var) (*ServiceModelDeclaration, error) {
+func ParseModels(ctx *Context) ([]*ServiceModelDeclaration, error) {
+	var models []*ServiceModelDeclaration
+	for _, typeName := range ctx.Scope().Names() {
+		scopeObj := ctx.Scope().Lookup(typeName)
+		if !scopeObj.Exported() {
+			continue
+		}
+		if _, ok := ToModelStruct(scopeObj); !ok {
+			continue
+		}
+
+		model, err := ParseModel(ctx, scopeObj.Type())
+		if err != nil {
+			return nil, err
+		}
+		models = append(models, model)
+	}
+	return models, nil
+}
+
+func ParseModel(ctx *Context, modelType types.Type) (*ServiceModelDeclaration, error) {
 	model := &ServiceModelDeclaration{
-		Name: noPackage(noPointer(param.Type().String())),
-		Type: ParseFieldType(ctx, param.Type()),
+		Name: noPackage(noPointer(modelType.String())),
+		Type: ParseFieldType(ctx, modelType),
 	}
 
-	fields, err := ParseModelFields(ctx, model, param.Type())
+	fields, err := ParseModelFields(ctx, model, modelType)
 	if err != nil {
 		return nil, fmt.Errorf("%s: field parsing error: %v", model.Name, err)
 	}
@@ -504,7 +528,12 @@ func ParseModelFields(ctx *Context, model *ServiceModelDeclaration, modelType ty
 	}
 
 	for i := 0; i < structType.NumFields(); i++ {
-		field, err := ParseModelField(ctx, model, structType.Field(i))
+		fieldNode := structType.Field(i)
+		if !fieldNode.Exported() {
+			continue
+		}
+
+		field, err := ParseModelField(ctx, model, fieldNode)
 		if err != nil {
 			return nil, err
 		}

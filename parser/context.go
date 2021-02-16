@@ -36,15 +36,17 @@ type Context struct {
 	Services []*ServiceDeclaration
 	// Models encapsulates snapshot info for all service request/response structs that were defined in the input file.
 	Models []*ServiceModelDeclaration
-	// TypeInfo contains detailed compiler info about the types in your source file.
-	TypeInfo      *types.Info
-	PackageInfo   *packages.Package
+	// TypeInfo contains the tree of all parsed type information.
+	TypeInfo *packages.Package
+	// Documentation stores the GoDoc comments for the services/functions/models/fields in the parsed code.
 	Documentation Documentation
-	Tags          Tags
+	// Tags stores the struct field tags annotated on fields in your input file.
+	Tags Tags
 }
 
+// Scope returns the root of the parsed type tree for the source file we parsed.
 func (ctx Context) Scope() *types.Scope {
-	return ctx.PackageInfo.Types.Scope()
+	return ctx.TypeInfo.Types.Scope()
 }
 
 // ServiceByName looks through "Services" to find the one with the matching interface name.
@@ -62,7 +64,7 @@ func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 	// These lookups likely happen when we perform lookups for service method parameters. Those are
 	// usually pointers (e.g. "*GetPostRequest). The model name we put on the context does not have
 	// any sort of pointer identification, so strip that off.
-	name = noPointer(name)
+	name = noPackage(noPointer(name))
 
 	for _, model := range ctx.Models {
 		if model.Name == name {
@@ -70,14 +72,6 @@ func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 		}
 	}
 	return nil
-}
-
-func (ctx Context) LookupType(typeExpr ast.Expr) (types.Type, error) {
-	info, ok := ctx.TypeInfo.Types[typeExpr]
-	if !ok {
-		return nil, fmt.Errorf("unable to find type info for %v", types.ExprString(typeExpr))
-	}
-	return info.Type, nil
 }
 
 // ServiceDeclaration wrangles all of the information we could grab about the service from the
@@ -183,6 +177,8 @@ func (fields FieldDeclarations) FieldByName(name string) *FieldDeclaration {
 	return nil
 }
 
+// FieldByBindingName looks for a field whose (possibly) re-mapped name matches the given value. This
+// comparison is CASE INSENSITIVE, so "id" will find the field "ID".
 func (fields FieldDeclarations) FieldByBindingName(name string) *FieldDeclaration {
 	for _, field := range fields {
 		if strings.EqualFold(field.Binding.Name, name) {
