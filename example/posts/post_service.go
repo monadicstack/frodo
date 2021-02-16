@@ -3,6 +3,8 @@ package posts
 import (
 	real "context"
 	chrono "time"
+
+	turds "github.com/monadicstack/frodo/example"
 )
 
 // PostService is a service that manages blog/article posts. This is just for example purposes,
@@ -35,6 +37,7 @@ type Post struct {
 	Text     string
 	Archived bool
 	Date     chrono.Time
+	Page     turds.Paging
 }
 
 type GetPostRequest struct {
@@ -42,7 +45,8 @@ type GetPostRequest struct {
 	ID    string
 	Limit int
 	// Offset is like the SQL offset, dummy.
-	Offset int
+	Offset int `json:"skip"`
+	//Page   example.Paging
 }
 
 // GetPostResponse describes a single post in the blog.

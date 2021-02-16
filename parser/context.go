@@ -7,7 +7,10 @@ import (
 	"go/types"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strings"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // Context wrangles all of the captured data about your input service declaration file. It tracks
@@ -34,7 +37,14 @@ type Context struct {
 	// Models encapsulates snapshot info for all service request/response structs that were defined in the input file.
 	Models []*ServiceModelDeclaration
 	// TypeInfo contains detailed compiler info about the types in your source file.
-	TypeInfo *types.Info
+	TypeInfo      *types.Info
+	PackageInfo   *packages.Package
+	Documentation Documentation
+	Tags          Tags
+}
+
+func (ctx Context) Scope() *types.Scope {
+	return ctx.PackageInfo.Types.Scope()
 }
 
 // ServiceByName looks through "Services" to find the one with the matching interface name.
@@ -52,9 +62,7 @@ func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 	// These lookups likely happen when we perform lookups for service method parameters. Those are
 	// usually pointers (e.g. "*GetPostRequest). The model name we put on the context does not have
 	// any sort of pointer identification, so strip that off.
-	if strings.HasPrefix(name, "*") {
-		name = name[1:]
-	}
+	name = noPointer(name)
 
 	for _, model := range ctx.Models {
 		if model.Name == name {
@@ -121,8 +129,8 @@ type ServiceFunctionDeclaration struct {
 	Gateway *GatewayFunctionOptions
 	// Documentation are all of the comments documenting this operation.
 	Documentation DocumentationLines
-	// Node is the syntax tree object that defined this function within the service interface.
-	Node *ast.Field
+	// Service represents the interface/service that this function belongs to.
+	Service *ServiceDeclaration
 }
 
 // String returns the function signature for this operation for debugging purposes.
@@ -144,8 +152,6 @@ type ServiceModelDeclaration struct {
 	Fields FieldDeclarations
 	// Type contains the runtime type data about this model.
 	Type *FieldType
-	// Node is the syntax tree object that defined this type/struct.
-	Node *ast.Object
 }
 
 // String just returns the model type's name.
@@ -194,9 +200,10 @@ type FieldDeclaration struct {
 	Type *FieldType
 	// Documentation are all of the comments documenting this field.
 	Documentation DocumentationLines
-	// Node is the syntax tree object where this field was defined.
-	Node    *ast.Field
+	// Binding describes the custom binding instructions used when unmarshaling request data onto this field.
 	Binding *FieldBindingOptions
+	// Model describes the service request/response that this field is a member of.
+	Model *ServiceModelDeclaration
 }
 
 // FieldBindingOptions provides hints to the generation tools about how the runtime binder will
@@ -257,6 +264,50 @@ type PackageDeclaration struct {
 	Import string
 	// Directory is the absolute path to the package.
 	Directory string
+}
+
+var noDocumentation = DocumentationLines{}
+
+type Documentation map[string]string
+
+func (docs Documentation) lookup(segments ...string) DocumentationLines {
+	if comments, ok := docs[strings.Join(segments, ".")]; ok {
+		return strings.Split(comments, "\n")
+	}
+	return noDocumentation
+}
+
+func (docs Documentation) ForService(s *ServiceDeclaration) DocumentationLines {
+	return docs.lookup(s.Name)
+}
+
+func (docs Documentation) ForFunction(f *ServiceFunctionDeclaration) DocumentationLines {
+	return docs.lookup(f.Service.Name, f.Name)
+}
+
+func (docs Documentation) ForModel(m *ServiceModelDeclaration) DocumentationLines {
+	return docs.lookup(m.Name)
+}
+
+func (docs Documentation) ForField(f *FieldDeclaration) DocumentationLines {
+	return docs.lookup(f.Model.Name, f.Name)
+}
+
+var noTag = reflect.StructTag("")
+
+type Tags map[string]string
+
+func (tags Tags) lookup(segments ...string) reflect.StructTag {
+	// When we pull tags off of the AST, they're still wrapped in the `xxx` back ticks, so
+	// pull those off before giving them back to the caller.
+	if tag, ok := tags[strings.Join(segments, ".")]; ok {
+		return reflect.StructTag(strings.Trim(tag, "`"))
+	}
+	return noTag
+}
+
+func (tags Tags) ForField(f *FieldDeclaration) reflect.StructTag {
+	return tags.lookup(f.Model.Name, f.Name)
 }
 
 // DocumentationLines represents all of the 'go doc' lines above a type/function/field with all
