@@ -47,7 +47,7 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.Module, err = ParseModuleInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.Package, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
+	if ctx.InputPackage, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
 	if ctx.TypeInfo, err = ParseTypeInformation(ctx); err != nil {

@@ -12,7 +12,7 @@ import (
 
 	"github.com/monadicstack/respond"
 	"github.com/monadicstack/frodo/rpc"
-	"{{ .Package.Import }}"
+	"{{.InputPackage.Import }}"
 )
 
 {{ $ctx := . }}
@@ -22,13 +22,13 @@ import (
 // can pass it to any standard library HTTP server of your choice.
 //
 //	// How to fire up your service for RPC and/or your REST API
-//	service := {{ $ctx.Package.Name }}.{{ .Name }}{ /* set up to your liking */ }
+//	service := {{ $ctx.InputPackage.Name }}.{{ .Name }}{ /* set up to your liking */ }
 //	gateway := {{ $ctx.OutputPackage.Name }}.New{{ .Name }}Gateway(service)
 //	http.ListenAndServe(":8080", gateway)
 //
 // The default instance works well enough, but you can supply additional options such as WithMiddleware() which
 // accepts any negroni-compatible middleware handlers.
-func New{{ .Name }}Gateway(service {{ $ctx.Package.Name }}.{{ .Name }}, options ...rpc.GatewayOption) rpc.Gateway {
+func New{{ .Name }}Gateway(service {{ $ctx.InputPackage.Name }}.{{ .Name }}, options ...rpc.GatewayOption) rpc.Gateway {
 	gw := rpc.NewGateway(options...)
 	gw.Name = "{{ .Name }}"
 	gw.PathPrefix = "{{ .Gateway.PathPrefix }}"
@@ -43,7 +43,7 @@ func New{{ .Name }}Gateway(service {{ $ctx.Package.Name }}.{{ .Name }}, options 
 		Handler:     func(w http.ResponseWriter, req *http.Request) {
 			response := respond.To(w, req)
 
-			serviceRequest := {{ $ctx.Package.Name }}.{{ .Request.Name }}{}
+			serviceRequest := {{ $ctx.InputPackage.Name }}.{{ .Request.Name }}{}
 			if err := gw.Binder.Bind(req, &serviceRequest); err != nil {
 				response.Fail(err)
 				return

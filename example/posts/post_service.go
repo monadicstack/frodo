@@ -25,8 +25,6 @@ type PostService interface {
 	// PATCH /post/:id/archive
 	// HTTP 202
 	Archive(real.Context, *ArchiveRequest) (*ArchiveResponse, error)
-	// GET /post
-	Search(real.Context, *GetPostResponse) (*example.Paging, error)
 }
 
 type ShortText string

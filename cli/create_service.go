@@ -107,7 +107,7 @@ func (c CreateService) Exec(request *CreateServiceRequest) error {
 	if err != nil {
 		return err
 	}
-	ctx.PackageImport = info.Package.Import
+	ctx.PackageImport = info.InputPackage.Import
 	if err := scaffoldTemplate(ctx, createMainTemplate, ctx.Paths.Main); err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ type createServiceContext struct {
 	}
 }
 
-var createServiceTemplate = template.Must(template.New("service.go").Parse(`package {{ .Package }}
+var createServiceTemplate = template.Must(template.New("service.go").Parse(`package {{.InputPackage }}
 
 import (
 	"context"
@@ -197,7 +197,7 @@ type CreateResponse struct {
 }
 `))
 
-var createHandlerTemplate = template.Must(template.New("service_handler.go").Parse(`package {{ .Package }}
+var createHandlerTemplate = template.Must(template.New("service_handler.go").Parse(`package {{.InputPackage }}
 
 import (
 	"context"
@@ -263,13 +263,13 @@ var createMainTemplate = template.Must(template.New("main").Parse(`package main
 import (
 	"net/http"
 
-	"{{ .PackageImport }}"
-	"{{ .PackageImport }}/gen"
+	"{{.PackageImport }}"
+	"{{.PackageImport }}/gen"
 )
 
 func main() {
-	serviceHandler := {{ .Package }}.{{ .HandlerName }}{}
-	gateway := {{ .Package }}rpc.New{{ .ServiceName }}Gateway(&serviceHandler)
+	serviceHandler := {{.InputPackage }}.{{ .HandlerName }}{}
+	gateway := {{.InputPackage }}rpc.New{{ .ServiceName }}Gateway(&serviceHandler)
 	http.ListenAndServe(":{{ .Port }}", gateway)
 }
 `))

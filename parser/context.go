@@ -26,8 +26,8 @@ type Context struct {
 	Path string
 	// AbsolutePath is the absolute path to the service definition file we're parsing.
 	AbsolutePath string
-	// Package contains information about the package where the service definition resides.
-	Package *PackageDeclaration
+	// InputPackage contains information about the package where the service definition resides.
+	InputPackage *PackageDeclaration
 	// OutputPackage contains information about the package where the generated code will go.
 	OutputPackage *PackageDeclaration
 	// Module contains info from "go.mod" about the entire module where the service/package is defined.

@@ -14,7 +14,7 @@ import (
 	"fmt"
 
 	"github.com/monadicstack/frodo/rpc"
-	"{{ .Package.Import }}"
+	"{{ .InputPackage.Import }}"
 )
 
 {{ $ctx := . }}
@@ -40,7 +40,7 @@ type {{ .Name }}Client struct {
 {{ range .Functions }}
 {{ range .Documentation }}
 // {{ . }}{{ end }}
-func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, request *{{ $ctx.Package.Name }}.{{ .Request.Name | NonPointer }}) (*{{ $ctx.Package.Name }}.{{ .Response.Name | NonPointer }}, error) {
+func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name | NonPointer }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name | NonPointer }}, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
 	}
@@ -48,7 +48,7 @@ func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, reque
 		return nil, fmt.Errorf("precondition failed: nil request")
 	}
 
-	response := &{{ $ctx.Package.Name }}.{{ .Response.Name }}{}
+	response := &{{ $ctx.InputPackage.Name }}.{{ .Response.Name }}{}
 	err := client.Invoke(ctx, "{{ .Gateway.Method }}", "{{ .Gateway.Path }}", request, response)
 	return response, err
 }
@@ -62,11 +62,11 @@ func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, reque
 // Since you have access to the underlying service, you are able to both implement custom handling logic AND
 // call the "real" implementation, so this can be used as special middleware that applies to only certain operations.
 type {{ .Name }}Proxy struct {
-	Service {{ $ctx.Package.Name }}.{{ .Name }}
+	Service {{ $ctx.InputPackage.Name }}.{{ .Name }}
 }
 
 {{ range .Functions }}
-func (proxy *{{ $service.Name }}Proxy) {{ .Name }} (ctx context.Context, request *{{ $ctx.Package.Name }}.{{ .Request.Name }}) (*{{ $ctx.Package.Name }}.{{ .Response.Name }}, error) {
+func (proxy *{{ $service.Name }}Proxy) {{ .Name }} (ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name }}, error) {
 	return proxy.Service.{{ .Name }}(ctx, request)
 }
 {{ end }}
