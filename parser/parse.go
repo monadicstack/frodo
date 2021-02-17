@@ -17,6 +17,10 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// DefaultServiceVersion defines the version we'll assign to all parsed services if they do
+// not have the VERSION doc option.
+const DefaultServiceVersion = "0.0.1"
+
 // ParseFile parses a source code file containing a service interface declaration as well as the
 // structs for the request/response inputs and outputs. It will aggregate all of the services/ops/models
 // described in the source code in a much more simple/direct Context.
@@ -213,7 +217,7 @@ func flattenEmbeddedFields(fields []*ast.Field) ([]*ast.Field, error) {
 // aliasing that might be going on.
 func ParseFieldType(ctx *Context, t types.Type) *FieldType {
 	fieldType := &FieldType{
-		Name:       t.String(),
+		Name:       typeName(t),
 		Type:       t,
 		Underlying: underlyingType(t),
 	}
@@ -461,7 +465,7 @@ func ParseServices(ctx *Context) ([]*ServiceDeclaration, error) {
 func ParseService(ctx *Context, name string, serviceInterface *types.Interface) (*ServiceDeclaration, error) {
 	service := &ServiceDeclaration{
 		Name:    name,
-		Version: "0.1.0",
+		Version: DefaultServiceVersion,
 		Gateway: &GatewayServiceOptions{},
 	}
 	service.Gateway.Service = service
@@ -746,9 +750,9 @@ func ApplyServiceDocumentation(ctx *Context, service *ServiceDeclaration) {
 	for _, line := range ctx.Documentation.ForService(service) {
 		switch {
 		case strings.HasPrefix(line, "PATH "):
-			service.Gateway.PathPrefix = normalizePathSegment(line[5:])
+			service.Gateway.PathPrefix = normalizePath(line[5:])
 		case strings.HasPrefix(line, "PREFIX "):
-			service.Gateway.PathPrefix = normalizePathSegment(line[7:])
+			service.Gateway.PathPrefix = normalizePath(line[7:])
 		case strings.HasPrefix(line, "VERSION "):
 			service.Version = strings.TrimSpace(line[8:])
 		default:
@@ -775,22 +779,22 @@ func ApplyFunctionDocumentation(ctx *Context, function *ServiceFunctionDeclarati
 		switch {
 		case strings.HasPrefix(line, "GET /"):
 			function.Gateway.Method = http.MethodGet
-			function.Gateway.Path = normalizePathSegment(line[4:])
+			function.Gateway.Path = normalizePath(line[4:])
 		case strings.HasPrefix(line, "PUT /"):
 			function.Gateway.Method = http.MethodPut
-			function.Gateway.Path = normalizePathSegment(line[4:])
+			function.Gateway.Path = normalizePath(line[4:])
 		case strings.HasPrefix(line, "POST /"):
 			function.Gateway.Method = http.MethodPost
-			function.Gateway.Path = normalizePathSegment(line[5:])
+			function.Gateway.Path = normalizePath(line[5:])
 		case strings.HasPrefix(line, "PATCH /"):
 			function.Gateway.Method = http.MethodPatch
-			function.Gateway.Path = normalizePathSegment(line[6:])
+			function.Gateway.Path = normalizePath(line[6:])
 		case strings.HasPrefix(line, "DELETE /"):
 			function.Gateway.Method = http.MethodDelete
-			function.Gateway.Path = normalizePathSegment(line[7:])
+			function.Gateway.Path = normalizePath(line[7:])
 		case strings.HasPrefix(line, "HEAD /"):
 			function.Gateway.Method = http.MethodHead
-			function.Gateway.Path = normalizePathSegment(line[5:])
+			function.Gateway.Path = normalizePath(line[5:])
 		case strings.HasPrefix(line, "HTTP "):
 			function.Gateway.Status = parseHTTPStatus(line[5:])
 		default:
@@ -821,7 +825,7 @@ func ApplyFieldDocumentation(ctx *Context, field *FieldDeclaration) {
 // fieldName returns the actual field name that should be used for this attribute within a struct.
 func fieldName(field *ast.Field) string {
 	if embeddedField(field) {
-		return noPointer(noPackage(typeName(field)))
+		return noPointer(noPackage(fieldTypeName(field)))
 	}
 	return field.Names[0].Name
 }
@@ -846,7 +850,18 @@ func noPointer(ident string) string {
 	return strings.TrimLeft(ident, "*")
 }
 
-func typeName(field *ast.Field) string {
+func typeName(t types.Type) string {
+	name := t.String()
+
+	// HACK: Depending on the context, types defined in the input file may be described w/ this prefix.
+	// Strip that off because it's not a "real" package prefix.
+	if strings.HasPrefix(name, "command-line-arguments.") {
+		return name[23:]
+	}
+	return name
+}
+
+func fieldTypeName(field *ast.Field) string {
 	return types.ExprString(field.Type)
 }
 
@@ -855,4 +870,13 @@ func varName(v *types.Var) string {
 		return noPointer(noPackage(v.Type().String()))
 	}
 	return v.Name()
+}
+
+// normalizePath strips off leading/trailing whitespace, trailing slashes, and ensures that
+// your path absolutely begins with a leading slash.
+func normalizePath(path string) string {
+	path = strings.TrimSpace(path)
+	path = strings.Trim(path, "/")
+	path = strings.TrimSpace(path)
+	return "/" + path
 }

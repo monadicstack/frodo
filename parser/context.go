@@ -362,6 +362,9 @@ func (docs DocumentationLines) Trim() DocumentationLines {
 			last = i
 		}
 	}
+	if first == -1 {
+		return DocumentationLines{}
+	}
 	return docs[first : last+1]
 }
 
@@ -375,11 +378,12 @@ func (docs DocumentationLines) Empty() bool {
 	return len(docs) == 0
 }
 
-func normalizePathSegment(path string) string {
-	path = strings.TrimSpace(path)
-	path = strings.Trim(path, "/")
-	path = strings.TrimSpace(path)
-	return path
+// String returns all of the documentation lines as one string, separated by newlines.
+func (docs DocumentationLines) String() string {
+	if docs.Empty() {
+		return ""
+	}
+	return strings.Join(docs, "\n")
 }
 
 // GatewayServiceOptions contains all of the configurable HTTP-related options for a top-level service.
