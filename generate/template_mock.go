@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"time"
 
-	"{{ .Package.Import }}"
+	"{{.InputPackage.Import }}"
 )
 
 {{ $ctx := . }}
@@ -27,7 +27,7 @@ import (
 // with a message indicating that it wasn't implemented.
 type Mock{{ .Name }} struct {
 	{{ range $function := .Functions -}}
-	  {{ .Name }}Func func(context.Context, *{{ $ctx.Package.Name }}.{{ .Request.Name }}) (*{{ $ctx.Package.Name }}.{{ .Response.Name }}, error)
+	  {{ .Name }}Func func(context.Context, *{{ $ctx.InputPackage.Name }}.{{ .Request.Name }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name }}, error)
 	{{ end }}
 	Calls struct {
 		{{ range $function := .Functions -}}
@@ -39,7 +39,7 @@ type Mock{{ .Name }} struct {
 {{ range $function := .Functions }}
 /* ---- {{ $service.Name }}.{{ .Name }} Mock Support For  ---- */
 
-func (mock *Mock{{ $service.Name }}) {{ .Name }}(ctx context.Context, request *{{ $ctx.Package.Name }}.{{ .Request.Name }}) (*{{ $ctx.Package.Name }}.{{ .Response.Name }}, error) {
+func (mock *Mock{{ $service.Name }}) {{ .Name }}(ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name }}, error) {
 	mock.Calls.{{ .Name }} = mock.Calls.{{ .Name }}.invoked(*request) 
 	if mock.{{ .Name }}Func == nil {
 		return nil, fmt.Errorf("{{ $service.Name }}.{{ .Name }} not implemented")
@@ -50,7 +50,7 @@ func (mock *Mock{{ $service.Name }}) {{ .Name }}(ctx context.Context, request *{
 
 {{ $callsType := (print "calls" $service.Name .Name) }} 
 {{ $callType := (print "call" $service.Name .Name) }} 
-{{ $requestType := (print $ctx.Package.Name "." .Request.Name) }}
+{{ $requestType := (print $ctx.InputPackage.Name "." .Request.Name) }}
 type {{ $callType }} struct {
 	Time    time.Time
 	Request {{ $requestType }}

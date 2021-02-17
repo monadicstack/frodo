@@ -7,7 +7,10 @@ import (
 	"go/types"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strings"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // Context wrangles all of the captured data about your input service declaration file. It tracks
@@ -23,8 +26,8 @@ type Context struct {
 	Path string
 	// AbsolutePath is the absolute path to the service definition file we're parsing.
 	AbsolutePath string
-	// Package contains information about the package where the service definition resides.
-	Package *PackageDeclaration
+	// InputPackage contains information about the package where the service definition resides.
+	InputPackage *PackageDeclaration
 	// OutputPackage contains information about the package where the generated code will go.
 	OutputPackage *PackageDeclaration
 	// Module contains info from "go.mod" about the entire module where the service/package is defined.
@@ -33,8 +36,17 @@ type Context struct {
 	Services []*ServiceDeclaration
 	// Models encapsulates snapshot info for all service request/response structs that were defined in the input file.
 	Models []*ServiceModelDeclaration
-	// TypeInfo contains detailed compiler info about the types in your source file.
-	TypeInfo *types.Info
+	// TypeInfo contains the tree of all parsed type information.
+	TypeInfo *packages.Package
+	// Documentation stores the GoDoc comments for the services/functions/models/fields in the parsed code.
+	Documentation Documentation
+	// Tags stores the struct field tags annotated on fields in your input file.
+	Tags Tags
+}
+
+// Scope returns the root of the parsed type tree for the source file we parsed.
+func (ctx Context) Scope() *types.Scope {
+	return ctx.TypeInfo.Types.Scope()
 }
 
 // ServiceByName looks through "Services" to find the one with the matching interface name.
@@ -52,9 +64,7 @@ func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 	// These lookups likely happen when we perform lookups for service method parameters. Those are
 	// usually pointers (e.g. "*GetPostRequest). The model name we put on the context does not have
 	// any sort of pointer identification, so strip that off.
-	if strings.HasPrefix(name, "*") {
-		name = name[1:]
-	}
+	name = noPackage(noPointer(name))
 
 	for _, model := range ctx.Models {
 		if model.Name == name {
@@ -62,14 +72,6 @@ func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 		}
 	}
 	return nil
-}
-
-func (ctx Context) LookupType(typeExpr ast.Expr) (types.Type, error) {
-	info, ok := ctx.TypeInfo.Types[typeExpr]
-	if !ok {
-		return nil, fmt.Errorf("unable to find type info for %v", types.ExprString(typeExpr))
-	}
-	return info.Type, nil
 }
 
 // ServiceDeclaration wrangles all of the information we could grab about the service from the
@@ -121,8 +123,8 @@ type ServiceFunctionDeclaration struct {
 	Gateway *GatewayFunctionOptions
 	// Documentation are all of the comments documenting this operation.
 	Documentation DocumentationLines
-	// Node is the syntax tree object that defined this function within the service interface.
-	Node *ast.Field
+	// Service represents the interface/service that this function belongs to.
+	Service *ServiceDeclaration
 }
 
 // String returns the function signature for this operation for debugging purposes.
@@ -144,8 +146,6 @@ type ServiceModelDeclaration struct {
 	Fields FieldDeclarations
 	// Type contains the runtime type data about this model.
 	Type *FieldType
-	// Node is the syntax tree object that defined this type/struct.
-	Node *ast.Object
 }
 
 // String just returns the model type's name.
@@ -177,6 +177,8 @@ func (fields FieldDeclarations) FieldByName(name string) *FieldDeclaration {
 	return nil
 }
 
+// FieldByBindingName looks for a field whose (possibly) re-mapped name matches the given value. This
+// comparison is CASE INSENSITIVE, so "id" will find the field "ID".
 func (fields FieldDeclarations) FieldByBindingName(name string) *FieldDeclaration {
 	for _, field := range fields {
 		if strings.EqualFold(field.Binding.Name, name) {
@@ -194,9 +196,10 @@ type FieldDeclaration struct {
 	Type *FieldType
 	// Documentation are all of the comments documenting this field.
 	Documentation DocumentationLines
-	// Node is the syntax tree object where this field was defined.
-	Node    *ast.Field
+	// Binding describes the custom binding instructions used when unmarshaling request data onto this field.
 	Binding *FieldBindingOptions
+	// Model describes the service request/response that this field is a member of.
+	Model *ServiceModelDeclaration
 }
 
 // FieldBindingOptions provides hints to the generation tools about how the runtime binder will
@@ -257,6 +260,78 @@ type PackageDeclaration struct {
 	Import string
 	// Directory is the absolute path to the package.
 	Directory string
+}
+
+var noDocumentation = DocumentationLines{}
+
+// Documentation is a lookup cache for all GoDoc comments on your services, functions, models, and fields.
+type Documentation map[string]string
+
+// Set adds an entry to the lookup. This is admittedly a bastardization of variadic functions - the last value you
+// pass in is the GoDoc comments. The first to second-to-last values are segments in the lookup key. For instance
+// if you are caching the comment for the function Bar on the FooService, you would
+// call `Set("FooService", "Bar", "Bar does some baz magic and gives you back goo.")`. The resulting entry will
+// look like "FooService.Bar"->"Bar does some...".
+func (docs Documentation) Set(segmentsAndDoc ...string) {
+	length := len(segmentsAndDoc)
+	if length < 2 {
+		return
+	}
+
+	key := strings.Join(segmentsAndDoc[:length-1], ".")
+	docs[key] = strings.TrimSpace(segmentsAndDoc[length-1])
+}
+
+func (docs Documentation) lookup(segments ...string) DocumentationLines {
+	if comments, ok := docs[strings.Join(segments, ".")]; ok {
+		return strings.Split(comments, "\n")
+	}
+	return noDocumentation
+}
+
+// ForService finds the GoDoc comments for the given service interface.
+func (docs Documentation) ForService(s *ServiceDeclaration) DocumentationLines {
+	return docs.lookup(s.Name)
+}
+
+// ForFunction finds the GoDoc comments for the given service function.
+func (docs Documentation) ForFunction(f *ServiceFunctionDeclaration) DocumentationLines {
+	return docs.lookup(f.Service.Name, f.Name)
+}
+
+// ForModel finds the GoDoc comments for the request/response struct.
+func (docs Documentation) ForModel(m *ServiceModelDeclaration) DocumentationLines {
+	return docs.lookup(m.Name)
+}
+
+// ForField find the GoDoc comments for the attribute of a request/response struct
+func (docs Documentation) ForField(f *FieldDeclaration) DocumentationLines {
+	return docs.lookup(f.Model.Name, f.Name)
+}
+
+var noTag = reflect.StructTag("")
+
+// Tags is a lookup for finding `json:"xxx"` tags defined on your request/response structs.
+type Tags map[string]string
+
+// Set captures the tag information for the given model attribute.
+func (tags Tags) Set(model string, field string, tag *ast.BasicLit) {
+	if tag == nil {
+		return
+	}
+
+	// When we pull tags off of the AST, they're still wrapped in the `xxx` back ticks, so
+	// pull those off before giving them back to the caller.
+	tags[model+"."+field] = strings.Trim(strings.TrimSpace(tag.Value), "`")
+}
+
+// ForField looks up the tag annotations for the given model field. If the field does not have any tags
+// you'll get back the zero-value StructTag that always gives you empty for any value lookups.
+func (tags Tags) ForField(f *FieldDeclaration) reflect.StructTag {
+	if tag, ok := tags[f.Model.Name+"."+f.Name]; ok {
+		return reflect.StructTag(tag)
+	}
+	return noTag
 }
 
 // DocumentationLines represents all of the 'go doc' lines above a type/function/field with all
