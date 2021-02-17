@@ -312,50 +312,75 @@ func ParseDocumentation(ctx *Context) (Documentation, Tags, error) {
 		return nil, nil, err
 	}
 
+	/*
+	 * What's going on here? We're collecting all of the GoDoc comments on the services, structs, functions,
+	 * and fields defined in your input file and storing them in an easier lookup mechanism for our purposes. The
+	 * packageDocs value is a tree we can traverse to find any doc we want, but it's inefficient since we look up
+	 * the corresponding comments for a service/function/etc on demand. Instead, we create an O(1) lookup map that
+	 * uses the names of the types/functions/etc to find the appropriate comments. For instance, when all is said and
+	 * done, we want a map that looks like this:
+	 *
+	 *     "UserService":          "UserService provides all operations on...",
+	 *     "UserService.GetByID":  "GetByID finds a user given their unique id",
+	 *     "UserService.Search":   "Search finds all users matching the specified criteria.",
+	 *     "SearchRequest" :       "SearchRequest contains all of the filtering options for...",
+	 *     "SearchRequest.Text":   "Text limits the search to only include users with these tokens...",
+	 *     "SearchRequest.Limit":  "Limit is the maximum number of users the search will return.",
+	 *     "SearchRequest.Offset": "Offset handles paging by skipping...",
+	 *     ...
+	 *
+	 * The keys are either "SERVICE", "SERVICE.FUNCTION", "MODEL", or "MODEL.FIELD". We traverse the tree and build
+	 * this flat structure so that we can do easier lookups later.
+	 *
+	 * As for the 'Tags', it's the exact same process; turn the tree into a flat map so we can find the `json` tags
+	 * on fields later on. True, tags arent' *technically* documentation, but it is where we can easily grab this
+	 * information. The type tree from "packages.Load()" does not have this data, so while we're traversing the AST
+	 * for documentation, we can grab the tag info, too.
+	 */
 	docs := Documentation{}
 	tags := Tags{}
 
 	// First iterate through the service interfaces and capture the interface/function docs.
-	for _, serviceType := range packageDocs.Types {
-		interfaceNode, ok := toInterfaceTypeNode(serviceType)
+	for _, service := range packageDocs.Types {
+		interfaceNode, ok := toInterfaceTypeNode(service)
 		if !ok {
 			continue
 		}
-		docs[serviceType.Name] = strings.TrimSpace(serviceType.Doc)
 
-		for _, functionNode := range interfaceNode.Methods.List {
-			if functionNode.Doc == nil {
-				continue
-			}
-			docs[serviceType.Name+"."+fieldName(functionNode)] = functionNode.Doc.Text()
+		docs.Set(service.Name, service.Doc)
+		for _, function := range interfaceNode.Methods.List {
+			docs.Set(service.Name, fieldName(function), toCommentText(function.Doc))
 		}
 	}
 
 	// Now iterate the models to capture the model/field docs.
-	for _, modelType := range packageDocs.Types {
-		structNode, ok := toStructTypeNode(modelType)
+	for _, model := range packageDocs.Types {
+		structNode, ok := toStructTypeNode(model)
 		if !ok {
 			continue
 		}
-		docs[modelType.Name] = strings.TrimSpace(modelType.Doc)
 
-		for _, fieldNode := range structNode.Fields.List {
-			if fieldNode.Doc == nil {
-				continue
-			}
-
-			lookupKey := modelType.Name + "." + fieldName(fieldNode)
-			docs[lookupKey] = fieldNode.Doc.Text()
-
-			if fieldNode.Tag != nil {
-				tags[lookupKey] = fieldNode.Tag.Value
-			}
+		docs.Set(model.Name, model.Doc)
+		for _, field := range structNode.Fields.List {
+			docs.Set(model.Name, fieldName(field), toCommentText(field.Doc))
+			tags.Set(model.Name, fieldName(field), field.Tag)
 		}
 	}
 
 	return docs, tags, nil
 }
 
+// toCommentText is a nil-safe way to extract the raw GoDoc comment string from a node's comment group. Should
+// you provide a nil group (i.e. the node doesn't have comments), this will just return "".
+func toCommentText(group *ast.CommentGroup) string {
+	if group == nil {
+		return ""
+	}
+	return group.Text()
+}
+
+// toStructTypeNode accepts a documentation tree's type node and returns the underlying AST struct node for
+// it. If documentation node is not part of a struct, this will return nil/false.
 func toStructTypeNode(t *doc.Type) (*ast.StructType, bool) {
 	typeSpec, ok := t.Decl.Specs[0].(*ast.TypeSpec)
 	if !ok {
@@ -365,6 +390,8 @@ func toStructTypeNode(t *doc.Type) (*ast.StructType, bool) {
 	return structNode, ok
 }
 
+// toStructTypeNode accepts a documentation tree's type node and returns the underlying AST interface node for
+// it. If documentation node is not part of an interface, this will return nil/false.
 func toInterfaceTypeNode(t *doc.Type) (*ast.InterfaceType, bool) {
 	typeSpec, ok := t.Decl.Specs[0].(*ast.TypeSpec)
 	if !ok {
@@ -374,15 +401,36 @@ func toInterfaceTypeNode(t *doc.Type) (*ast.InterfaceType, bool) {
 	return interfaceNode, ok
 }
 
-func ToServiceInterface(typeObj types.Object) (*types.Interface, bool) {
+// toServiceInterface accepts a 'type' from the packages type tree and returns the raw interface data for it
+// if and only if it meets our criteria for being a "service interface"
+//
+// * It follows the naming convention "FooBarService" (i.e. ends with "Service")
+// * It is an exported type
+// * The 'type' is interface.
+//
+// Any type that doesn't meet all of these criteria will receive "nil, false" back.
+func toServiceInterface(typeObj types.Object) (*types.Interface, bool) {
 	// Enforce the naming convention that services end w/ the word "Service"
 	if !strings.HasSuffix(typeObj.Name(), "Service") {
+		return nil, false
+	}
+	if !typeObj.Exported() {
 		return nil, false
 	}
 	return underlyingInterface(typeObj.Type())
 }
 
-func ToModelStruct(typeObj types.Object) (*types.Struct, bool) {
+// toModelStruct accepts a 'type' from the packages type tree and returns the raw struct data for it
+// if and only if it meets our criteria for being a valid request/response model:
+//
+// * It is an exported type
+// * The 'type' is struct.
+//
+// Pretty simple. Any type that doesn't meet all those criteria will receive "nil, false" back.
+func toModelStruct(typeObj types.Object) (*types.Struct, bool) {
+	if !typeObj.Exported() {
+		return nil, false
+	}
 	return underlyingStruct(typeObj.Type())
 }
 
@@ -393,13 +441,13 @@ func ToModelStruct(typeObj types.Object) (*types.Struct, bool) {
 func ParseServices(ctx *Context) ([]*ServiceDeclaration, error) {
 	var services []*ServiceDeclaration
 
-	for _, typeName := range ctx.Scope().Names() {
-		interfaceType, ok := ToServiceInterface(ctx.Scope().Lookup(typeName))
+	for _, name := range ctx.Scope().Names() {
+		interfaceType, ok := toServiceInterface(ctx.Scope().Lookup(name))
 		if !ok {
 			continue
 		}
 
-		service, err := ParseService(ctx, typeName, interfaceType)
+		service, err := ParseService(ctx, name, interfaceType)
 		if err != nil {
 			return nil, err
 		}
@@ -408,6 +456,8 @@ func ParseServices(ctx *Context) ([]*ServiceDeclaration, error) {
 	return services, nil
 }
 
+// ParseService accepts an interface node from the packages type tree and builds the appropriate service
+// declaration containing all service and function info.
 func ParseService(ctx *Context, name string, serviceInterface *types.Interface) (*ServiceDeclaration, error) {
 	service := &ServiceDeclaration{
 		Name:    name,
@@ -426,6 +476,7 @@ func ParseService(ctx *Context, name string, serviceInterface *types.Interface) 
 	return service, nil
 }
 
+// ParseServiceFunctions creates function declarations for all methods on the service interface.
 func ParseServiceFunctions(ctx *Context, service *ServiceDeclaration, interfaceType *types.Interface) ([]*ServiceFunctionDeclaration, error) {
 	var functions []*ServiceFunctionDeclaration
 	for i := 0; i < interfaceType.NumMethods(); i++ {
@@ -433,11 +484,14 @@ func ParseServiceFunctions(ctx *Context, service *ServiceDeclaration, interfaceT
 		if err != nil {
 			return nil, err
 		}
+
 		functions = append(functions, function)
 	}
 	return functions, nil
 }
 
+// ParseServiceFunction captures the information for a single function on a service. This includes all of the
+// doc options that configure the gateway stuff.
 func ParseServiceFunction(ctx *Context, service *ServiceDeclaration, funcType *types.Func) (*ServiceFunctionDeclaration, error) {
 	function := &ServiceFunctionDeclaration{
 		Name:    funcType.Name(),
@@ -452,46 +506,58 @@ func ParseServiceFunction(ctx *Context, service *ServiceDeclaration, funcType *t
 
 	signature, ok := funcType.Type().(*types.Signature)
 	if !ok {
-		return nil, fmt.Errorf("%s: not a function signature type", function.Name)
+		return nil, fmt.Errorf("%s(): not a function signature type", function.Name)
 	}
 
-	// Check to make sure that we have 2 parameters w/ the correct types (context and your request)
+	// Check to make sure that we have 2 parameters and 2 return values.
 	if signature.Params().Len() != 2 {
-		return nil, fmt.Errorf("%s: does not have 2 parameters", function.Name)
+		return nil, fmt.Errorf("%s(): does not have 2 parameters", function.Name)
 	}
-	if !validMethodParam1(ctx, signature.Params().At(0)) {
-		return nil, fmt.Errorf("%s: param 1 is not a context.Context", function.Name)
-	}
-	if !validMethodParam2(ctx, signature.Params().At(1)) {
-		return nil, fmt.Errorf("%s: param 2 is not a pointer to a request struct", function.Name)
-	}
-
-	// Check to make sure that we have 2 return values (your response type and an error)
 	if signature.Results().Len() != 2 {
-		return nil, fmt.Errorf("%s: does not return 2 values", function.Name)
-	}
-	if !validMethodReturnValue1(ctx, signature.Results().At(0)) {
-		return nil, fmt.Errorf("%s: return value 1 is not a pointer to a struct", function.Name)
-	}
-	if !validMethodReturnValue2(ctx, signature.Results().At(1)) {
-		return nil, fmt.Errorf("%s: return value 2 is not an error", function.Name)
+		return nil, fmt.Errorf("%s(): does not return 2 values", function.Name)
 	}
 
-	function.Request = ctx.ModelByName(signature.Params().At(1).Type().String())
-	function.Response = ctx.ModelByName(signature.Results().At(0).Type().String())
+	param1 := signature.Params().At(0)
+	param2 := signature.Params().At(1)
+	result1 := signature.Results().At(0)
+	result2 := signature.Results().At(1)
+
+	// Make sure that the two inputs are a context.Context and a request struct.
+	if !validMethodParam1(ctx, param1) {
+		return nil, fmt.Errorf("%s(): param 1 is not a context.Context", function.Name)
+	}
+	if !validMethodParam2(ctx, param2) {
+		return nil, fmt.Errorf("%s(): param 2 is not a pointer to a request struct", function.Name)
+	}
+
+	// Make sure that the two return values are a response struct and an error
+	if !validMethodReturnValue1(ctx, result1) {
+		return nil, fmt.Errorf("%s(): return value 1 is not a pointer to a struct", function.Name)
+	}
+	if !validMethodReturnValue2(ctx, result2) {
+		return nil, fmt.Errorf("%s(): return value 2 is not an error", function.Name)
+	}
+
+	// We're enforcing a convention that you define your request/response structs in the same file as the
+	// services that they correspond to. Even if you want to share common types across services, that's fine,
+	// but you need to define an alias or a new type where the common type is embedded in that file.
+	if function.Request = ctx.ModelByName(param2.Type().String()); function.Request == nil {
+		return nil, fmt.Errorf("%s(): request struct must be defined in %s", function.Name, ctx.Path)
+	}
+	if function.Response = ctx.ModelByName(result1.Type().String()); function.Response == nil {
+		return nil, fmt.Errorf("%s(): response struct must be defined in %s", function.Name, ctx.Path)
+	}
 
 	ApplyFunctionDocumentation(ctx, function)
 	return function, nil
 }
 
+// ParseModels looks for all of the structs defined in your input file and captures them as model declarations.
 func ParseModels(ctx *Context) ([]*ServiceModelDeclaration, error) {
 	var models []*ServiceModelDeclaration
 	for _, typeName := range ctx.Scope().Names() {
 		scopeObj := ctx.Scope().Lookup(typeName)
-		if !scopeObj.Exported() {
-			continue
-		}
-		if _, ok := ToModelStruct(scopeObj); !ok {
+		if _, ok := toModelStruct(scopeObj); !ok {
 			continue
 		}
 
@@ -504,6 +570,8 @@ func ParseModels(ctx *Context) ([]*ServiceModelDeclaration, error) {
 	return models, nil
 }
 
+// ParseModel accepts an exported struct type and captures all of the model's details including its doc options
+// and all of the field/type information.
 func ParseModel(ctx *Context, modelType types.Type) (*ServiceModelDeclaration, error) {
 	model := &ServiceModelDeclaration{
 		Name: noPackage(noPointer(modelType.String())),
@@ -519,14 +587,15 @@ func ParseModel(ctx *Context, modelType types.Type) (*ServiceModelDeclaration, e
 	return model, nil
 }
 
+// ParseModelFields accepts the info for a model struct and constructs declarations for all of the fields
+// that belong to it. This includes all of the doc options and expanded type info.
 func ParseModelFields(ctx *Context, model *ServiceModelDeclaration, modelType types.Type) (FieldDeclarations, error) {
-	fields := FieldDeclarations{}
-
 	structType, ok := underlyingStruct(modelType)
 	if !ok {
 		return nil, fmt.Errorf("model type is not a struct")
 	}
 
+	fields := FieldDeclarations{}
 	for i := 0; i < structType.NumFields(); i++ {
 		fieldNode := structType.Field(i)
 		if !fieldNode.Exported() {
@@ -539,10 +608,11 @@ func ParseModelFields(ctx *Context, model *ServiceModelDeclaration, modelType ty
 		}
 		fields = append(fields, field)
 	}
-
 	return fields, nil
 }
 
+// ParseModelField takes the type tree node for a struct field and captures the necessary info into
+// a field declaration including all type info, binding info, and doc options.
 func ParseModelField(ctx *Context, model *ServiceModelDeclaration, fieldVar *types.Var) (*FieldDeclaration, error) {
 	field := &FieldDeclaration{
 		Name:  varName(fieldVar),
@@ -553,6 +623,10 @@ func ParseModelField(ctx *Context, model *ServiceModelDeclaration, fieldVar *typ
 	return field, nil
 }
 
+// ParseBindingOptions looks at the `json` tags of the given struct field and returns this field's binding
+// configuration. It indicates whether the field should be left out of JSON marshaling and what field name to
+// use when going to/from JSON format. If the field has no `json` tag, you will get a set of binding options
+// representing the default values (i.e. include the field and use its exact name).
 func ParseBindingOptions(ctx *Context, field *FieldDeclaration, fieldVar *types.Var) *FieldBindingOptions {
 	options := &FieldBindingOptions{
 		Omit: false,
@@ -592,6 +666,7 @@ func validMethodParam1(ctx *Context, param *types.Var) bool {
 	return param.Type().String() == "context.Context"
 }
 
+// The second parameter should be a pointer to your "request struct".
 func validMethodParam2(_ *Context, param *types.Var) bool {
 	if _, ok := underlyingPointer(param.Type()); !ok {
 		return false
@@ -602,11 +677,13 @@ func validMethodParam2(_ *Context, param *types.Var) bool {
 	return true
 }
 
+// The first return value should be a pointer to your "response struct".
 func validMethodReturnValue1(ctx *Context, param *types.Var) bool {
 	// It has the same semantics - must be a pointer to a struct.
 	return validMethodParam2(ctx, param)
 }
 
+// The second return value should always just be an error.
 func validMethodReturnValue2(_ *Context, param *types.Var) bool {
 	return param.Type().String() == "error"
 }

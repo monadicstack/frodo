@@ -264,7 +264,23 @@ type PackageDeclaration struct {
 
 var noDocumentation = DocumentationLines{}
 
+// Documentation is a lookup cache for all GoDoc comments on your services, functions, models, and fields.
 type Documentation map[string]string
+
+// Set adds an entry to the lookup. This is admittedly a bastardization of variadic functions - the last value you
+// pass in is the GoDoc comments. The first to second-to-last values are segments in the lookup key. For instance
+// if you are caching the comment for the function Bar on the FooService, you would
+// call `Set("FooService", "Bar", "Bar does some baz magic and gives you back goo.")`. The resulting entry will
+// look like "FooService.Bar"->"Bar does some...".
+func (docs Documentation) Set(segmentsAndDoc ...string) {
+	length := len(segmentsAndDoc)
+	if length < 2 {
+		return
+	}
+
+	key := strings.Join(segmentsAndDoc[:length-1], ".")
+	docs[key] = strings.TrimSpace(segmentsAndDoc[length-1])
+}
 
 func (docs Documentation) lookup(segments ...string) DocumentationLines {
 	if comments, ok := docs[strings.Join(segments, ".")]; ok {
@@ -273,37 +289,49 @@ func (docs Documentation) lookup(segments ...string) DocumentationLines {
 	return noDocumentation
 }
 
+// ForService finds the GoDoc comments for the given service interface.
 func (docs Documentation) ForService(s *ServiceDeclaration) DocumentationLines {
 	return docs.lookup(s.Name)
 }
 
+// ForFunction finds the GoDoc comments for the given service function.
 func (docs Documentation) ForFunction(f *ServiceFunctionDeclaration) DocumentationLines {
 	return docs.lookup(f.Service.Name, f.Name)
 }
 
+// ForModel finds the GoDoc comments for the request/response struct.
 func (docs Documentation) ForModel(m *ServiceModelDeclaration) DocumentationLines {
 	return docs.lookup(m.Name)
 }
 
+// ForField find the GoDoc comments for the attribute of a request/response struct
 func (docs Documentation) ForField(f *FieldDeclaration) DocumentationLines {
 	return docs.lookup(f.Model.Name, f.Name)
 }
 
 var noTag = reflect.StructTag("")
 
+// Tags is a lookup for finding `json:"xxx"` tags defined on your request/response structs.
 type Tags map[string]string
 
-func (tags Tags) lookup(segments ...string) reflect.StructTag {
+// Set captures the tag information for the given model attribute.
+func (tags Tags) Set(model string, field string, tag *ast.BasicLit) {
+	if tag == nil {
+		return
+	}
+
 	// When we pull tags off of the AST, they're still wrapped in the `xxx` back ticks, so
 	// pull those off before giving them back to the caller.
-	if tag, ok := tags[strings.Join(segments, ".")]; ok {
-		return reflect.StructTag(strings.Trim(tag, "`"))
-	}
-	return noTag
+	tags[model+"."+field] = strings.Trim(strings.TrimSpace(tag.Value), "`")
 }
 
+// ForField looks up the tag annotations for the given model field. If the field does not have any tags
+// you'll get back the zero-value StructTag that always gives you empty for any value lookups.
 func (tags Tags) ForField(f *FieldDeclaration) reflect.StructTag {
-	return tags.lookup(f.Model.Name, f.Name)
+	if tag, ok := tags[f.Model.Name+"."+f.Name]; ok {
+		return reflect.StructTag(tag)
+	}
+	return noTag
 }
 
 // DocumentationLines represents all of the 'go doc' lines above a type/function/field with all
