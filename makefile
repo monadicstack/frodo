@@ -1,3 +1,5 @@
+TEST_TIMEOUT=30s
+
 build: clean-gen
 	@ \
 	go build -o out/frodo main.go
@@ -21,13 +23,13 @@ example-run: example-gen
 #
 test:
 	@ \
-	go test -timeout 15s ./...
+	go test -timeout $(TEST_TIMEOUT) ./...
 
 #
 # Runs the test suite for the whole module, spitting out the the code coverage report to find gaps.
 #
 coverage:
 	@ \
-	go test -coverprofile=coverage.out -timeout 15s ./... && \
+	go test -coverprofile=coverage.out -timeout $(TEST_TIMEOUT) ./... && \
 	go tool cover -func=coverage.out && \
 	rm coverage.out

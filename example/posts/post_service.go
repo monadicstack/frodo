@@ -4,7 +4,6 @@ import (
 	real "context"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/monadicstack/frodo/example"
 )
 
@@ -48,7 +47,6 @@ type GetPostRequest struct {
 	Offset int `json:"skip"`
 	// Page defines the cursor/offset for the search.
 	Page example.Paging
-	P    httprouter.Params
 }
 
 // GetPostResponse describes a single post in the blog.

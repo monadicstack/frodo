@@ -226,20 +226,20 @@ func ParseFieldType(ctx *Context, t types.Type) *FieldType {
 		Underlying: underlyingType(t),
 	}
 
-	switch underlying := fieldType.Underlying.(type) {
+	switch fieldTypeType := fieldType.Type.(type) {
 	case *types.Pointer:
 		fieldType.Pointer = true
-		fieldType.Type = underlying.Elem()
+		fieldType.Type = fieldTypeType.Elem()
 		fieldType.Underlying = underlyingType(fieldType.Type)
 	case *types.Array:
-		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
+		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
 	case *types.Slice:
-		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
+		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
 	case *types.Chan:
-		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
+		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
 	case *types.Map:
-		fieldType.Key = ParseFieldType(ctx, underlying.Key())
-		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
+		fieldType.Key = ParseFieldType(ctx, fieldTypeType.Key())
+		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
 	}
 
 	fieldType.JSONType = toJSON(ctx, fieldType.Underlying)
@@ -314,6 +314,10 @@ func underlyingType(fieldType types.Type) types.Type {
 	return fieldType
 }
 
+// ParseDocumentation runs go/doc parsing on your input file to extract all of your documentation, comments, and
+// struct field tags. It returns 2 specialized lookup maps; one for doc comments and one for the struct field tags.
+// The keys to these maps are based on the names of the thing whose docs/tags you want; either "SERVICE",
+// "SERVICE.FUNCTION", "MODEL", or "MODEL.FIELD".
 func ParseDocumentation(ctx *Context) (Documentation, Tags, error) {
 	packageDocs, err := doc.NewFromFiles(ctx.TypeInfo.Fset, ctx.TypeInfo.Syntax, ctx.Module.Name)
 	if err != nil {
@@ -861,6 +865,9 @@ func typeName(t types.Type) string {
 	// Strip that off because it's not a "real" package prefix.
 	if strings.HasPrefix(name, "command-line-arguments.") {
 		return name[23:]
+	}
+	if strings.HasPrefix(name, "*command-line-arguments.") {
+		return name[24:]
 	}
 	return name
 }
