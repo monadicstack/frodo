@@ -66,6 +66,10 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.Services, err = ParseServices(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
+
+	if len(ctx.Services) == 0 {
+		return nil, fmt.Errorf("[%s]: input does not contain any service interfaces", inputPath)
+	}
 	return ctx, nil
 }
 
@@ -777,22 +781,22 @@ func ApplyFunctionDocumentation(ctx *Context, function *ServiceFunctionDeclarati
 	// comments of gateway.New() that describes why we need this limitation for now.
 	for _, line := range ctx.Documentation.ForFunction(function) {
 		switch {
-		case strings.HasPrefix(line, "GET /"):
+		case strings.HasPrefix(line, "GET "):
 			function.Gateway.Method = http.MethodGet
 			function.Gateway.Path = normalizePath(line[4:])
-		case strings.HasPrefix(line, "PUT /"):
+		case strings.HasPrefix(line, "PUT "):
 			function.Gateway.Method = http.MethodPut
 			function.Gateway.Path = normalizePath(line[4:])
-		case strings.HasPrefix(line, "POST /"):
+		case strings.HasPrefix(line, "POST "):
 			function.Gateway.Method = http.MethodPost
 			function.Gateway.Path = normalizePath(line[5:])
-		case strings.HasPrefix(line, "PATCH /"):
+		case strings.HasPrefix(line, "PATCH "):
 			function.Gateway.Method = http.MethodPatch
 			function.Gateway.Path = normalizePath(line[6:])
-		case strings.HasPrefix(line, "DELETE /"):
+		case strings.HasPrefix(line, "DELETE "):
 			function.Gateway.Method = http.MethodDelete
 			function.Gateway.Path = normalizePath(line[7:])
-		case strings.HasPrefix(line, "HEAD /"):
+		case strings.HasPrefix(line, "HEAD "):
 			function.Gateway.Method = http.MethodHead
 			function.Gateway.Path = normalizePath(line[5:])
 		case strings.HasPrefix(line, "HTTP "):
