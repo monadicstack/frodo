@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/monadicstack/frodo/parser/testdata"
+	"github.com/monadicstack/respond"
 )
 
 type HappyLittleService interface {
@@ -11,6 +14,12 @@ type HappyLittleService interface {
 }
 
 type Request struct {
+	EmbeddedFields
+	EmbeddedString
+	embeddedBool
+
+	notExported string
+
 	Basic        string
 	BasicPointer *string
 
@@ -31,6 +40,18 @@ type Request struct {
 
 	BasicSlice []string
 	BasicMap   map[string]string
+
+	AliasBasic        AliasBasic
+	AliasBasicPointer *AliasBasic
+
+	AliasStruct        AliasStruct
+	AliasStructPointer *AliasStruct
+
+	AliasSlice        AliasSlice
+	AliasSlicePointer *AliasSlice
+
+	ThirdParty respond.Redirector
+	SharedType testdata.SharedType
 }
 
 type Response struct {
@@ -43,3 +64,17 @@ type ExportedStruct struct {
 type notExportedStruct struct {
 	name string
 }
+
+type EmbeddedFields struct {
+	EmbeddedA string
+	EmbeddedB bool
+	EmbeddedC ExportedStruct
+	embeddedD int
+}
+
+type EmbeddedString string
+type embeddedBool bool
+
+type AliasBasic uint64
+type AliasStruct ExportedStruct
+type AliasSlice []string

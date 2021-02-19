@@ -68,9 +68,9 @@ func (suite *ParserSuite) TestDocOptions() {
 		Documentation: parser.DocumentationLines{},
 		Gateway:       expectedGateway{Method: "POST", Path: "/LebowskiService.Walter", Status: 200},
 	})
-	suite.assertFunction(service, "Donnie", expectedFunction{
+	suite.assertFunction(service, "Donny", expectedFunction{
 		Documentation: parser.DocumentationLines{},
-		Gateway:       expectedGateway{Method: "POST", Path: "/LebowskiService.Donnie", Status: 204},
+		Gateway:       expectedGateway{Method: "POST", Path: "/LebowskiService.Donny", Status: 204},
 	})
 	suite.assertFunction(service, "Maude", expectedFunction{
 		Documentation: parser.DocumentationLines{},
@@ -102,10 +102,36 @@ func (suite *ParserSuite) TestDocOptions() {
 	})
 }
 
+func (suite *ParserSuite) TestBindingOptions() {
+	ctx, err := parser.ParseFile("testdata/bindingopts/service.go")
+	suite.Require().NoError(err)
+
+	request := ctx.ModelByName("Request")
+
+	binding := request.Fields.ByName("ID").Binding
+	suite.Require().Equal("record_id", binding.Name)
+	suite.Require().False(binding.Omit)
+	suite.Require().True(binding.NotOmit())
+
+	binding = request.Fields.ByName("Name").Binding
+	suite.Require().Equal("Name", binding.Name)
+	suite.Require().False(binding.Omit)
+	suite.Require().True(binding.NotOmit())
+
+	binding = request.Fields.ByName("OmitMe").Binding
+	suite.Require().Equal("OmitMe", binding.Name)
+	suite.Require().True(binding.Omit)
+	suite.Require().False(binding.NotOmit())
+
+	binding = request.Fields.ByName("IncludeMe").Binding
+	suite.Require().Equal("include", binding.Name)
+	suite.Require().False(binding.Omit)
+	suite.Require().True(binding.NotOmit())
+}
+
 func (suite *ParserSuite) TestFieldTypes() {
 	ctx, err := parser.ParseFile("testdata/fieldtypes/service.go")
 	suite.Require().NoError(err)
-	suite.assertContext(ctx, expectedContext{NumServices: 1, NumModels: 3})
 
 	fields := ctx.ModelByName("Request").Fields
 
@@ -127,7 +153,39 @@ func (suite *ParserSuite) TestFieldTypes() {
 	suite.assertFieldType(fields, "BasicSlice", expectedFieldType{Name: "[]string", Pointer: false, JSON: "array", ElemName: "string"})
 	suite.assertFieldType(fields, "BasicMap", expectedFieldType{Name: "map[string]string", Pointer: false, JSON: "array", ElemName: "string", KeyName: "string"})
 
-	// TODO: Do rest of types...
+	suite.assertFieldType(fields, "Interface", expectedFieldType{Name: "interface{}", Pointer: false, JSON: "object"})
+	suite.assertFieldType(fields, "Stringer", expectedFieldType{Name: "fmt.Stringer", Pointer: false, JSON: "object"})
+
+	suite.assertFieldType(fields, "AliasBasic", expectedFieldType{Name: "AliasBasic", Pointer: false, JSON: "number"})
+	suite.assertFieldType(fields, "AliasBasicPointer", expectedFieldType{Name: "AliasBasic", Pointer: true, JSON: "number"})
+
+	suite.assertFieldType(fields, "AliasBasic", expectedFieldType{Name: "AliasBasic", Pointer: false, JSON: "number"})
+	suite.assertFieldType(fields, "AliasBasicPointer", expectedFieldType{Name: "AliasBasic", Pointer: true, JSON: "number"})
+
+	suite.assertFieldType(fields, "AliasStruct", expectedFieldType{Name: "AliasStruct", Pointer: false, JSON: "object"})
+	suite.assertFieldType(fields, "AliasStructPointer", expectedFieldType{Name: "AliasStruct", Pointer: true, JSON: "object"})
+
+	suite.assertFieldType(fields, "AliasSlice", expectedFieldType{Name: "AliasSlice", Pointer: false, JSON: "array"})
+	suite.assertFieldType(fields, "AliasSlicePointer", expectedFieldType{Name: "AliasSlice", Pointer: true, JSON: "array"})
+
+	// Make sure we support types defined outside of this file and package; types that are defined in another package
+	// of this project as well as those that belong to third party packages.
+	suite.assertFieldType(fields, "SharedType", expectedFieldType{Name: "testdata.SharedType", Pointer: false, JSON: "object"})
+	suite.assertFieldType(fields, "ThirdParty", expectedFieldType{Name: "respond.Redirector", Pointer: false, JSON: "object"})
+
+	// This should be flattened, not included as-is. Exclude non-exported fields of the embedded type
+	suite.Require().Nil(fields.ByName("EmbeddedFields"))
+	suite.Require().Nil(fields.ByName("embeddedD"))
+	suite.assertFieldType(fields, "EmbeddedA", expectedFieldType{Name: "string", Pointer: false, JSON: "string"})
+	suite.assertFieldType(fields, "EmbeddedB", expectedFieldType{Name: "bool", Pointer: false, JSON: "boolean"})
+	suite.assertFieldType(fields, "EmbeddedC", expectedFieldType{Name: "ExportedStruct", Pointer: false, JSON: "object"})
+
+	// Embedded non-structs should be included without any flattening.
+	suite.assertFieldType(fields, "EmbeddedString", expectedFieldType{Name: "EmbeddedString", Pointer: false, JSON: "string"})
+
+	// Don't include non-exported fields regardless of whether it's embedded or not
+	suite.Require().Nil(fields.ByName("embeddedBool"))
+	suite.Require().Nil(fields.ByName("notExported"))
 }
 
 // Ensures that you can have multiple services defined in the same file (though not preferred).

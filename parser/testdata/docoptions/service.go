@@ -35,7 +35,7 @@ type LebowskiService interface {
 	// HTTP 204
 	//
 	//
-	Donnie(context.Context, *Request) (*Response, error)
+	Donny(context.Context, *Request) (*Response, error)
 	// HTTP 201
 	// POST /dude/:id/child
 	Maude(context.Context, *Request) (*Response, error)

@@ -79,7 +79,7 @@ func ParseFile(inputPath string) (*Context, error) {
 func ParseTypeInformation(ctx *Context) (*packages.Package, error) {
 	config := &packages.Config{
 		Tests: false,
-		Mode:  packages.NeedDeps | packages.NeedName | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
+		Mode:  packages.NeedDeps | packages.NeedName | packages.NeedSyntax | packages.NeedTypes,
 	}
 
 	loadedPackages, err := packages.Load(config, ctx.Path)
@@ -165,57 +165,6 @@ func FindGoDotMod(dirName string) (string, error) {
 	return FindGoDotMod(filepath.Dir(dirName))
 }
 
-// lookupFieldList accepts the AST node for a type definition and returns a slice of all
-// fields/attributes that belong to this type.
-//
-// IMPORTANT! The resulting slice will contain the attributes of all embedded types as well.
-// As a result, the slice should contain explicitly defined attributes as well as those it
-// sugar-coats due to embedding.
-func lookupFieldList(modelNode *ast.Object) ([]*ast.Field, error) {
-	if modelNode == nil {
-		return nil, nil
-	}
-	typeSpec, ok := modelNode.Decl.(*ast.TypeSpec)
-	if !ok {
-		return nil, fmt.Errorf("unable to look up fields for non-type spec")
-	}
-	return lookupFieldListForType(typeSpec.Type)
-}
-
-// lookupFieldListForType behaves the same as lookupFieldList, but works by taking an AST type
-// expression that you already have in-hand.
-func lookupFieldListForType(typeExpr ast.Expr) ([]*ast.Field, error) {
-	switch t := typeExpr.(type) {
-	case *ast.StructType:
-		return flattenEmbeddedFields(t.Fields.List)
-	case *ast.Ident:
-		return lookupFieldList(t.Obj)
-	case *ast.SelectorExpr:
-		return lookupFieldList(t.Sel.Obj)
-	default:
-		return nil, nil
-	}
-}
-
-// flattenEmbeddedFields takes the exact list of fields defined on a struct and expands the list
-// to include any "inherited" fields that came from fields that were actually embedded types.
-func flattenEmbeddedFields(fields []*ast.Field) ([]*ast.Field, error) {
-	var results []*ast.Field
-	for _, field := range fields {
-		if !embeddedField(field) {
-			results = append(results, field)
-			continue
-		}
-
-		embeddedFields, err := lookupFieldListForType(field.Type)
-		if err != nil {
-			return nil, fmt.Errorf("embedded field lookup error: %s: %v", fieldName(field), err)
-		}
-		results = append(results, embeddedFields...)
-	}
-	return results, nil
-}
-
 // ParseFieldType looks at the Go parser's type information for a given model attribute and extracts
 // all of the various info we need to get a complete picture of the type and how to unravel any
 // aliasing that might be going on.
@@ -253,10 +202,6 @@ func toJSON(ctx *Context, t types.Type) string {
 		return toJSON(ctx, raw.Elem())
 	case *types.Array, *types.Slice:
 		return "array"
-	case *types.Chan:
-		return "object"
-	case *types.Map:
-		return "object"
 	}
 
 	jsonType, ok := jsonTypeMapping[t.String()]
@@ -608,12 +553,8 @@ func ParseModelFields(ctx *Context, model *ServiceModelDeclaration, modelType ty
 	}
 
 	fields := FieldDeclarations{}
-	for i := 0; i < structType.NumFields(); i++ {
-		fieldNode := structType.Field(i)
-		if !fieldNode.Exported() {
-			continue
-		}
-
+	structFields := flattenedStructFields(structType)
+	for _, fieldNode := range structFields {
 		field, err := ParseModelField(ctx, model, fieldNode)
 		if err != nil {
 			return nil, err
@@ -621,6 +562,42 @@ func ParseModelFields(ctx *Context, model *ServiceModelDeclaration, modelType ty
 		fields = append(fields, field)
 	}
 	return fields, nil
+}
+
+func flattenedStructFields(structType *types.Struct) []*types.Var {
+	var fields []*types.Var
+	for i := 0; i < structType.NumFields(); i++ {
+		field := structType.Field(i)
+		if !field.Exported() {
+			continue
+		}
+		if !field.Embedded() {
+			fields = append(fields, field)
+			continue
+		}
+
+		// Embedded struct support falls into one of these two buckets for us.
+		//
+		//     type Request {
+		//         Record
+		//         Name
+		//     }
+		//     type Record struct {
+		//         ID string
+		//     }
+		//     type Name string
+		//
+		// The embedded 'Record' field is another struct, so we need to recursively grab its fields
+		// and include them in this flattened list. The embedded 'Name' field, however, is just a standalone
+		// field, so include it like a normal field.
+		embeddedStruct, ok := underlyingStruct(field.Type())
+		if !ok {
+			fields = append(fields, field)
+			continue
+		}
+		fields = append(fields, flattenedStructFields(embeddedStruct)...)
+	}
+	return fields
 }
 
 // ParseModelField takes the type tree node for a struct field and captures the necessary info into
@@ -860,6 +837,12 @@ func noPointer(ident string) string {
 
 func typeName(t types.Type) string {
 	name := t.String()
+
+	// Third party packages include the entire import path and package info (e.g. "github.com/module/pkg/subpkg.Foo")
+	slash := strings.LastIndex(name, "/")
+	if slash >= 0 {
+		name = name[slash+1:]
+	}
 
 	// HACK: Depending on the context, types defined in the input file may be described w/ this prefix.
 	// Strip that off because it's not a "real" package prefix.
