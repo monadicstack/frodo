@@ -73,6 +73,9 @@ func (suite *HeaderSuite) TestWithHeader() {
 	})
 
 	// No header on the context
+	suite.Equal(authorization.None, authorization.FromContext(nil))
+
+	// No header on the context
 	ctx = context.Background()
 	suite.Equal(authorization.None, authorization.FromContext(ctx))
 

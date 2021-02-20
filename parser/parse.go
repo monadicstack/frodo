@@ -17,6 +17,10 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// DefaultServiceVersion defines the version we'll assign to all parsed services if they do
+// not have the VERSION doc option.
+const DefaultServiceVersion = "0.0.1"
+
 // ParseFile parses a source code file containing a service interface declaration as well as the
 // structs for the request/response inputs and outputs. It will aggregate all of the services/ops/models
 // described in the source code in a much more simple/direct Context.
@@ -62,6 +66,10 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.Services, err = ParseServices(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
+
+	if len(ctx.Services) == 0 {
+		return nil, fmt.Errorf("[%s]: input does not contain any service interfaces", inputPath)
+	}
 	return ctx, nil
 }
 
@@ -71,7 +79,7 @@ func ParseFile(inputPath string) (*Context, error) {
 func ParseTypeInformation(ctx *Context) (*packages.Package, error) {
 	config := &packages.Config{
 		Tests: false,
-		Mode:  packages.NeedDeps | packages.NeedName | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
+		Mode:  packages.NeedDeps | packages.NeedName | packages.NeedSyntax | packages.NeedTypes,
 	}
 
 	loadedPackages, err := packages.Load(config, ctx.Path)
@@ -157,81 +165,30 @@ func FindGoDotMod(dirName string) (string, error) {
 	return FindGoDotMod(filepath.Dir(dirName))
 }
 
-// lookupFieldList accepts the AST node for a type definition and returns a slice of all
-// fields/attributes that belong to this type.
-//
-// IMPORTANT! The resulting slice will contain the attributes of all embedded types as well.
-// As a result, the slice should contain explicitly defined attributes as well as those it
-// sugar-coats due to embedding.
-func lookupFieldList(modelNode *ast.Object) ([]*ast.Field, error) {
-	if modelNode == nil {
-		return nil, nil
-	}
-	typeSpec, ok := modelNode.Decl.(*ast.TypeSpec)
-	if !ok {
-		return nil, fmt.Errorf("unable to look up fields for non-type spec")
-	}
-	return lookupFieldListForType(typeSpec.Type)
-}
-
-// lookupFieldListForType behaves the same as lookupFieldList, but works by taking an AST type
-// expression that you already have in-hand.
-func lookupFieldListForType(typeExpr ast.Expr) ([]*ast.Field, error) {
-	switch t := typeExpr.(type) {
-	case *ast.StructType:
-		return flattenEmbeddedFields(t.Fields.List)
-	case *ast.Ident:
-		return lookupFieldList(t.Obj)
-	case *ast.SelectorExpr:
-		return lookupFieldList(t.Sel.Obj)
-	default:
-		return nil, nil
-	}
-}
-
-// flattenEmbeddedFields takes the exact list of fields defined on a struct and expands the list
-// to include any "inherited" fields that came from fields that were actually embedded types.
-func flattenEmbeddedFields(fields []*ast.Field) ([]*ast.Field, error) {
-	var results []*ast.Field
-	for _, field := range fields {
-		if !embeddedField(field) {
-			results = append(results, field)
-			continue
-		}
-
-		embeddedFields, err := lookupFieldListForType(field.Type)
-		if err != nil {
-			return nil, fmt.Errorf("embedded field lookup error: %s: %v", fieldName(field), err)
-		}
-		results = append(results, embeddedFields...)
-	}
-	return results, nil
-}
-
 // ParseFieldType looks at the Go parser's type information for a given model attribute and extracts
 // all of the various info we need to get a complete picture of the type and how to unravel any
 // aliasing that might be going on.
 func ParseFieldType(ctx *Context, t types.Type) *FieldType {
 	fieldType := &FieldType{
-		Name:       t.String(),
+		Name:       typeName(t),
 		Type:       t,
 		Underlying: underlyingType(t),
 	}
 
-	switch underlying := fieldType.Underlying.(type) {
+	switch fieldTypeType := fieldType.Type.(type) {
 	case *types.Pointer:
 		fieldType.Pointer = true
-		fieldType.Type = underlying.Elem()
+		fieldType.Type = fieldTypeType.Elem()
 		fieldType.Underlying = underlyingType(fieldType.Type)
 	case *types.Array:
-		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
+		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
 	case *types.Slice:
-		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
+		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
 	case *types.Chan:
-		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
+		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
 	case *types.Map:
-		fieldType.Key = ParseFieldType(ctx, underlying.Key())
-		fieldType.Elem = ParseFieldType(ctx, underlying.Elem())
+		fieldType.Key = ParseFieldType(ctx, fieldTypeType.Key())
+		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
 	}
 
 	fieldType.JSONType = toJSON(ctx, fieldType.Underlying)
@@ -245,10 +202,6 @@ func toJSON(ctx *Context, t types.Type) string {
 		return toJSON(ctx, raw.Elem())
 	case *types.Array, *types.Slice:
 		return "array"
-	case *types.Chan:
-		return "object"
-	case *types.Map:
-		return "object"
 	}
 
 	jsonType, ok := jsonTypeMapping[t.String()]
@@ -306,6 +259,10 @@ func underlyingType(fieldType types.Type) types.Type {
 	return fieldType
 }
 
+// ParseDocumentation runs go/doc parsing on your input file to extract all of your documentation, comments, and
+// struct field tags. It returns 2 specialized lookup maps; one for doc comments and one for the struct field tags.
+// The keys to these maps are based on the names of the thing whose docs/tags you want; either "SERVICE",
+// "SERVICE.FUNCTION", "MODEL", or "MODEL.FIELD".
 func ParseDocumentation(ctx *Context) (Documentation, Tags, error) {
 	packageDocs, err := doc.NewFromFiles(ctx.TypeInfo.Fset, ctx.TypeInfo.Syntax, ctx.Module.Name)
 	if err != nil {
@@ -461,7 +418,7 @@ func ParseServices(ctx *Context) ([]*ServiceDeclaration, error) {
 func ParseService(ctx *Context, name string, serviceInterface *types.Interface) (*ServiceDeclaration, error) {
 	service := &ServiceDeclaration{
 		Name:    name,
-		Version: "0.1.0",
+		Version: DefaultServiceVersion,
 		Gateway: &GatewayServiceOptions{},
 	}
 	service.Gateway.Service = service
@@ -596,12 +553,8 @@ func ParseModelFields(ctx *Context, model *ServiceModelDeclaration, modelType ty
 	}
 
 	fields := FieldDeclarations{}
-	for i := 0; i < structType.NumFields(); i++ {
-		fieldNode := structType.Field(i)
-		if !fieldNode.Exported() {
-			continue
-		}
-
+	structFields := flattenedStructFields(structType)
+	for _, fieldNode := range structFields {
 		field, err := ParseModelField(ctx, model, fieldNode)
 		if err != nil {
 			return nil, err
@@ -609,6 +562,42 @@ func ParseModelFields(ctx *Context, model *ServiceModelDeclaration, modelType ty
 		fields = append(fields, field)
 	}
 	return fields, nil
+}
+
+func flattenedStructFields(structType *types.Struct) []*types.Var {
+	var fields []*types.Var
+	for i := 0; i < structType.NumFields(); i++ {
+		field := structType.Field(i)
+		if !field.Exported() {
+			continue
+		}
+		if !field.Embedded() {
+			fields = append(fields, field)
+			continue
+		}
+
+		// Embedded struct support falls into one of these two buckets for us.
+		//
+		//     type Request {
+		//         Record
+		//         Name
+		//     }
+		//     type Record struct {
+		//         ID string
+		//     }
+		//     type Name string
+		//
+		// The embedded 'Record' field is another struct, so we need to recursively grab its fields
+		// and include them in this flattened list. The embedded 'Name' field, however, is just a standalone
+		// field, so include it like a normal field.
+		embeddedStruct, ok := underlyingStruct(field.Type())
+		if !ok {
+			fields = append(fields, field)
+			continue
+		}
+		fields = append(fields, flattenedStructFields(embeddedStruct)...)
+	}
+	return fields
 }
 
 // ParseModelField takes the type tree node for a struct field and captures the necessary info into
@@ -746,9 +735,9 @@ func ApplyServiceDocumentation(ctx *Context, service *ServiceDeclaration) {
 	for _, line := range ctx.Documentation.ForService(service) {
 		switch {
 		case strings.HasPrefix(line, "PATH "):
-			service.Gateway.PathPrefix = normalizePathSegment(line[5:])
+			service.Gateway.PathPrefix = normalizePath(line[5:])
 		case strings.HasPrefix(line, "PREFIX "):
-			service.Gateway.PathPrefix = normalizePathSegment(line[7:])
+			service.Gateway.PathPrefix = normalizePath(line[7:])
 		case strings.HasPrefix(line, "VERSION "):
 			service.Version = strings.TrimSpace(line[8:])
 		default:
@@ -773,24 +762,24 @@ func ApplyFunctionDocumentation(ctx *Context, function *ServiceFunctionDeclarati
 	// comments of gateway.New() that describes why we need this limitation for now.
 	for _, line := range ctx.Documentation.ForFunction(function) {
 		switch {
-		case strings.HasPrefix(line, "GET /"):
+		case strings.HasPrefix(line, "GET "):
 			function.Gateway.Method = http.MethodGet
-			function.Gateway.Path = normalizePathSegment(line[4:])
-		case strings.HasPrefix(line, "PUT /"):
+			function.Gateway.Path = normalizePath(line[4:])
+		case strings.HasPrefix(line, "PUT "):
 			function.Gateway.Method = http.MethodPut
-			function.Gateway.Path = normalizePathSegment(line[4:])
-		case strings.HasPrefix(line, "POST /"):
+			function.Gateway.Path = normalizePath(line[4:])
+		case strings.HasPrefix(line, "POST "):
 			function.Gateway.Method = http.MethodPost
-			function.Gateway.Path = normalizePathSegment(line[5:])
-		case strings.HasPrefix(line, "PATCH /"):
+			function.Gateway.Path = normalizePath(line[5:])
+		case strings.HasPrefix(line, "PATCH "):
 			function.Gateway.Method = http.MethodPatch
-			function.Gateway.Path = normalizePathSegment(line[6:])
-		case strings.HasPrefix(line, "DELETE /"):
+			function.Gateway.Path = normalizePath(line[6:])
+		case strings.HasPrefix(line, "DELETE "):
 			function.Gateway.Method = http.MethodDelete
-			function.Gateway.Path = normalizePathSegment(line[7:])
-		case strings.HasPrefix(line, "HEAD /"):
+			function.Gateway.Path = normalizePath(line[7:])
+		case strings.HasPrefix(line, "HEAD "):
 			function.Gateway.Method = http.MethodHead
-			function.Gateway.Path = normalizePathSegment(line[5:])
+			function.Gateway.Path = normalizePath(line[5:])
 		case strings.HasPrefix(line, "HTTP "):
 			function.Gateway.Status = parseHTTPStatus(line[5:])
 		default:
@@ -821,7 +810,7 @@ func ApplyFieldDocumentation(ctx *Context, field *FieldDeclaration) {
 // fieldName returns the actual field name that should be used for this attribute within a struct.
 func fieldName(field *ast.Field) string {
 	if embeddedField(field) {
-		return noPointer(noPackage(typeName(field)))
+		return noPointer(noPackage(fieldTypeName(field)))
 	}
 	return field.Names[0].Name
 }
@@ -846,7 +835,27 @@ func noPointer(ident string) string {
 	return strings.TrimLeft(ident, "*")
 }
 
-func typeName(field *ast.Field) string {
+func typeName(t types.Type) string {
+	name := t.String()
+
+	// Third party packages include the entire import path and package info (e.g. "github.com/module/pkg/subpkg.Foo")
+	slash := strings.LastIndex(name, "/")
+	if slash >= 0 {
+		name = name[slash+1:]
+	}
+
+	// HACK: Depending on the context, types defined in the input file may be described w/ this prefix.
+	// Strip that off because it's not a "real" package prefix.
+	if strings.HasPrefix(name, "command-line-arguments.") {
+		return name[23:]
+	}
+	if strings.HasPrefix(name, "*command-line-arguments.") {
+		return name[24:]
+	}
+	return name
+}
+
+func fieldTypeName(field *ast.Field) string {
 	return types.ExprString(field.Type)
 }
 
@@ -855,4 +864,13 @@ func varName(v *types.Var) string {
 		return noPointer(noPackage(v.Type().String()))
 	}
 	return v.Name()
+}
+
+// normalizePath strips off leading/trailing whitespace, trailing slashes, and ensures that
+// your path absolutely begins with a leading slash.
+func normalizePath(path string) string {
+	path = strings.TrimSpace(path)
+	path = strings.Trim(path, "/")
+	path = strings.TrimSpace(path)
+	return "/" + path
 }

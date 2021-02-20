@@ -40,7 +40,7 @@ func (p *PostServiceHandler) CreatePost(_ context.Context, request *CreatePostRe
 		Title:    request.Title,
 		Text:     request.Text,
 		Archived: false,
-		Date:     time.Now(),
+		Date:     ISODate(time.Now()),
 	}
 	p.posts = append(p.posts, newPost)
 

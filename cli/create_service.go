@@ -48,7 +48,7 @@ func (c CreateService) Command() *cobra.Command {
 	return cmd
 }
 
-// CreateService creates the bare minimum code required to have a frodo-powered service. It
+// Exec creates the bare minimum code required to have a frodo-powered service. It
 // creates a directory for the service code to live, a declaration file that contains the
 // interface and model definitions, and a skeleton implementation. These all help establish some
 // of the base patterns you should use when working with frodo services.

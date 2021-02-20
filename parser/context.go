@@ -49,17 +49,19 @@ func (ctx Context) Scope() *types.Scope {
 	return ctx.TypeInfo.Types.Scope()
 }
 
-// ServiceByName looks through "Services" to find the one with the matching interface name.
+// ServiceByName looks through "Services" to find the one with the matching interface name. This search
+// is CASE INSENSITIVE so "fooservice" will find "FooService".
 func (ctx Context) ServiceByName(name string) *ServiceDeclaration {
 	for _, service := range ctx.Services {
-		if service.Name == name {
+		if strings.EqualFold(service.Name, name) {
 			return service
 		}
 	}
 	return nil
 }
 
-// ModelByName looks through "Models" to find the one whose method/function name matches 'name'.
+// ModelByName looks through "Models" to find the one whose method/function name matches 'name'. This search
+//// is CASE INSENSITIVE so "foorequest" will find "FooRequest".
 func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 	// These lookups likely happen when we perform lookups for service method parameters. Those are
 	// usually pointers (e.g. "*GetPostRequest). The model name we put on the context does not have
@@ -67,7 +69,7 @@ func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
 	name = noPackage(noPointer(name))
 
 	for _, model := range ctx.Models {
-		if model.Name == name {
+		if strings.EqualFold(model.Name, name) {
 			return model
 		}
 	}
@@ -88,23 +90,13 @@ type ServiceDeclaration struct {
 	Functions []*ServiceFunctionDeclaration
 	// Documentation are all of the comments documenting this service.
 	Documentation DocumentationLines
-	// Node is the syntax tree object for the interface that described this service.
-	Node *ast.Object
-}
-
-// InterfaceNode traverses the AST node for the service, returning the properly-cast InterfaceType
-// declaration which defined this service.
-func (service ServiceDeclaration) InterfaceNode() *ast.InterfaceType {
-	return service.Node.
-		Decl.(*ast.TypeSpec).
-		Type.(*ast.InterfaceType)
 }
 
 // FunctionByName fetches the service operation with the given function name. This returns nil when there
 // are no functions in this interface/service by that name.
 func (service ServiceDeclaration) FunctionByName(name string) *ServiceFunctionDeclaration {
 	for _, m := range service.Functions {
-		if m.Name == name {
+		if strings.EqualFold(m.Name, name) {
 			return m
 		}
 	}
@@ -129,7 +121,7 @@ type ServiceFunctionDeclaration struct {
 
 // String returns the function signature for this operation for debugging purposes.
 func (f ServiceFunctionDeclaration) String() string {
-	return fmt.Sprintf("%s(context.Context, %v) (%v, error)",
+	return fmt.Sprintf("%s(context.Context, *%v) (*%v, error)",
 		f.Name,
 		f.Request,
 		f.Response,
@@ -166,9 +158,9 @@ func (fields FieldDeclarations) NotEmpty() bool {
 	return len(fields) > 0
 }
 
-// FieldByName looks up the declaration for the field that matches the given name. This name
+// ByName looks up the declaration for the field that matches the given name. This name
 // comparison is CASE INSENSITIVE, so "id" will find the field "ID".
-func (fields FieldDeclarations) FieldByName(name string) *FieldDeclaration {
+func (fields FieldDeclarations) ByName(name string) *FieldDeclaration {
 	for _, field := range fields {
 		if strings.EqualFold(field.Name, name) {
 			return field
@@ -177,9 +169,9 @@ func (fields FieldDeclarations) FieldByName(name string) *FieldDeclaration {
 	return nil
 }
 
-// FieldByBindingName looks for a field whose (possibly) re-mapped name matches the given value. This
+// ByBindingName looks for a field whose (possibly) re-mapped name matches the given value. This
 // comparison is CASE INSENSITIVE, so "id" will find the field "ID".
-func (fields FieldDeclarations) FieldByBindingName(name string) *FieldDeclaration {
+func (fields FieldDeclarations) ByBindingName(name string) *FieldDeclaration {
 	for _, field := range fields {
 		if strings.EqualFold(field.Binding.Name, name) {
 			return field
@@ -319,6 +311,9 @@ func (tags Tags) Set(model string, field string, tag *ast.BasicLit) {
 	if tag == nil {
 		return
 	}
+	if model == "" || field == "" {
+		return
+	}
 
 	// When we pull tags off of the AST, they're still wrapped in the `xxx` back ticks, so
 	// pull those off before giving them back to the caller.
@@ -351,7 +346,7 @@ func (docs DocumentationLines) Trim() DocumentationLines {
 	last := -1
 	for i, line := range docs {
 		switch {
-		case line == "":
+		case strings.TrimSpace(line) == "":
 			// don't update anything
 		case first < 0:
 			// we just found the first non-blank comment
@@ -362,24 +357,33 @@ func (docs DocumentationLines) Trim() DocumentationLines {
 			last = i
 		}
 	}
+	if first == -1 {
+		return DocumentationLines{}
+	}
 	return docs[first : last+1]
 }
 
 // NotEmpty returns true when there is at least 1 line of documentation/comments.
 func (docs DocumentationLines) NotEmpty() bool {
-	return len(docs) > 0
+	return !docs.Empty()
 }
 
 // Empty returns true when there are no lines of documentation/comments for the service/field/function/etc.
 func (docs DocumentationLines) Empty() bool {
-	return len(docs) == 0
+	for _, doc := range docs {
+		if doc != "" {
+			return false
+		}
+	}
+	return true
 }
 
-func normalizePathSegment(path string) string {
-	path = strings.TrimSpace(path)
-	path = strings.Trim(path, "/")
-	path = strings.TrimSpace(path)
-	return path
+// String returns all of the documentation lines as one string, separated by newlines.
+func (docs DocumentationLines) String() string {
+	if docs.Empty() {
+		return ""
+	}
+	return strings.Join(docs, "\n")
 }
 
 // GatewayServiceOptions contains all of the configurable HTTP-related options for a top-level service.
@@ -422,7 +426,7 @@ func (opts GatewayFunctionOptions) PathParameters() GatewayParameters {
 		}
 
 		paramName := segment[1:]
-		field := opts.Function.Request.Fields.FieldByBindingName(paramName)
+		field := opts.Function.Request.Fields.ByBindingName(paramName)
 		if field == nil {
 			continue
 		}

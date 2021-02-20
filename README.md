@@ -1,3 +1,5 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/monadicstack/frodo)](https://goreportcard.com/report/github.com/monadicstack/frodo)
+
 # Frodo
 
 Frodo is a code generator and runtime library that helps
