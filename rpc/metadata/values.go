@@ -120,8 +120,7 @@ func Value(ctx context.Context, key string, out interface{}) bool {
 	// We have already reconstituted the raw value from the header json, so just assign
 	// the value to the "out" pointer.
 	if entry.Value != nil {
-		reflection.Assign(entry.Value, out)
-		return true
+		return reflection.Assign(entry.Value, out)
 	}
 
 	// You are likely on the server side and are attempting to access a value for the first time,
@@ -137,6 +136,12 @@ func Value(ctx context.Context, key string, out interface{}) bool {
 // WithValue stores a key/value pair in the context metadata. It returns a new context that contains
 // the metadata map with your value.
 func WithValue(ctx context.Context, key string, value interface{}) context.Context {
+	if ctx == nil {
+		return ctx
+	}
+	if key == "" {
+		return ctx
+	}
 	meta, ok := ctx.Value(contextKey{}).(Values)
 	if !ok {
 		meta = Values{}
@@ -161,10 +166,7 @@ func WithValues(ctx context.Context, meta Values) context.Context {
 // yourself as this is mainly used to set the X-RPC-Values header when making RPC calls to preserve your
 // data across RPC calls.
 func ToJSON(ctx context.Context) (string, error) {
-	meta, ok := ctx.Value(contextKey{}).(Values)
-	if !ok {
-		return "", nil
-	}
+	meta, _ := ctx.Value(contextKey{}).(Values)
 	metaJSON, err := json.Marshal(meta)
 	return string(metaJSON), err
 }

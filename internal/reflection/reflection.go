@@ -115,13 +115,22 @@ func BindingName(field reflect.StructField) string {
 }
 
 // Assign simply performs a reflective replace of the value, making sure to try to properly handle pointers.
-func Assign(value interface{}, out interface{}) {
+func Assign(value interface{}, out interface{}) bool {
 	// Depending on whether you wrote "SomeStruct{}" or "&SomeStruct{}" (a pointer) to the
 	// scope, we want to make sure that we're de-referencing the scope value properly.
 	reflectValue := reflect.ValueOf(value)
+	reflectOut := reflect.ValueOf(out).Elem()
+
 	if reflectValue.Type().Kind() == reflect.Ptr {
-		reflect.ValueOf(out).Elem().Set(reflectValue.Elem())
-	} else {
-		reflect.ValueOf(out).Elem().Set(reflectValue)
+		return set(reflectValue.Elem(), reflectOut)
 	}
+	return set(reflectValue, reflectOut)
+}
+
+func set(value reflect.Value, out reflect.Value) bool {
+	if out.Type().AssignableTo(value.Type()) {
+		out.Set(value)
+		return true
+	}
+	return false
 }
