@@ -2,7 +2,6 @@ package metadata_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/monadicstack/frodo/rpc/metadata"
@@ -115,7 +114,6 @@ func (suite *ValuesSuite) TestValues_json() {
 	valueJSON, err := metadata.ToJSON(a)
 	suite.Require().NoError(err)
 
-	fmt.Println(valueJSON)
 	values, err := metadata.FromJSON(valueJSON)
 	suite.Require().NoError(err)
 
