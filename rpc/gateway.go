@@ -86,7 +86,34 @@ func (gw *Gateway) Register(endpoint Endpoint) {
 	// your CORS middleware to short-circuit the 'next' chain, so the 405 failure we're hard-coding
 	// as the OPTIONS handler won't actually be invoked if you enable CORS via middleware.
 	gw.endpoints[path] = endpoint
-	gw.Router.HandlerFunc(endpoint.Method, path, gw.middleware.Then(endpoint.Handler))
+	gw.Router.HandlerFunc(strings.ToUpper(endpoint.Method), path, gw.middleware.Then(endpoint.Handler))
+	gw.registerOptions(path)
+}
+
+func (gw Gateway) registerOptions(path string) {
+	// I realize that recovering from panics makes the baby jesus cry. This is to handle the case where you
+	// register multiple service functions with the same path, but different methods. For instance:
+	//
+	//   GET  /foo/bar
+	//   POST /foo/bar
+	//
+	// Since we blindly register an options with each, we will end up registering OPTIONS twice for that
+	// path. The httprouter will panic when that happens. At first I planned on just looking through the
+	// gateway's already-registered endpoint paths for a match (and thus skip), but there's a case that's
+	// hard to detect:
+	//
+	//   GET  /foo/:bar
+	//   POST /foo/:goo
+	//
+	// A dumb string-based check would see those as unique paths, but the router will still barf because they
+	// are functionally equivalent.
+	//
+	// So.... since Julien Schmidt is already doing all of the hard work, I'm catching the panic in this
+	// instance to make life easier. If there's something fundamentally wrong with the route, we'll fail
+	// more naturally when we register the "real" endpoint route, so we're not going to miss meaningful errors.
+	defer func() {
+		recover()
+	}()
 	gw.Router.HandlerFunc(http.MethodOptions, path, gw.middleware.Then(methodNotAllowedHandler{}.ServeHTTP))
 }
 
