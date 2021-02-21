@@ -76,6 +76,9 @@ var noField = reflect.StructField{}
 
 // FindField looks up the struct field attribute for the given field on the given struct.
 func FindField(structType reflect.Type, name string) (reflect.StructField, bool) {
+	if structType.Kind() != reflect.Struct {
+		return noField, false
+	}
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)
 		if strings.EqualFold(name, BindingName(field)) {
@@ -133,4 +136,14 @@ func set(value reflect.Value, out reflect.Value) bool {
 		return true
 	}
 	return false
+}
+
+// FlattenPointerType looks at the reflective type and if it's a pointer it will flatten it to the
+// type it is a pointer for (e.g. "*string"->"string"). If it's already a non-pointer then we will
+// leave this type as-is.
+func FlattenPointerType(t reflect.Type) reflect.Type {
+	if t.Kind() == reflect.Ptr {
+		return t.Elem()
+	}
+	return t
 }

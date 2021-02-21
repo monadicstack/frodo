@@ -25,7 +25,9 @@ type Binder interface {
 // of your choice.
 func WithBinder(binder Binder) GatewayOption {
 	return func(gw *Gateway) {
-		gw.Binder = binder
+		if binder != nil {
+			gw.Binder = binder
+		}
 	}
 }
 
@@ -61,6 +63,9 @@ type jsonBindingContext struct {
 }
 
 func (b jsonBinder) Bind(req *http.Request, out interface{}) error {
+	if req == nil {
+		return fmt.Errorf("unable to bind nil request")
+	}
 	// To keep the logic more simple (but fast enough for most use cases), we will generate a separate
 	// JSON representation of each value and run it through the JSON decoder. To make things a bit more
 	// efficient, we'll re-use the buffer/reader and the JSON decoder for each value we unmarshal
@@ -71,11 +76,11 @@ func (b jsonBinder) Bind(req *http.Request, out interface{}) error {
 		decoder: json.NewDecoder(buf),
 	}
 
-	if err := b.BindBody(ctx, req, out); err != nil {
-		return fmt.Errorf("error binding body: %w", err)
-	}
 	if err := b.BindQueryString(ctx, req, out); err != nil {
 		return fmt.Errorf("error binding query string: %w", err)
+	}
+	if err := b.BindBody(ctx, req, out); err != nil {
+		return fmt.Errorf("error binding body: %w", err)
 	}
 	if err := b.BindPathParams(ctx, req, out); err != nil {
 		return fmt.Errorf("error binding path params: %w", err)
@@ -90,6 +95,9 @@ func (b jsonBinder) BindBody(_ jsonBindingContext, req *http.Request, out interf
 	}
 	if req.Body == http.NoBody {
 		return nil
+	}
+	if req.Method != "POST" && req.Method != "PUT" && req.Method != "PATCH" {
+		return nil // Only bind methods universally intended to have body data that affects the request.
 	}
 	return json.NewDecoder(req.Body).Decode(out)
 }
@@ -106,9 +114,6 @@ func (b jsonBinder) BindQueryString(ctx jsonBindingContext, req *http.Request, o
 // BindQueryString decodes all of the URL path parameters onto the 'out' value. Each parameter will
 // be converted to an equivalent JSON object and unmarshaled separately.
 func (b jsonBinder) BindPathParams(ctx jsonBindingContext, req *http.Request, out interface{}) error {
-	if req.Context() == nil {
-		return errors.BadRequest("request missing context")
-	}
 	params := httprouter.ParamsFromContext(req.Context())
 	values := url.Values{}
 	for _, param := range params {
@@ -219,13 +224,13 @@ func (b jsonBinder) keyToJSONType(outValue reflect.Value, key []string, value st
 	// "foo" on the out value, then the "bar" attribute on that type, then the "baz" attribute on that type.
 	// Once we exit the loop, 'actualType' should be the type of that nested "baz" field and we can
 	// determine the correct JSON type from there.
-	actualType := outValue.Type()
+	actualType := reflection.FlattenPointerType(outValue.Type())
 	for i := 0; i < keyLength; i++ {
 		field, ok := reflection.FindField(actualType, key[i])
 		if !ok {
 			return jsonTypeNil
 		}
-		actualType = field.Type
+		actualType = reflection.FlattenPointerType(field.Type)
 	}
 
 	// Now that we have the Go type for the field that will ultimately be populated by this parameter/value,
