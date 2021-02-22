@@ -147,6 +147,10 @@ type contextKeyEndpoint struct{}
 
 // EndpointFromContext fetches the meta information about the service RPC operation that we're currently invoking.
 func EndpointFromContext(ctx context.Context) *Endpoint {
+	if ctx == nil {
+		return nil
+	}
+
 	endpoint, ok := ctx.Value(contextKeyEndpoint{}).(Endpoint)
 	if !ok {
 		return nil
@@ -176,6 +180,7 @@ func restoreEndpoint(w http.ResponseWriter, req *http.Request, next http.Handler
 	}
 
 	params := httprouter.ParamsFromContext(req.Context())
+
 	endpoint, ok := gw.endpoints[params.MatchedRoutePath()]
 	if !ok {
 		respond.To(w, req).InternalServerError("no endpoint for path '%s'", params.MatchedRoutePath())
