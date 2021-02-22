@@ -20,11 +20,11 @@ type BindingSuite struct {
 
 // Ensure that binding requests w/ no values works, just leaving the 'out' value as-is.
 func (suite *BindingSuite) TestEmptyRequest() {
-	value, err := suite.bind(nil)
+	_, err := suite.bind(nil)
 	suite.Require().Error(err, "Binding nil request should return an error")
 
 	req := suite.newRequest("GET", noBody, noQuery, noPathParams)
-	value, err = suite.bind(req)
+	value, err := suite.bind(req)
 	suite.Require().NoError(err)
 	suite.Require().Equal(serviceRequest{}, value, "Should be a zero-value struct when no request values present.")
 

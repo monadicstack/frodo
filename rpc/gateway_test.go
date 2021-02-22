@@ -175,15 +175,15 @@ func (suite *GatewaySuite) TestRegister() {
 
 	// Any unique path we register should have an OPTIONS that responds with 405. You can hit it
 	// with middleware to do something interesting like CORS.
-	status, result, err = suite.request(server, "OPTIONS", "/foo", "")
+	status, _, err = suite.request(server, "OPTIONS", "/foo", "")
 	suite.Require().NoError(err)
 	suite.Require().Equal(405, status, "Gateway missing auto-OPTIONS route")
-	status, result, err = suite.request(server, "OPTIONS", "/FooService.Hello", "")
+	status, _, err = suite.request(server, "OPTIONS", "/FooService.Hello", "")
 	suite.Require().NoError(err)
 	suite.Require().Equal(405, status, "Gateway missing auto-OPTIONS route")
 
 	// Should be a not-found, not a bad-method when OPTIONS is for a path we didn't register.
-	status, result, err = suite.request(server, "OPTIONS", "/FooService.Goodbye", "")
+	status, _, err = suite.request(server, "OPTIONS", "/FooService.Goodbye", "")
 	suite.Require().NoError(err)
 	suite.Require().Equal(404, status, "Gateway should not accept OPTIONS for any old path/route")
 }
@@ -339,7 +339,7 @@ func (suite *GatewaySuite) TestGatewayPathPrefix() {
 	suite.Require().Equal("ok", result, "Did not respond properly when path prefix is configured")
 
 	// Make sure that the path w/o the prefix didn't sneak in there...
-	status, result, err = suite.request(server, "POST", "/bar", "")
+	status, _, err = suite.request(server, "POST", "/bar", "")
 	suite.Require().NoError(err)
 	suite.Require().Equal(404, status, "Did not respond properly when path prefix is configured")
 }
