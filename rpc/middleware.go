@@ -55,6 +55,11 @@ func WithClientMiddleware(funcs ...ClientMiddlewareFunc) ClientOption {
 // RoundTripperFunc matches the signature of the standard http.RoundTripper interface.
 type RoundTripperFunc func(r *http.Request) (*http.Response, error)
 
+// RoundTrip allows a single round trip function to behave as a full-fledged http.RoundTripper.
+func (rt RoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return rt(req)
+}
+
 // ClientMiddlewareFunc is a round-tripper-like function that accepts a request and returns a response/error
 // combo, but also accepts 'next' (the rest of the computation) so that you can short circuit the
 // execution as you see fit.
