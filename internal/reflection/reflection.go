@@ -23,14 +23,34 @@ func ToAttributes(item interface{}) StructAttributes {
 
 	for i := 0; i < valueType.NumField(); i++ {
 		name := BindingName(valueType.Field(i))
-		field := reflectValue.Field(i).Interface()
-		if valueType.Field(i).Type.Kind() == reflect.Struct {
-			attrs = append(attrs, &StructAttribute{Name: name, Value: ToAttributes(field)})
-		} else {
-			attrs = append(attrs, &StructAttribute{Name: name, Value: field})
+		reflectField := reflectValue.Field(i)
+		actualValue := reflectField.Interface()
+		if IsNil(reflectField) {
+			continue
+		}
+
+		// Include non-recursive types as-is. Probably doesn't handle map/slice types nicely. Will deal with later.
+		if valueType.Field(i).Type.Kind() != reflect.Struct {
+			attrs = append(attrs, &StructAttribute{Name: name, Value: actualValue})
+			continue
+		}
+
+		// Recursively add child attributes to *this* list using an "ParentStruct.ChildStruct" style
+		// naming convention so that we can include nested values.
+		for _, childAttr := range ToAttributes(actualValue) {
+			attrs = append(attrs, &StructAttribute{Name: name + "." + childAttr.Name, Value: childAttr.Value})
 		}
 	}
 	return attrs
+}
+
+func IsNil(value reflect.Value) bool {
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // StructAttributes maintains a list of attribute names/values for some source struct.
