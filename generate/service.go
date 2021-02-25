@@ -107,7 +107,7 @@ type scaffoldServiceContext struct {
 	Package string
 }
 
-var serviceDeclarationTemplate = parseArtifactTemplate("service.go", `package {{.InputPackage }}
+var serviceDeclarationTemplate = parseArtifactTemplate("service.go", `package {{.Package }}
 
 import (
 	"context"
@@ -129,7 +129,7 @@ type LookupResponse struct {
 }
 `)
 
-var serviceHandlerTemplate = parseArtifactTemplate("service_handler.go", `package {{.InputPackage }}
+var serviceHandlerTemplate = parseArtifactTemplate("service_handler.go", `package {{.Package }}
 
 import (
 	"context"
