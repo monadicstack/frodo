@@ -173,7 +173,7 @@ type createServiceContext struct {
 	}
 }
 
-var createServiceTemplate = template.Must(template.New("service.go").Parse(`package {{.InputPackage }}
+var createServiceTemplate = template.Must(template.New("service.go").Parse(`package {{.Package }}
 
 import (
 	"context"
@@ -197,7 +197,7 @@ type CreateResponse struct {
 }
 `))
 
-var createHandlerTemplate = template.Must(template.New("service_handler.go").Parse(`package {{.InputPackage }}
+var createHandlerTemplate = template.Must(template.New("service_handler.go").Parse(`package {{.Package }}
 
 import (
 	"context"
@@ -263,13 +263,13 @@ var createMainTemplate = template.Must(template.New("main").Parse(`package main
 import (
 	"net/http"
 
-	"{{.PackageImport }}"
-	"{{.PackageImport }}/gen"
+	"{{ .PackageImport }}"
+	{{ .Package }}rpc "{{.PackageImport }}/gen"
 )
 
 func main() {
-	serviceHandler := {{.InputPackage }}.{{ .HandlerName }}{}
-	gateway := {{.InputPackage }}rpc.New{{ .ServiceName }}Gateway(&serviceHandler)
+	serviceHandler := {{.Package }}.{{ .HandlerName }}{}
+	gateway := {{.Package }}rpc.New{{ .ServiceName }}Gateway(&serviceHandler)
 	http.ListenAndServe(":{{ .Port }}", gateway)
 }
 `))

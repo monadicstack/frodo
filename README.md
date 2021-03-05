@@ -204,23 +204,23 @@ func main() {
 
     add, err := client.Add(ctx, &calc.AddRequest{A:5, B:2})
     if err != nil {
-        log.Fatalf("aww nuts: %v\n", err)
+        log.Fatalf(err.Error())
     }
-    fmt.Printf("Add(5, 2) -> %d\n", add.Result)
+    fmt.Println("5 + 2 = ", add.Result)
 
     sub, err := client.Sub(ctx, &calc.SubRequest{A:5, B:2})
     if err != nil {
-        log.Fatalf("aww nuts: %v\n", err)
+        log.Fatalf(err.Error())
     }
-    fmt.Printf("Sub(5, 2) -> %d\n", sub.Result)
+    fmt.Println("5 - 2 = ", sub.Result)
 }
 ```
 
 Compile/run this program, and you should see the following output:
 
 ```
-Add(5, 2) -> 7
-Sub(5, 2) -> 3
+5 + 2 = 7
+5 - 2 = 3
 ```
 That's it!
 
