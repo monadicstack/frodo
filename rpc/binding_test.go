@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/dimfeld/httptreemux/v5"
 	"github.com/monadicstack/frodo/rpc"
 	"github.com/stretchr/testify/suite"
 )
@@ -299,15 +299,7 @@ func (suite *BindingSuite) bind(req *http.Request) (serviceRequest, error) {
 // Creates a new HTTP request with just the handful of request fields filled in that we actually use
 // in the binding process.
 func (suite *BindingSuite) newRequest(method string, body string, queryValues bindingValues, pathValues bindingValues) *http.Request {
-	queryString := url.Values{}
-	for key, value := range queryValues {
-		queryString.Set(key, value)
-	}
-
-	pathParams := httprouter.Params{}
-	for key, value := range pathValues {
-		pathParams = append(pathParams, httprouter.Param{Key: key, Value: value})
-	}
+	queryString := queryValues.ToQueryString()
 
 	// The binding process only grabs path params from the context/router, so don't worry about having
 	// a meaningful path/endpoint with the data.
@@ -327,7 +319,10 @@ func (suite *BindingSuite) newRequest(method string, body string, queryValues bi
 		URL:    uri,
 		Body:   bodyReader,
 	}
-	ctx := context.WithValue(context.Background(), httprouter.ParamsKey, pathParams)
+	ctx := httptreemux.AddRouteDataToContext(context.Background(), mockRouteData{
+		route:  "Some.Function",
+		params: pathValues,
+	})
 	return req.WithContext(ctx)
 }
 
@@ -408,8 +403,16 @@ var noBody = ""
 
 // Bind does nothing here. It's only used when testing WithBinder so
 // that we have something other than the default binder to test against.
-func (bindingValues) Bind(*http.Request, interface{}) error {
+func (values bindingValues) Bind(*http.Request, interface{}) error {
 	return nil
+}
+
+func (values bindingValues) ToQueryString() url.Values {
+	queryString := url.Values{}
+	for key, value := range values {
+		queryString.Set(key, value)
+	}
+	return queryString
 }
 
 func TestBindingSuite(t *testing.T) {

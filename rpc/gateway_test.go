@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/dimfeld/httptreemux/v5"
 	"github.com/monadicstack/frodo/rpc"
 	"github.com/monadicstack/frodo/rpc/authorization"
 	"github.com/monadicstack/frodo/rpc/metadata"
@@ -94,8 +94,8 @@ func (suite *GatewaySuite) TestRegister() {
 		ServiceName: "FooService",
 		Name:        "Sum",
 		Handler: func(w http.ResponseWriter, req *http.Request) {
-			params := httprouter.ParamsFromContext(req.Context())
-			suite.respond(w, 202, fmt.Sprintf("%s + %s = ?", params.ByName("a"), params.ByName("b")))
+			params := httptreemux.ContextParams(req.Context())
+			suite.respond(w, 202, fmt.Sprintf("%s + %s = ?", params["a"], params["b"]))
 		},
 	})
 	gateway.Register(rpc.Endpoint{

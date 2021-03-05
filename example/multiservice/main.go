@@ -4,17 +4,26 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/monadicstack/frodo/example/multiservice/games"
 	gamesrpc "github.com/monadicstack/frodo/example/multiservice/games/gen"
 	"github.com/monadicstack/frodo/example/multiservice/scores"
 	scoresrpc "github.com/monadicstack/frodo/example/multiservice/scores/gen"
+	"github.com/monadicstack/frodo/rpc"
 )
 
 func main() {
+	fmt.Println("Starting backend services")
+	go runServers()
+
+	fmt.Println("Waiting for them to fire up for real")
+	time.Sleep(2 * time.Second)
+
 	ctx := context.Background()
 	gameClient := gamesrpc.NewGameServiceClient("http://localhost:9001")
-	scoreClient := scoresrpc.NewScoreServiceClient("http://localhost:9002")
+	scoreClient := scoresrpc.NewScoreServiceClient("http://localhost:9001")
 
 	// Operation 1: Just look up a game that's already in the database.
 	game1, err := gameClient.GetByID(ctx, &games.GetByIDRequest{ID: "1"})
@@ -48,6 +57,17 @@ func main() {
 	for i, highScore := range highScores.Scores {
 		fmt.Printf("High Score %d = %d (%s)\n", i+1, highScore.Score, highScore.PlayerName)
 	}
+}
+
+func runServers() {
+	gameService := games.GameServiceHandler{Repo: games.NewRepo()}
+	scoreService := scores.ScoreServiceHandler{Games: &gameService, Repo: scores.NewRepo()}
+
+	gateway := rpc.Compose(
+		scoresrpc.NewScoreServiceGateway(&scoreService),
+		gamesrpc.NewGameServiceGateway(&gameService),
+	)
+	http.ListenAndServe(":9001", gateway)
 }
 
 func exitOnError(err error) {

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/dimfeld/httptreemux/v5"
 	"github.com/monadicstack/frodo/rpc/authorization"
 	"github.com/monadicstack/frodo/rpc/metadata"
 	"github.com/monadicstack/respond"
@@ -13,12 +13,14 @@ import (
 
 // NewGateway creates a wrapper around your raw service to expose it via HTTP for RPC calls.
 func NewGateway(options ...GatewayOption) Gateway {
+	router := httptreemux.New()
 	gw := Gateway{
-		Router:     httprouter.New(),
-		Binder:     jsonBinder{},
-		middleware: middlewarePipeline{},
-		PathPrefix: "",
-		endpoints:  map[string]Endpoint{},
+		Router:      router,
+		routerGroup: router.UsingContext(),
+		Binder:      jsonBinder{},
+		middleware:  middlewarePipeline{},
+		PathPrefix:  "",
+		endpoints:   map[route]Endpoint{},
 	}
 	for _, option := range options {
 		option(&gw)
@@ -48,7 +50,6 @@ func NewGateway(options ...GatewayOption) Gateway {
 		MiddlewareFunc(restoreAuthorization),
 	}
 	gw.middleware = append(mw, gw.middleware...)
-	gw.Router.SaveMatchedRoutePath = true
 	return gw
 }
 
@@ -60,12 +61,13 @@ type GatewayOption func(*Gateway)
 // your service response struct data back to the caller. Aside from feeding this to `http.ListenAndServe()`
 // you likely won't interact with this at all yourself.
 type Gateway struct {
-	Name       string
-	Router     *httprouter.Router
-	Binder     Binder
-	PathPrefix string
-	middleware middlewarePipeline
-	endpoints  map[string]Endpoint
+	Name        string
+	Router      *httptreemux.TreeMux
+	routerGroup *httptreemux.ContextGroup
+	Binder      Binder
+	PathPrefix  string
+	middleware  middlewarePipeline
+	endpoints   map[route]Endpoint
 }
 
 // Register the operation with the gateway so that it can be exposed for invoking remotely.
@@ -76,6 +78,7 @@ func (gw *Gateway) Register(endpoint Endpoint) {
 	// prefix (e.g. "/v2"). So we'll use the full path for routing and lookups (transparent to
 	// the user), but the user will never have to see the "/v2" portion.
 	path := toEndpointPath(gw.PathPrefix, endpoint.Path)
+	method := strings.ToUpper(endpoint.Method)
 
 	// If you're registering "POST /FooService.Bar" we're going to create a route for
 	// the POST as well as an additional, implicit OPTIONS route. This is so that
@@ -85,8 +88,9 @@ func (gw *Gateway) Register(endpoint Endpoint) {
 	// will never actually get invoked - httprouter will just reject the request. We fully expect
 	// your CORS middleware to short-circuit the 'next' chain, so the 405 failure we're hard-coding
 	// as the OPTIONS handler won't actually be invoked if you enable CORS via middleware.
-	gw.endpoints[path] = endpoint
-	gw.Router.HandlerFunc(strings.ToUpper(endpoint.Method), path, gw.middleware.Then(endpoint.Handler))
+	gw.endpoints[route{method: method, path: path}] = endpoint
+	gw.endpoints[route{method: http.MethodOptions, path: path}] = endpoint
+	gw.routerGroup.Handle(method, path, gw.middleware.Then(endpoint.Handler))
 	gw.registerOptions(path)
 }
 
@@ -98,7 +102,7 @@ func (gw Gateway) registerOptions(path string) {
 	//   POST /foo/bar
 	//
 	// Since we blindly register an options with each, we will end up registering OPTIONS twice for that
-	// path. The httprouter will panic when that happens. At first I planned on just looking through the
+	// path. The httptreemux will panic when that happens. At first I planned on just looking through the
 	// gateway's already-registered endpoint paths for a match (and thus skip), but there's a case that's
 	// hard to detect:
 	//
@@ -108,13 +112,13 @@ func (gw Gateway) registerOptions(path string) {
 	// A dumb string-based check would see those as unique paths, but the router will still barf because they
 	// are functionally equivalent.
 	//
-	// So.... since Julien Schmidt is already doing all of the hard work, I'm catching the panic in this
+	// So.... since the mux is already doing all of the hard work, I'm catching the panic in this
 	// instance to make life easier. If there's something fundamentally wrong with the route, we'll fail
 	// more naturally when we register the "real" endpoint route, so we're not going to miss meaningful errors.
 	defer func() {
 		recover()
 	}()
-	gw.Router.HandlerFunc(http.MethodOptions, path, gw.middleware.Then(methodNotAllowedHandler{}.ServeHTTP))
+	gw.routerGroup.OPTIONS(path, gw.middleware.Then(methodNotAllowedHandler{}.ServeHTTP))
 }
 
 // ServeHTTP is the central HTTP handler that includes all http routing, middleware, service forwarding, etc.
@@ -179,11 +183,16 @@ func restoreEndpoint(w http.ResponseWriter, req *http.Request, next http.Handler
 		return
 	}
 
-	params := httprouter.ParamsFromContext(req.Context())
+	routeData := httptreemux.ContextData(req.Context())
+	routePath := routeData.Route()
 
-	endpoint, ok := gw.endpoints[params.MatchedRoutePath()]
+	// The more you know: This failure is a 500, not a 404 because to hit this point in the code, the
+	// router/mux must have routed the caller to a real handler that we're currently processing middleware
+	// for, so the route "exists". What failed is the fact that our internal data structure for the
+	// service operation endpoint is not there when it should be. The server is in a bad state, so 500, not 404.
+	endpoint, ok := gw.endpoints[route{method: req.Method, path: routePath}]
 	if !ok {
-		respond.To(w, req).InternalServerError("no endpoint for path '%s'", params.MatchedRoutePath())
+		respond.To(w, req).InternalServerError("no endpoint for route '%s %s'", req.Method, routePath)
 		return
 	}
 
@@ -237,4 +246,67 @@ type methodNotAllowedHandler struct{}
 
 func (methodNotAllowedHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	respond.To(w, req).MethodNotAllowed("")
+}
+
+// CompositeGateway is a gateway that is composed of multiple service RPC Gateway instances. You use
+// one of these when you want to run multiple services in the same process (like for local dev).
+type CompositeGateway struct {
+	// Name is a colon-separated string containing the names of all of the services wrapped up in here.
+	Name string
+	// Gateways tracks all of the original gateways that this is wrapping up.
+	Gateways []Gateway
+	// Router is the HTTP mux that does the actual request routing work.
+	Router *httptreemux.TreeMux
+	// routerGroup is just a reference to the mux that allows standard http.HandlerFunc instances to be registered.
+	routerGroup *httptreemux.ContextGroup
+	// endpoints is the master list of ALL endpoints we have registered across all services we've composed.
+	endpoints map[route]Endpoint
+}
+
+func (gw CompositeGateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	ctx := context.WithValue(req.Context(), contextKeyGateway{}, &gw)
+	gw.Router.ServeHTTP(w, req.WithContext(ctx))
+}
+
+// Compose accepts multiple gateways generated using the 'frodo' tool in order to allow them to run in the same
+// HTTP server/listener. A typical use-case for this functionality is when you are running microservices in local
+// development. Rather than starting/stopping 20 different processes, you can run all of your services in a single
+// server process:
+//
+//     userGateway := users.NewUserServiceGateway(userService)
+//     groupGateway := groups.NewGroupServiceGateway(groupService)
+//     projectGateway := projects.NewProjectServiceGateway(projectService)
+//
+//     gateway := rpc.Compose(
+//         userGateway,
+//         groupGateway,
+//         projectGateway,
+//     )
+//     http.listenAndService(":8080", gateway)
+//
+// This will preserve all of the original gateways as well. Now you'll just have a "master" gateway that contains
+// all of the routes/endpoints from all of the services.
+func Compose(gateways ...Gateway) CompositeGateway {
+	router := httptreemux.New()
+	result := CompositeGateway{
+		Name:        "Composite",
+		Router:      router,
+		routerGroup: router.UsingContext(),
+		Gateways:    gateways,
+		endpoints:   map[route]Endpoint{},
+	}
+
+	for _, gw := range gateways {
+		result.Name = result.Name + ":" + gw.Name
+		for r, endpoint := range gw.endpoints {
+			result.routerGroup.Handler(r.method, r.path, endpoint.Handler)
+			result.endpoints[r] = endpoint
+		}
+	}
+	return result
+}
+
+type route struct {
+	method string
+	path   string
 }

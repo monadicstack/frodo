@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/dimfeld/httptreemux/v5"
 	"github.com/monadicstack/frodo/internal/reflection"
 	"github.com/monadicstack/frodo/rpc/errors"
 )
@@ -114,10 +114,10 @@ func (b jsonBinder) BindQueryString(ctx jsonBindingContext, req *http.Request, o
 // BindQueryString decodes all of the URL path parameters onto the 'out' value. Each parameter will
 // be converted to an equivalent JSON object and unmarshaled separately.
 func (b jsonBinder) BindPathParams(ctx jsonBindingContext, req *http.Request, out interface{}) error {
-	params := httprouter.ParamsFromContext(req.Context())
+	params := httptreemux.ContextParams(req.Context())
 	values := url.Values{}
-	for _, param := range params {
-		values[param.Key] = []string{param.Value}
+	for key, value := range params {
+		values.Set(key, value)
 	}
 	return b.bindValues(ctx, values, out)
 }
