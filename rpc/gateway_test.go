@@ -401,6 +401,123 @@ func (suite *GatewaySuite) TestEndpointFromContext_missing() {
 	suite.Require().Nil(endpoint, "Endpoint should be nil when not present in context")
 }
 
+// Ensure that composing multiple services gateways into one ensures that all operations from all N still work.
+func (suite *GatewaySuite) TestCompose() {
+	serviceA := rpc.NewGateway()
+	serviceA.Name = "A"
+	serviceA.PathPrefix = "/v2"
+	serviceA.Register(rpc.Endpoint{
+		Method:      "POST",
+		Path:        "A.Hello",
+		ServiceName: "A",
+		Name:        "Hello",
+		Handler: func(w http.ResponseWriter, req *http.Request) {
+			suite.respond(w, 200, "hello post a")
+		},
+	})
+	serviceA.Register(rpc.Endpoint{
+		Method:      "GET",
+		Path:        "A.Hello",
+		ServiceName: "A",
+		Name:        "Hello",
+		Handler: func(w http.ResponseWriter, req *http.Request) {
+			suite.respond(w, 200, "hello get a")
+		},
+	})
+
+	serviceB := rpc.NewGateway()
+	serviceB.Name = "B"
+	serviceB.PathPrefix = "/v3"
+	serviceB.Register(rpc.Endpoint{
+		Method:      "POST",
+		Path:        "B.Hello",
+		ServiceName: "B",
+		Name:        "Hello",
+		Handler: func(w http.ResponseWriter, req *http.Request) {
+			suite.respond(w, 200, "hello post b")
+		},
+	})
+	serviceB.Register(rpc.Endpoint{
+		Method:      "GET",
+		Path:        "B.Hello",
+		ServiceName: "B",
+		Name:        "Hello",
+		Handler: func(w http.ResponseWriter, req *http.Request) {
+			suite.respond(w, 200, "hello get b")
+		},
+	})
+
+	gateway := rpc.Compose(serviceA, serviceB)
+	server := httptest.NewServer(gateway)
+	defer server.Close()
+
+	// It's really going to be something like "Composite:A:B", but really we just care that the
+	// individual service names appear "somewhere" in the composite name.
+	suite.Require().Contains(gateway.Name, "A", "Composite name should encode all service names")
+	suite.Require().Contains(gateway.Name, "B", "Composite name should encode all service names")
+
+	suite.Require().Len(gateway.Gateways, 2, "Composite should contain all supplied service gateways")
+	suite.Require().Equal(serviceA, gateway.Gateways[0], "Composite should contain all supplied service gateways")
+	suite.Require().Equal(serviceB, gateway.Gateways[1], "Composite should contain all supplied service gateways")
+
+	status, result, err := suite.request(server, "GET", "/v2/A.Hello", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(200, status, "ServiceA.Hello not properly responding")
+	suite.Require().Equal("hello get a", result, "ServiceA.Hello not properly responding")
+
+	status, result, err = suite.request(server, "POST", "/v2/A.Hello", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(200, status, "ServiceA.Hello not properly responding")
+	suite.Require().Equal("hello post a", result, "ServiceA.Hello not properly responding")
+
+	status, result, err = suite.request(server, "GET", "/v3/B.Hello", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(200, status, "ServiceB.Hello not properly responding")
+	suite.Require().Equal("hello get b", result, "ServiceB.Hello not properly responding")
+
+	status, result, err = suite.request(server, "POST", "/v3/B.Hello", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(200, status, "ServiceB.Hello not properly responding")
+	suite.Require().Equal("hello post b", result, "ServiceB.Hello not properly responding")
+
+	status, result, err = suite.request(server, "DELETE", "/v3/B.Hello", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(405, status, "ServiceB.Hello should not allow a DELETE request")
+
+	status, result, err = suite.request(server, "GET", "/v2/B.Hello", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(404, status, "ServiceB.Hello should not have a v2/ prefix")
+}
+
+// Ensures that creating a composite gateway with conflicting routes fails miserably.
+func (suite *GatewaySuite) TestCompose_conflict() {
+	serviceA := rpc.NewGateway()
+	serviceA.Name = "A"
+	serviceA.Register(rpc.Endpoint{
+		Method:      "POST",
+		Path:        "/foo/:bar",
+		ServiceName: "A",
+		Name:        "Hello",
+		Handler: func(w http.ResponseWriter, req *http.Request) {
+			suite.respond(w, 200, "hello post a")
+		},
+	})
+
+	serviceB := rpc.NewGateway()
+	serviceB.Name = "B"
+	serviceB.Register(rpc.Endpoint{
+		Method:      "POST",
+		Path:        "/foo/:bar",
+		ServiceName: "B",
+		Name:        "Hello",
+		Handler: func(w http.ResponseWriter, req *http.Request) {
+			suite.respond(w, 200, "hello post b")
+		},
+	})
+
+	suite.Panics(func() { rpc.Compose(serviceA, serviceB) }, "Compose should panic if multiple routes conflict")
+}
+
 func (suite *GatewaySuite) request(server *httptest.Server, method string, path string, body string, opts ...func(*http.Request)) (int, string, error) {
 	request, err := http.NewRequest(method, server.URL+path, strings.NewReader(body))
 	if err != nil {
