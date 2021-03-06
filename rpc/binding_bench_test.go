@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/dimfeld/httptreemux/v5"
 	"github.com/monadicstack/frodo/rpc"
 )
 
@@ -29,14 +29,29 @@ func BenchmarkJsonBinder_Bind(b *testing.B) {
 	request := &http.Request{
 		URL: address,
 	}
-	params := httprouter.Params{
-		httprouter.Param{Key: "id", Value: "abcdef"},
-	}
-	request = request.WithContext(context.WithValue(context.Background(), httprouter.ParamsKey, params))
+
+	ctx := context.Background()
+	ctx = httptreemux.AddRouteDataToContext(ctx, mockRouteData{
+		params: map[string]string{"id": "abcdef"},
+	})
+	request = request.WithContext(ctx)
 	output := benchmarkRequest{}
 
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_ = binder.Bind(request, &output)
 	}
+}
+
+type mockRouteData struct {
+	route  string
+	params map[string]string
+}
+
+func (m mockRouteData) Route() string {
+	return m.route
+}
+
+func (m mockRouteData) Params() map[string]string {
+	return m.params
 }
