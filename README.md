@@ -34,6 +34,7 @@ with as little fuss as possible.
 * [Request Scoped Metadata](https://github.com/monadicstack/frodo#request-scoped-metadata)
 * [Create a JavaScript Client](https://github.com/monadicstack/frodo#creating-a-javascript-client)
 * [Authorization](https://github.com/monadicstack/frodo#authorization)
+* [Composing Gateways](https://github.com/monadicstack/frodo#composing-gateways)
 * [Mocking Services](https://github.com/monadicstack/frodo#mocking-services)
 * [Generating OpenAPI Documentation](https://github.com/monadicstack/frodo#generate-openapiswagger-documentation-experimental)
 * [Go Generate Support](https://github.com/monadicstack/frodo#go-generate-support)
@@ -629,6 +630,54 @@ client = new ServiceAClient('...');
 client.Hello({ Name: 'Bob' }, {
     authorization: 'Token 12345'
 });
+```
+
+## Composing Gateways
+
+The default behavior for your service gateways is that they will each
+run in their own HTTP server, likely in their own processes. There are
+a few instances, however, where you might decide that you want to run
+multiple services in the same server/process. The most common is probably
+for local development. It can be a pain to start/stop 15 different processes
+for each of your services, so maybe you just want everything to run
+in a single one. This way when you make a change to any service you just
+down/up one process and see your changes.
+
+You can use the `rpc.Compose()` function to take any N service gateways
+and create a single gateway that serves up all of those services/operations.
+
+```go
+// Create gateways for each service like you normally would.
+userGateway := users.NewUserServiceGateway(userService)
+groupGateway := groups.NewGroupServiceGateway(groupService)
+projectGateway := projects.NewProjectServiceGateway(projectService)
+
+// Wrap them in a composed gateway that routes requests to all three.
+gateway := rpc.Compose(
+    userGateway,
+    groupGateway,
+    projectGateway,
+)
+http.listenAndService(":8080", gateway)
+```
+All 3 services will be listening on port 8080, so
+you can access them via their Frodo clients; just give them all the
+same address:
+
+```go
+userClient := users.NewUserServiceClient("http://localhost:8080")
+groupClient := groups.NewGroupServiceClient("http://localhost:8080")
+projectClient := projects.NewProjectServiceClient("http://localhost:8080")
+```
+
+If you plan to just hit the API endpoints directly, the
+base address is the same, but the request paths should still correspond
+to the original gateways:
+
+```
+curl -d '{"ID":"123"}' http://localhost:8080/UserService.GetByID
+curl -d '{"Name":"Foo"}' http://localhost:8080/GroupService.CreateGroup
+curl -d '{"Flag":true}' http://localhost:8080/ProjectService.ArchiveProject
 ```
 
 ## Mocking Services
