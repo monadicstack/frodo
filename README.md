@@ -38,10 +38,13 @@ with as little fuss as possible.
 * [Mocking Services](https://github.com/monadicstack/frodo#mocking-services)
 * [Generating OpenAPI Documentation](https://github.com/monadicstack/frodo#generate-openapiswagger-documentation-experimental)
 * [Go Generate Support](https://github.com/monadicstack/frodo#go-generate-support)
+* [Bring Your Own Templates](https://github.com/monadicstack/frodo#bring-your-own-templates)
 * [New Service Scaffolding](https://github.com/monadicstack/frodo#create-a-new-service-w-frodo-create)
 * [Why Not gRPC?](https://github.com/monadicstack/frodo#why-not-just-use-grpc) (motivation for this project)
 
 ## Getting Started
+
+*Frodo requires Go 1.16+ as it uses `fs.FS` and `//go:embed` to load templates.*
 
 ```shell
 go install github.com/monadicstack/frodo
@@ -49,6 +52,7 @@ go install github.com/monadicstack/frodo
 This will fetch the `frodo` code generation executable as well
 as the runtime libraries that allow your services to
 communicate with each other.
+
 
 ## Example
 
@@ -781,6 +785,27 @@ single command (assuming you're already in the 'calc' directory):
 ```shell
 $ go generate .
 ```
+
+## Bring Your Own Templates
+
+As Frodo matures, we will try to maintain a large number of templates for
+clients in multiple popular languages (feel free to submit a PR if your
+language of choice is not currently supported). If you have more specialized
+needs, you can actually bring your own custom code templates to all CLI code
+generation sub-commands (client, gateway, mock, and docs).
+
+For instance, if you have your own JavaScript client template that meets your
+needs better than the one that ships with Frodo, you can do the following:
+
+```shell
+frodo client calculator_service.go \
+  --language=js \
+  --template=mytemplates/myclient.js.tmpl
+```
+
+The path to the template can be either relative to where you're running the
+command or an absolute path to a template on your hard drive. Either way, just
+make sure that your template expects the root value to be a Frodo `*parser.Context`.
 
 ## Create a New Service w/ `frodo create`
 
