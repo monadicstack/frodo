@@ -1,0 +1,3 @@
+Hello {{ .Name }}{{ range $tok := .Tokens }}
+-> {{ $tok }}
+{{- end }}

@@ -1,0 +1,14 @@
+package main
+
+import (
+	"net/http"
+
+	"{{ .PackageImport }}"
+	{{ .Package }}rpc "{{.PackageImport }}/gen"
+)
+
+func main() {
+	serviceHandler := {{.Package }}.{{ .HandlerName }}{}
+	gateway := {{.Package }}rpc.New{{ .ServiceName }}Gateway(&serviceHandler)
+	http.ListenAndServe(":{{ .Port }}", gateway)
+}

@@ -10,6 +10,7 @@ import (
 
 // GenerateGatewayRequest contains all of the CLI options used in the "frodo client" command.
 type GenerateGatewayRequest struct {
+	templateOption
 	// InputFileName is the service definition to parse/process (the "--service" option)
 	InputFileName string
 }
@@ -29,6 +30,7 @@ func (c GenerateGateway) Command() *cobra.Command {
 			return c.Exec(request)
 		},
 	}
+	cmd.Flags().StringVar(&request.Template, "template", "", "Path to a custom Go template file used to generate this artifact.")
 	return cmd
 }
 
@@ -40,6 +42,7 @@ func (c GenerateGateway) Exec(request *GenerateGatewayRequest) error {
 		return err
 	}
 
-	log.Printf("[frodo] Generating artifact '%s'", generate.TemplateGatewayGo.Name())
-	return generate.Artifact(ctx, request.InputFileName, generate.TemplateGatewayGo)
+	artifact := request.ToFileTemplate("gateway.go")
+	log.Printf("[frodo] Generating artifact '%s'", artifact.Name)
+	return generate.File(ctx, artifact)
 }

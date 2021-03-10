@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
 	"time"
 
+	"github.com/monadicstack/frodo/generate"
 	"github.com/monadicstack/frodo/parser"
 	"github.com/spf13/cobra"
 )
@@ -93,13 +93,14 @@ func (c CreateService) Exec(request *CreateServiceRequest) error {
 	if err := os.MkdirAll(filepath.Join(ctx.Directory, "cmd"), 0777); err != nil {
 		return err
 	}
-	if err := scaffoldTemplate(ctx, createServiceTemplate, ctx.Paths.Service); err != nil {
+
+	if err := scaffoldTemplate(ctx, "templates/create/service.go.tmpl", ctx.Paths.Service); err != nil {
 		return err
 	}
-	if err := scaffoldTemplate(ctx, createHandlerTemplate, ctx.Paths.Handler); err != nil {
+	if err := scaffoldTemplate(ctx, "templates/create/service_handler.go.tmpl", ctx.Paths.Handler); err != nil {
 		return err
 	}
-	if err := scaffoldTemplate(ctx, createMakefileTemplate, ctx.Paths.Makefile); err != nil {
+	if err := scaffoldTemplate(ctx, "templates/create/makefile.tmpl", ctx.Paths.Makefile); err != nil {
 		return err
 	}
 
@@ -108,7 +109,7 @@ func (c CreateService) Exec(request *CreateServiceRequest) error {
 		return err
 	}
 	ctx.PackageImport = info.InputPackage.Import
-	if err := scaffoldTemplate(ctx, createMainTemplate, ctx.Paths.Main); err != nil {
+	if err := scaffoldTemplate(ctx, "templates/create/main.go.tmpl", ctx.Paths.Main); err != nil {
 		return err
 	}
 
@@ -124,7 +125,9 @@ func (c CreateService) Exec(request *CreateServiceRequest) error {
 	return nil
 }
 
-func scaffoldTemplate(ctx createServiceContext, t *template.Template, path string) error {
+func scaffoldTemplate(ctx createServiceContext, templatePath string, path string) error {
+	t := generate.NewStandardTemplate(templatePath, templatePath)
+
 	// Only allow you to overwrite the file if you included the --force argument.
 	_, err := os.Stat(path)
 	if !os.IsNotExist(err) && !ctx.Request.Force {
@@ -138,9 +141,14 @@ func scaffoldTemplate(ctx createServiceContext, t *template.Template, path strin
 	}
 	defer outputFile.Close()
 
-	err = t.Execute(outputFile, ctx)
+	code, err := t.Eval(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to eval code template: %s: %w", path, err)
+	}
+
+	_, err = outputFile.Write(code)
+	if err != nil {
+		return fmt.Errorf("unable to write code artifact: %s: %w", path, err)
 	}
 	return nil
 }
@@ -172,104 +180,3 @@ type createServiceContext struct {
 		Main     string
 	}
 }
-
-var createServiceTemplate = template.Must(template.New("service.go").Parse(`package {{.Package }}
-
-import (
-	"context"
-)
-
-// {{ .ServiceName }} is a service that...
-type {{ .ServiceName }} interface  {
-    // Create saves a new {{ .ShortName }} record to the database. 
-	Create(context.Context, *CreateRequest) (*CreateResponse, error)
-}
-
-type CreateRequest struct {
-	Name        string
-	Description string
-}
-
-type CreateResponse struct {
-	ID          string
-	Name        string
-	Description string
-}
-`))
-
-var createHandlerTemplate = template.Must(template.New("service_handler.go").Parse(`package {{.Package }}
-
-import (
-	"context"
-
-	"github.com/monadicstack/frodo/rpc/errors"
-)
-
-// {{ .HandlerName }} implements all of the "real" functionality for the {{ .ServiceName }}.
-type {{ .ServiceName }}Handler struct{}
-
-func (svc *{{ .HandlerName }}) Create(ctx context.Context, request *CreateRequest) (*CreateResponse, error) {
-	if request.Name == "" {
-		return nil, errors.BadRequest("create: name is required")
-	}
-	// Beep boop beep... pretend we're doing real work...
-	return &CreateResponse{
-		ID:          "1234",
-		Name:        request.Name,
-		Description: request.Description,
-	}, nil
-}
-`))
-
-var createMakefileTemplate = template.Must(template.New("makefile").Parse(`#
-# Local development only. This builds and executes the service in a local process.
-#
-run: build
-	out/{{ .ShortNameLower }}
-
-#
-# Runs {{ .ShortNameLower }}_service.go through the 'frodo' code generator to spit out
-# the latest and greatest RPC client/gateway code.
-#
-frodo:
-	frodo gateway {{ .ShortNameLower }}_service.go && \
-	frodo client  {{ .ShortNameLower }}_service.go
-
-#
-# If you add Frodo-based "//go:generate" comments to your service, generate your Frodo
-# artifacts using that method instead.
-#
-generate:
-	go generate .
-
-#
-# Rebuilds the binary for this service. We will "re-frodo" the service declaration beforehand
-# so that any modifications to your service are always reflected in your client/gateway code
-# without you having to think about it.
-#
-build: frodo
-	go build -o out/{{ .ShortNameLower }} cmd/main.go
-
-#
-# This target hacks the Gibson; what do you think 'test' does? It runs through all of
-# the test suites for this service.
-#
-test:
-	go test ./...
-`))
-
-var createMainTemplate = template.Must(template.New("main").Parse(`package main
-
-import (
-	"net/http"
-
-	"{{ .PackageImport }}"
-	{{ .Package }}rpc "{{.PackageImport }}/gen"
-)
-
-func main() {
-	serviceHandler := {{.Package }}.{{ .HandlerName }}{}
-	gateway := {{.Package }}rpc.New{{ .ServiceName }}Gateway(&serviceHandler)
-	http.ListenAndServe(":{{ .Port }}", gateway)
-}
-`))

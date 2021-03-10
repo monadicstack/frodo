@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"text/template"
 
 	"github.com/monadicstack/frodo/generate"
 	"github.com/monadicstack/frodo/parser"
@@ -13,6 +12,7 @@ import (
 
 // GenerateClientRequest contains all of the CLI options used in the "frodo client" command.
 type GenerateClientRequest struct {
+	templateOption
 	// InputFileName is the service definition to parse/process (the "--service" option)
 	InputFileName string
 	// Language is the programming language for the client to generate (the "--language" option)
@@ -35,6 +35,7 @@ func (c GenerateClient) Command() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&request.Language, "language", "go", "The file extension of the target language (e.g. 'go' or 'js')")
+	cmd.Flags().StringVar(&request.Template, "template", "", "Path to a custom Go template file used to generate this artifact.")
 	return cmd
 }
 
@@ -42,9 +43,9 @@ func (c GenerateClient) Command() *cobra.Command {
 func (c GenerateClient) Exec(request *GenerateClientRequest) error {
 	switch strings.ToLower(request.Language) {
 	case "go", "":
-		return c.generate(request, generate.TemplateClientGo)
+		return c.generate(request, request.ToFileTemplate("client.go"))
 	case "js", "javascript", "node", "nodejs":
-		return c.generate(request, generate.TemplateClientJS)
+		return c.generate(request, request.ToFileTemplate("client.js"))
 	default:
 		return fmt.Errorf("unsupported client language")
 	}
@@ -52,13 +53,13 @@ func (c GenerateClient) Exec(request *GenerateClientRequest) error {
 
 // generate parses the input service definition file and creates an output client/gateway
 // code, writing it to the output gen/ directory.
-func (c GenerateClient) generate(request *GenerateClientRequest, artifactTemplate *template.Template) error {
-	log.Printf("[frodo] Parsing service definitions: %s", request.InputFileName)
+func (c GenerateClient) generate(request *GenerateClientRequest, artifact generate.FileTemplate) error {
+	log.Printf("[frodo] Parsing service definition: %s", request.InputFileName)
 	ctx, err := parser.ParseFile(request.InputFileName)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[frodo] Generating artifact '%s'", artifactTemplate.Name())
-	return generate.Artifact(ctx, request.InputFileName, artifactTemplate)
+	log.Printf("[frodo] Generating '%s'", artifact.Name)
+	return generate.File(ctx, artifact)
 }
