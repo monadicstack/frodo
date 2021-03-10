@@ -1,0 +1,17 @@
+package {{.Package }}
+
+import (
+	"context"
+
+	"github.com/monadicstack/frodo/rpc/errors"
+)
+
+// {{ .HandlerName }} implements all of the "real" functionality for the {{ .InterfaceName }}.
+type {{ .InterfaceName }}Handler struct{}
+
+func (svc *{{ .HandlerName }}) Lookup(ctx context.Context, request *LookupRequest) (*LookupResponse, error) {
+	if request.ID == "" {
+		return nil, errors.BadRequest("lookup: id is required")
+	}
+	return &LookupResponse{ID: request.ID, Name: "Beetlejuice"}, nil
+}

@@ -10,6 +10,7 @@ import (
 
 // GenerateDocsRequest contains all of the CLI options used in the "frodo docs" command.
 type GenerateDocsRequest struct {
+	templateOption
 	// InputFileName is the service definition to parse/process (the "--service" option)
 	InputFileName string
 }
@@ -29,6 +30,7 @@ func (c GenerateDocs) Command() *cobra.Command {
 			return c.Exec(request)
 		},
 	}
+	cmd.Flags().StringVar(&request.Template, "template", "", "Path to a custom Go template file used to generate this artifact.")
 	return cmd
 }
 
@@ -40,6 +42,7 @@ func (c GenerateDocs) Exec(request *GenerateDocsRequest) error {
 		return err
 	}
 
-	log.Printf("[frodo] Generating artifact '%s'", generate.TemplateClientOpenAPI.Name())
-	return generate.Artifact(ctx, request.InputFileName, generate.TemplateClientOpenAPI)
+	artifact := request.ToFileTemplate("openapi.yml")
+	log.Printf("[frodo] Generating artifact '%s'", artifact.Name)
+	return generate.File(ctx, artifact)
 }

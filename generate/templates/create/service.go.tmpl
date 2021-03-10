@@ -1,0 +1,20 @@
+package {{.Package }}
+
+import (
+	"context"
+)
+
+// {{ .InterfaceName }} is a service that...
+type {{ .InterfaceName }} interface  {
+    // Lookup fetches a {{ .ShortName }} record by its unique identifier.
+	Lookup(context.Context, *LookupRequest) (*LookupResponse, error)
+}
+
+type LookupRequest struct {
+	ID string
+}
+
+type LookupResponse struct {
+	ID   string
+	Name string
+}

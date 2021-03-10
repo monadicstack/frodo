@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
 )
 
 // ServiceScaffold creates the bare minimum code required to have a frodo-powered service. It
@@ -34,13 +33,24 @@ func ServiceScaffold(request ServiceScaffoldRequest) error {
 	}
 	ctx.Package = filepath.Base(ctx.Directory)
 
+	serviceArtifact := FileTemplate{
+		Name:       "service.go",
+		FileSystem: StandardTemplates,
+		Path:       "templates/service.go.tmpl",
+	}
+	serviceHandlerArtifact := FileTemplate{
+		Name:       "service_handler.go",
+		FileSystem: StandardTemplates,
+		Path:       "templates/service_handler.go.tmpl",
+	}
+
 	if err := scaffoldDirectory(ctx); err != nil {
 		return err
 	}
-	if err := scaffoldTemplate(ctx, serviceDeclarationTemplate); err != nil {
+	if err := scaffoldTemplate(ctx, serviceArtifact); err != nil {
 		return err
 	}
-	if err := scaffoldTemplate(ctx, serviceHandlerTemplate); err != nil {
+	if err := scaffoldTemplate(ctx, serviceHandlerArtifact); err != nil {
 		return err
 	}
 	return nil
@@ -67,8 +77,8 @@ func scaffoldDirectory(ctx scaffoldServiceContext) error {
 	return nil
 }
 
-func scaffoldTemplate(ctx scaffoldServiceContext, t *template.Template) error {
-	path := filepath.Join(ctx.Directory, ctx.ShortNameLower+"_"+t.Name())
+func scaffoldTemplate(ctx scaffoldServiceContext, artifact FileTemplate) error {
+	path := filepath.Join(ctx.Directory, ctx.ShortNameLower+"_"+artifact.Name)
 
 	// Only allow you to overwrite the file if you included the --force argument.
 	_, err := os.Stat(path)
@@ -83,9 +93,14 @@ func scaffoldTemplate(ctx scaffoldServiceContext, t *template.Template) error {
 	}
 	defer outputFile.Close()
 
-	err = t.Execute(outputFile, ctx)
+	code, err := artifact.Eval(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to eval code template: %s: %w", path, err)
+	}
+
+	_, err = outputFile.Write(code)
+	if err != nil {
+		return fmt.Errorf("unable to write generated source code: %s: %w", path, err)
 	}
 	return nil
 }
@@ -106,44 +121,3 @@ type scaffoldServiceContext struct {
 	// Package is the name of the package that the new service will belong to.
 	Package string
 }
-
-var serviceDeclarationTemplate = parseArtifactTemplate("service.go", `package {{.Package }}
-
-import (
-	"context"
-)
-
-// {{ .InterfaceName }} is a service that...
-type {{ .InterfaceName }} interface  {
-    // Lookup fetches a {{ .ShortName }} record by its unique identifier. 
-	Lookup(context.Context, *LookupRequest) (*LookupResponse, error)
-}
-
-type LookupRequest struct {
-	ID string
-}
-
-type LookupResponse struct {
-	ID   string
-	Name string
-}
-`)
-
-var serviceHandlerTemplate = parseArtifactTemplate("service_handler.go", `package {{.Package }}
-
-import (
-	"context"
-
-	"github.com/monadicstack/frodo/rpc/errors"
-)
-
-// {{ .HandlerName }} implements all of the "real" functionality for the {{ .InterfaceName }}.
-type {{ .InterfaceName }}Handler struct{}
-
-func (svc *{{ .HandlerName }}) Lookup(ctx context.Context, request *LookupRequest) (*LookupResponse, error) {
-	if request.ID == "" {
-		return nil, errors.BadRequest("lookup: id is required")
-	}
-	return &LookupResponse{ID: request.ID, Name: "Beetlejuice"}, nil
-}
-`)
