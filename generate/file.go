@@ -165,6 +165,15 @@ var templateFuncs = template.FuncMap{
 	"ToLower": func(value string) string {
 		return strings.ToLower(value)
 	},
+	// ToLowerCamel converts the string to lower camel-cased.
+	"ToLowerCamel": func(value string) string {
+		// This is a shitty implementation.
+		if value == "" {
+			return ""
+		}
+		firstChar := value[0:1]
+		return strings.ToLower(firstChar) + value[1:]
+	},
 	// EmptyString is a predicate that returns true when the input value is "".
 	"EmptyString": func(value string) bool {
 		return value == ""
@@ -187,5 +196,15 @@ var templateFuncs = template.FuncMap{
 			return path
 		}
 		return "/" + path
+	},
+	"JavaPackage": func(packageName string) string {
+		// Split the package like "github.com/myorg/mymodule/a/b/c" into the segments
+		// separated by slashes. Omit the first segment which is the address; regardless
+		// of whether it's GitHub, GitLab, or whatever. Then put the remaining segments
+		// back together using periods. In the example, the result would be
+		// "myorg.mymodule.a.b.c"
+		segments := strings.Split(packageName, "/")
+		segments = segments[1:]
+		return strings.Join(segments, ".")
 	},
 }
