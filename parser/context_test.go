@@ -13,82 +13,6 @@ type ContextSuite struct {
 	suite.Suite
 }
 
-func (suite *ContextSuite) TestContext_ServiceByName() {
-	ctx := &parser.Context{}
-	check := func(ctx *parser.Context, name string, exists bool) {
-		service := ctx.ServiceByName(name)
-		if exists {
-			suite.Require().NotNil(service, "Context did not find service '%s'", name)
-			suite.Require().True(strings.EqualFold(name, service.Name), "Context found wrong service '%s'", name)
-		} else {
-			suite.Require().Nil(service, "Context should not find the service '%s'", name)
-		}
-	}
-
-	check(ctx, "", false)
-	check(ctx, "FooService", false)
-
-	ctx.Services = []*parser.ServiceDeclaration{
-		{Name: "FooService"},
-	}
-	check(ctx, "", false)
-	check(ctx, "FooService", true)
-	check(ctx, "fooservice", true)
-	check(ctx, "Foo", false)
-	check(ctx, "BarService", false)
-
-	ctx.Services = []*parser.ServiceDeclaration{
-		{Name: "FooService"},
-		{Name: "BarService"},
-	}
-	check(ctx, "", false)
-	check(ctx, "FooService", true)
-	check(ctx, "Foo", false)
-	check(ctx, "BarService", true)
-	check(ctx, "barservice", true)
-	check(ctx, "BazService", false)
-}
-
-func (suite *ContextSuite) TestContext_ModelByName() {
-	ctx := &parser.Context{}
-	check := func(ctx *parser.Context, name string, exists bool) {
-		model := ctx.ModelByName(name)
-		if exists {
-			suite.Require().NotNil(model, "Context did not find model '%s'", name)
-		} else {
-			suite.Require().Nil(model, "Context should not find the model '%s'", name)
-		}
-	}
-
-	check(ctx, "", false)
-	check(ctx, "FooModel", false)
-
-	ctx.Models = []*parser.ServiceModelDeclaration{
-		{Name: "FooModel"},
-	}
-	check(ctx, "", false)
-	check(ctx, "FooModel", true)
-	check(ctx, "foomodel", true)
-	check(ctx, "Foo", false)
-	check(ctx, "BarModel", false)
-
-	ctx.Models = []*parser.ServiceModelDeclaration{
-		{Name: "FooModel"},
-		{Name: "BarModel"},
-	}
-	check(ctx, "", false)
-	check(ctx, "FooModel", true)
-	check(ctx, "Foo", false)
-	check(ctx, "BarModel", true)
-	check(ctx, "barmodel", true)
-	check(ctx, "BazModel", false)
-
-	// We strip off package and pointer information when doing the lookup!
-	check(ctx, "*FooModel", true)
-	check(ctx, "*package.FooModel", true)
-	check(ctx, "package.FooModel", true)
-}
-
 func (suite *ContextSuite) TestService_FunctionByName() {
 	service := &parser.ServiceDeclaration{}
 	check := func(service *parser.ServiceDeclaration, name string, exists bool) {
@@ -131,8 +55,8 @@ func (suite *ContextSuite) TestFunction_String() {
 
 	function = &parser.ServiceFunctionDeclaration{
 		Name:     "Foo",
-		Request:  &parser.ServiceModelDeclaration{Name: "Request"},
-		Response: &parser.ServiceModelDeclaration{Name: "Response"},
+		Request:  &parser.TypeDeclaration{Name: "Request"},
+		Response: &parser.TypeDeclaration{Name: "Response"},
 	}
 	suite.Require().Equal("Foo(context.Context, *Request) (*Response, error)", function.String())
 }
@@ -291,7 +215,7 @@ func (suite *ContextSuite) TestDocumentation_ForService_ForModel() {
 		suite.Require().Equal(parser.DocumentationLines(expectedLines).String(), serviceDocs.String())
 	}
 	checkModel := func(docs parser.Documentation, name string, expectedLines ...string) {
-		model := &parser.ServiceModelDeclaration{Name: name}
+		model := &parser.TypeDeclaration{Name: name}
 		modelDocs := docs.ForType(model)
 		suite.Require().Equal(parser.DocumentationLines(expectedLines).String(), modelDocs.String())
 	}
@@ -327,8 +251,8 @@ func (suite *ContextSuite) TestDocumentation_ForFunction_ForField() {
 		suite.Require().Equal(parser.DocumentationLines(expectedLines).String(), functionDocs.String())
 	}
 	checkField := func(docs parser.Documentation, modelName string, name string, expectedLines ...string) {
-		model := &parser.ServiceModelDeclaration{Name: modelName}
-		field := &parser.FieldDeclaration{Name: name, Model: model}
+		model := &parser.TypeDeclaration{Name: modelName}
+		field := &parser.FieldDeclaration{Name: name, ParentType: model}
 		fieldDocs := docs.ForField(field)
 		suite.Require().Equal(parser.DocumentationLines(expectedLines).String(), fieldDocs.String())
 	}
@@ -380,8 +304,8 @@ func (suite *ContextSuite) TestTags_Set() {
 
 func (suite *ContextSuite) TestTags_ForField() {
 	check := func(tags parser.Tags, modelName string, fieldName string, expectedTag string) {
-		model := &parser.ServiceModelDeclaration{Name: modelName}
-		field := &parser.FieldDeclaration{Name: fieldName, Model: model}
+		model := &parser.TypeDeclaration{Name: modelName}
+		field := &parser.FieldDeclaration{Name: fieldName, ParentType: model}
 		tag := tags.ForField(field)
 		suite.Require().Equal(expectedTag, string(tag))
 	}
@@ -473,7 +397,7 @@ func (suite *ContextSuite) TestGatewayFunctionOptions_PathParameters() {
 		&parser.FieldDeclaration{Name: "LastName", Binding: &parser.FieldBindingOptions{Name: "LastName"}},
 		&parser.FieldDeclaration{Name: "FirstName", Binding: &parser.FieldBindingOptions{Name: "first_name"}},
 	}
-	request := &parser.ServiceModelDeclaration{
+	request := &parser.TypeDeclaration{
 		Fields: fields,
 	}
 	function := &parser.ServiceFunctionDeclaration{
@@ -530,7 +454,7 @@ func (suite *ContextSuite) TestGatewayFunctionOptions_QueryParameters() {
 		&parser.FieldDeclaration{Name: "LastName", Binding: &parser.FieldBindingOptions{Name: "LastName"}},
 		&parser.FieldDeclaration{Name: "FirstName", Binding: &parser.FieldBindingOptions{Name: "first_name"}},
 	}
-	request := &parser.ServiceModelDeclaration{
+	request := &parser.TypeDeclaration{
 		Fields: fields,
 	}
 	function := &parser.ServiceFunctionDeclaration{

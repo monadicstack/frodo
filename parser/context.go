@@ -157,6 +157,8 @@ func (fields FieldDeclarations) ByBindingName(name string) *FieldDeclaration {
 type FieldDeclaration struct {
 	// Name the name of the field/attribute.
 	Name string
+	// ParentType is a back-pointer to the type that this field is a member of.
+	ParentType *TypeDeclaration
 	// Type contains the data type information for this field.
 	Type *TypeDeclaration
 	// Pointer indicates if this field is a pointer type (true) or value type (false).
@@ -250,7 +252,7 @@ func (docs Documentation) ForType(t *TypeDeclaration) DocumentationLines {
 
 // ForField find the GoDoc comments for the attribute of a request/response struct
 func (docs Documentation) ForField(f *FieldDeclaration) DocumentationLines {
-	return docs.lookup(f.Type.Name, f.Name)
+	return docs.lookup(f.ParentType.Name, f.Name)
 }
 
 var noTag = reflect.StructTag("")
@@ -275,7 +277,7 @@ func (tags Tags) Set(model string, field string, tag *ast.BasicLit) {
 // ForField looks up the tag annotations for the given model field. If the field does not have any tags
 // you'll get back the zero-value StructTag that always gives you empty for any value lookups.
 func (tags Tags) ForField(f *FieldDeclaration) reflect.StructTag {
-	if tag, ok := tags[f.Type.Name+"."+f.Name]; ok {
+	if tag, ok := tags[f.ParentType.Name+"."+f.Name]; ok {
 		return reflect.StructTag(tag)
 	}
 	return noTag
@@ -477,6 +479,11 @@ type TypeDeclaration struct {
 	Documentation DocumentationLines
 }
 
+// String returns the name of the type. That is all.
+func (t TypeDeclaration) String() string {
+	return t.Name
+}
+
 // SliceLike returns true for array or slice types. This will also be true for any alias to an array/slice type.
 func (t TypeDeclaration) SliceLike() bool {
 	return t.Kind == reflect.Slice || t.Kind == reflect.Array
@@ -504,21 +511,28 @@ type TypeRegistry map[string]*TypeDeclaration
 // Lookup finds our parsed snapshot for the raw type. It returns the snapshot an an "ok" boolean to indicate
 // whether we found it or not.
 func (reg TypeRegistry) Lookup(t types.Type) (*TypeDeclaration, bool) {
-	key := reg.key(t)
+	key := reg.key(t, t.String())
 	info, ok := reg[key]
+	return info, ok
+}
+
+// LookupByName finds our parsed snapshot for the type name. It returns the snapshot an an "ok" boolean to indicate
+// whether we found it or not.
+func (reg TypeRegistry) LookupByName(name string) (*TypeDeclaration, bool) {
+	info, ok := reg[strings.ToLower(name)]
 	return info, ok
 }
 
 // Register adds the given type declaration to the registry.
 func (reg TypeRegistry) Register(entry *TypeDeclaration) *TypeDeclaration {
-	key := reg.key(entry.Type)
+	key := reg.key(entry.Type, entry.Name)
 	reg[key] = entry
 	return entry
 }
 
 // Unregister removes the given type from the type registry.
 func (reg TypeRegistry) Unregister(entry *TypeDeclaration) {
-	key := reg.key(entry.Type)
+	key := reg.key(entry.Type, entry.Name)
 	delete(reg, key)
 }
 
@@ -534,8 +548,11 @@ func (reg TypeRegistry) NonBasicTypes() []*TypeDeclaration {
 	return results
 }
 
-func (reg TypeRegistry) key(t types.Type) string {
-	name := t.String()
+func (reg TypeRegistry) key(t types.Type, name string) string {
+	if t != nil {
+		name = t.String()
+	}
 	name = naming.NoPointer(name)
-	return name
+	name = naming.CleanPrefix(name)
+	return strings.ToLower(name)
 }

@@ -55,10 +55,10 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.InputPackage, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.RawTypes, ctx.Types, err = ParseTypeInformation(ctx); err != nil {
+	if ctx.Documentation, ctx.Tags, err = ParseDocumentation(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.Documentation, ctx.Tags, err = ParseDocumentation(ctx); err != nil {
+	if ctx.RawTypes, ctx.Types, err = ParseTypeInformation(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
 	if ctx.Service, err = ParseService(ctx); err != nil {
@@ -177,9 +177,10 @@ func parseTypeRegistryEntry(ctx *Context, registry TypeRegistry, t types.Type, e
 			}
 
 			fieldDecl := &FieldDeclaration{
-				Name:    structField.Name(),
-				Type:    fieldType,
-				Pointer: strings.HasPrefix(structField.Name(), "*"), // TODO: handle aliases to pointer types
+				Name:       structField.Name(),
+				ParentType: entry,
+				Type:       fieldType,
+				Pointer:    strings.HasPrefix(structField.Type().String(), "*"), // TODO: handle aliases to pointer types
 			}
 			fieldDecl.Binding = ParseBindingOptions(ctx, fieldDecl, structField)
 			ApplyFieldDocumentation(ctx, fieldDecl)
@@ -277,7 +278,7 @@ func FindGoDotMod(dirName string) (string, error) {
 // The keys to these maps are based on the names of the thing whose docs/tags you want; either "SERVICE",
 // "SERVICE.FUNCTION", "MODEL", or "MODEL.FIELD".
 func ParseDocumentation(ctx *Context) (Documentation, Tags, error) {
-	packageDocs, err := doc.NewFromFiles(ctx.RawTypes.Fset, ctx.RawTypes.Syntax, ctx.Module.Name)
+	packageDocs, err := doc.NewFromFiles(ctx.FileSet, []*ast.File{ctx.File}, ctx.Module.Name)
 	if err != nil {
 		return nil, nil, err
 	}
