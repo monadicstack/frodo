@@ -7,12 +7,12 @@
 
 const defaultFetch = fetch && fetch.bind(window);
 
-{{ range $service := .Services }}/**
- * Exposes all of the standard operations for the remote {{ .Name }} service. These RPC calls
- * will be sent over http(s) to the backend service instances. {{ range .Documentation }}
+/**
+ * Exposes all of the standard operations for the remote {{ .Service.Name }} service. These RPC calls
+ * will be sent over http(s) to the backend service instances. {{ range .Service.Documentation }}
  * {{ . }}{{end}}
  */
-class {{ .Name }}Client {
+class {{ .Service.Name }}Client {
     _baseURL;
     _fetch;
     _authorization;
@@ -29,12 +29,12 @@ class {{ .Name }}Client {
      *      leave this blank and use the authorization option on each request.
      */
     constructor(baseURL, {fetch, authorization} = {}) {
-        this._baseURL = trimSlashes(trimSlashes(baseURL) + '/' + trimSlashes('{{ .Gateway.PathPrefix}}'));
+        this._baseURL = trimSlashes(trimSlashes(baseURL) + '/' + trimSlashes('{{ .Service.Gateway.PathPrefix}}'));
         this._fetch = fetch || defaultFetch;
         this._authorization = authorization || '';
     }
 
-    {{ range .Functions }}
+    {{ range .Service.Functions }}
     /**{{ range $doc := .Documentation }}
      * {{ . }} {{ end }}
      *
@@ -65,7 +65,6 @@ class {{ .Name }}Client {
     }
     {{ end }}
 }
-{{ end }}
 
 /**
  * Fills in a router path pattern such as "/user/:id", with the appropriate attribute from
@@ -187,13 +186,13 @@ function trimSlashes(value) {
     return value;
 }
 
-{{ range $name, $type := .Types}}{{ if not $type.Basic }}
+{{ range .Types.NonBasicTypes }}
 /**
  * @typedef { {{ . | JSTypedefType }} } {{ .Name | JoinPackageName | NoPointer }}{{ range .Fields }}
  * @property { {{ .Type | JSPropertyType }} } [{{ .Binding.Name }}]{{ end }}
 */
-{{end }}{{- end }}
+{{- end }}
 
 module.exports = {
-    {{ range .Services }}{{ .Name }}Client,{{ end }}
+    {{ .Service.Name }}Client,
 };

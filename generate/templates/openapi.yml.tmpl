@@ -2,17 +2,16 @@
 #
 #   https://github.com/monadicstack/frodo
 #
-{{ range $service := .Services -}}
 openapi: 3.0.0
 info:
-    title: {{ .Name }}
-    version: "{{ .Version }}"
+    title: {{ .Service.Name }}
+    version: "{{ .Service.Version }}"
 
 servers:
-    - url: {{ .Gateway.PathPrefix | LeadingSlash }}
+    - url: {{ .Service.Gateway.PathPrefix | LeadingSlash }}
 
 paths:
-    {{ range $method := .Functions }}
+    {{ range $method := .Service.Functions }}
     {{ $pathFields := .Gateway.PathParameters }}
     {{ $queryFields := .Gateway.QueryParameters }}
     "{{ .Gateway.Path | OpenAPIPath }}":
@@ -59,7 +58,6 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/{{ .Response.Name }}'
-    {{ end }}
     {{ end }}
 
 components:

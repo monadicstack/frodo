@@ -12,7 +12,7 @@ import (
 	"github.com/monadicstack/respond"
 )
 
-// NewCalculatorServiceGateway accepts your "real" CalculatorService instance (the thing that really does the work), and
+// NewCalculatorServiceGateway accepts your "realsies" CalculatorService instance (the thing that really does the work), and
 // exposes it to other services/clients over RPC. The rpc.Gateway it returns implements http.Handler, so you
 // can pass it to any standard library HTTP server of your choice.
 //

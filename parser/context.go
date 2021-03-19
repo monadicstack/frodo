@@ -19,6 +19,8 @@ import (
 // that were defined in the file, etc. It's the output of Parse() and is the input value when we
 // evaluate Go templates to generate other source files based on this service definition info.
 type Context struct {
+	// --- Fields tracking the input file that we parsed.
+
 	// FileSet is the collection of related files we're going to give to the Go AST parser.
 	FileSet *token.FileSet
 	// File is the entire syntax tree from when we parsed your input file.
@@ -27,40 +29,38 @@ type Context struct {
 	Path string
 	// AbsolutePath is the absolute path to the service definition file we're parsing.
 	AbsolutePath string
+
+	// --- Fields related to orienting ourselves to the user's module/package.
+
+	// Module contains info from "go.mod" about the entire module where the service/package is defined.
+	Module *ModuleDeclaration
 	// InputPackage contains information about the package where the service definition resides.
 	InputPackage *PackageDeclaration
 	// OutputPackage contains information about the package where the generated code will go.
 	OutputPackage *PackageDeclaration
-	// Module contains info from "go.mod" about the entire module where the service/package is defined.
-	Module *ModuleDeclaration
-	// Services encapsulates snapshot info for all service interfaces that were defined in the input file.
-	Services []*ServiceDeclaration
-	// TypeInfo contains the tree of all parsed type information.
-	TypeInfo *packages.Package
-	// Documentation stores the GoDoc comments for the services/functions/models/fields in the parsed code.
-	Documentation Documentation
-	// Tags stores the struct field tags annotated on fields in your input file.
-	Tags Tags
+
+	// --- Fields related to the actual service info that we're parsing.
+
+	// Service contains the parsed info about the service declared in our input file.
+	Service *ServiceDeclaration
 	// Types captures snapshots of every model type, primitive type, and recursive field type for
 	// any field referenced by any of your request/response models. It contains all of the referenced types
 	// for every single field and their fields and their fields, and so on.
 	Types TypeRegistry
+
+	// --- Fields that cache various types of parsed syntax/type info so the parser can look it up easily.
+
+	// Documentation stores the GoDoc comments for the services/functions/models/fields in the parsed code.
+	Documentation Documentation
+	// Tags stores the struct field tags annotated on fields in your input file.
+	Tags Tags
+	// RawTypes contains the tree of all raw, parsed type information as we get it from the AST.
+	RawTypes *packages.Package
 }
 
 // Scope returns the root of the parsed type tree for the source file we parsed.
 func (ctx Context) Scope() *types.Scope {
-	return ctx.TypeInfo.Types.Scope()
-}
-
-// ServiceByName looks through "Services" to find the one with the matching interface name. This search
-// is CASE INSENSITIVE so "fooservice" will find "FooService".
-func (ctx Context) ServiceByName(name string) *ServiceDeclaration {
-	for _, service := range ctx.Services {
-		if strings.EqualFold(service.Name, name) {
-			return service
-		}
-	}
-	return nil
+	return ctx.RawTypes.Types.Scope()
 }
 
 // ServiceDeclaration wrangles all of the information we could grab about the service from the
@@ -74,7 +74,7 @@ type ServiceDeclaration struct {
 	// Gateway contains the configuration HTTP-related options for this service.
 	Gateway *GatewayServiceOptions
 	// Functions are all of the functions explicitly defined on this service.
-	Functions []*ServiceFunctionDeclaration
+	Functions ServiceFunctionDeclarations
 	// Documentation are all of the comments documenting this service.
 	Documentation DocumentationLines
 }
@@ -89,6 +89,9 @@ func (service ServiceDeclaration) FunctionByName(name string) *ServiceFunctionDe
 	}
 	return nil
 }
+
+// ServiceFunctionDeclarations defines a collection of related service functions/operations.
+type ServiceFunctionDeclarations []*ServiceFunctionDeclaration
 
 // ServiceFunctionDeclaration defines a single operation/function within a service (one of the interface functions).
 type ServiceFunctionDeclaration struct {

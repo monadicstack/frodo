@@ -55,18 +55,14 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.InputPackage, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.TypeInfo, ctx.Types, err = ParseTypeInformation(ctx); err != nil {
+	if ctx.RawTypes, ctx.Types, err = ParseTypeInformation(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
 	if ctx.Documentation, ctx.Tags, err = ParseDocumentation(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.Services, err = ParseServices(ctx); err != nil {
+	if ctx.Service, err = ParseService(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
-	}
-
-	if len(ctx.Services) == 0 {
-		return nil, fmt.Errorf("[%s]: input does not contain any service interfaces", inputPath)
 	}
 	return ctx, nil
 }
@@ -119,12 +115,15 @@ func ParseTypeInformation(ctx *Context) (*packages.Package, TypeRegistry, error)
 		"complex128": &TypeDeclaration{Basic: true, Name: "complex128", Kind: reflect.Complex128},
 	}
 
+	// Iterate our top level type definitions and then recursively iterate their fields' types to populate
+	// our entire type registry of every single type that this service requires.
 	for _, scopeKey := range targetScope.Names() {
 		t := targetScope.Lookup(scopeKey).Type()
 		typeDeclaration := registerType(ctx, registry, t)
 		ApplyTypeDocumentation(ctx, typeDeclaration)
 	}
 
+	// Throw out types like channel and function fields since we can't really use those in service transport.
 	for _, typeDeclaration := range registry {
 		if typeDeclaration.Kind == reflect.Invalid {
 			registry.Unregister(typeDeclaration)
@@ -149,8 +148,7 @@ func registerType(ctx *Context, registry TypeRegistry, t types.Type) *TypeDeclar
 	})
 
 	parseTypeRegistryEntry(ctx, registry, t, typeDeclaration)
-	ApplyTypeDocumentation(ctx, typeDeclaration)
-	return typeDeclaration
+	return ApplyTypeDocumentation(ctx, typeDeclaration)
 }
 
 func parseTypeRegistryEntry(ctx *Context, registry TypeRegistry, t types.Type, entry *TypeDeclaration) {
@@ -279,7 +277,7 @@ func FindGoDotMod(dirName string) (string, error) {
 // The keys to these maps are based on the names of the thing whose docs/tags you want; either "SERVICE",
 // "SERVICE.FUNCTION", "MODEL", or "MODEL.FIELD".
 func ParseDocumentation(ctx *Context) (Documentation, Tags, error) {
-	packageDocs, err := doc.NewFromFiles(ctx.TypeInfo.Fset, ctx.TypeInfo.Syntax, ctx.Module.Name)
+	packageDocs, err := doc.NewFromFiles(ctx.RawTypes.Fset, ctx.RawTypes.Syntax, ctx.Module.Name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -373,6 +371,31 @@ func toInterfaceTypeNode(t *doc.Type) (*ast.InterfaceType, bool) {
 	return interfaceNode, ok
 }
 
+// findServiceInterface fetches only the Interface type nodes from the scope/AST that look like service declarations.
+// It will return the name of the interface and the AST node type info for the service interface it finds. You'll
+// receive a non-nil error if there are no service interfaces or more than 1 service interface.
+func findServiceInterface(ctx *Context) (string, *types.Interface, error) {
+	var serviceName string
+	var serviceInterface *types.Interface
+
+	for _, name := range ctx.Scope().Names() {
+		nextService, ok := toServiceInterface(ctx.Scope().Lookup(name))
+		if !ok {
+			continue
+		}
+		if serviceInterface != nil {
+			return "", nil, fmt.Errorf("do not define multiple services in a single file")
+		}
+		serviceInterface = nextService
+		serviceName = name
+	}
+
+	if serviceInterface == nil {
+		return "", nil, fmt.Errorf("file does not contain any service interfaces")
+	}
+	return serviceName, serviceInterface, nil
+}
+
 // toServiceInterface accepts a 'type' from the packages type tree and returns the raw interface data for it
 // if and only if it meets our criteria for being a "service interface"
 //
@@ -406,45 +429,30 @@ func toModelStruct(typeObj types.Object) (*types.Struct, bool) {
 	return underlyingStruct(typeObj.Type())
 }
 
-// ParseServices looks for all 'type XxxService interface' declarations and extracts all
-// service/operation info from it that we need to generate our artifacts. Most of the time
-// the resulting slice will only contain 1 item since its generally good design to only define
-// a single service in a file, but you might have declared multiple.
-func ParseServices(ctx *Context) ([]*ServiceDeclaration, error) {
-	var services []*ServiceDeclaration
+// ParseService looks for 'type XxxService interface' declarations and extracts all
+// service/operation info from it that we need to generate our artifacts. This operation will
+// fail if you have multiple service interfaces in this file.
+func ParseService(ctx *Context) (*ServiceDeclaration, error) {
+	var err error
 
-	for _, name := range ctx.Scope().Names() {
-		interfaceType, ok := toServiceInterface(ctx.Scope().Lookup(name))
-		if !ok {
-			continue
-		}
-
-		service, err := ParseService(ctx, name, interfaceType)
-		if err != nil {
-			return nil, err
-		}
-		services = append(services, service)
+	// First, make sure we have one and only one service defined in this file.
+	serviceName, serviceInterface, err := findServiceInterface(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return services, nil
-}
 
-// ParseService accepts an interface node from the packages type tree and builds the appropriate service
-// declaration containing all service and function info.
-func ParseService(ctx *Context, name string, serviceInterface *types.Interface) (*ServiceDeclaration, error) {
-	service := &ServiceDeclaration{
-		Name:    name,
+	// Now scrape that one and only service's data into a declaration instance.
+	service := ApplyServiceDocumentation(ctx, &ServiceDeclaration{
+		Name:    serviceName,
 		Version: DefaultServiceVersion,
 		Gateway: &GatewayServiceOptions{},
-	}
+	})
 	service.Gateway.Service = service
 
-	functions, err := ParseServiceFunctions(ctx, service, serviceInterface)
+	service.Functions, err = ParseServiceFunctions(ctx, service, serviceInterface)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", service.Name, err)
 	}
-	service.Functions = functions
-
-	ApplyServiceDocumentation(ctx, service)
 	return service, nil
 }
 
@@ -675,9 +683,9 @@ func parseHTTPStatus(statusText string) int {
 
 // ApplyServiceDocumentation takes the documentation comment block above your interface type
 // declaration and applies them to the service snapshot, parsing all Doc Options in the process.
-func ApplyServiceDocumentation(ctx *Context, service *ServiceDeclaration) {
+func ApplyServiceDocumentation(ctx *Context, service *ServiceDeclaration) *ServiceDeclaration {
 	if ctx == nil || service == nil {
-		return
+		return service
 	}
 
 	for _, line := range ctx.Documentation.ForService(service) {
@@ -693,6 +701,7 @@ func ApplyServiceDocumentation(ctx *Context, service *ServiceDeclaration) {
 		}
 	}
 	service.Documentation = service.Documentation.Trim()
+	return service
 }
 
 // ApplyFunctionDocumentation takes the documentation comment block above your interface function
@@ -739,11 +748,12 @@ func ApplyFunctionDocumentation(ctx *Context, function *ServiceFunctionDeclarati
 
 // ApplyTypeDocumentation takes the documentation comment block above your struct/alias type
 // declaration and applies them to the model snapshot, parsing all Doc Options in the process.
-func ApplyTypeDocumentation(ctx *Context, t *TypeDeclaration) {
+func ApplyTypeDocumentation(ctx *Context, t *TypeDeclaration) *TypeDeclaration {
 	if t == nil {
-		return
+		return t
 	}
 	t.Documentation = ctx.Documentation.ForType(t).Trim()
+	return t
 }
 
 // ApplyFieldDocumentation takes the documentation comment block above your struct field

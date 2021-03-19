@@ -13,30 +13,31 @@ import (
 )
 
 {{ $ctx := . }}
-{{ range .Services }}
-// New{{ .Name }}Client creates an RPC client that conforms to the {{ .Name }} interface, but delegates
+{{ $serviceName := .Service.Name }}
+{{ $clientName := (print $serviceName "Client") }}
+
+// New{{ $clientName }} creates an RPC client that conforms to the {{ $serviceName }} interface, but delegates
 // work to remote instances. You must supply the base address of the remote service gateway instance or
-// the load balancer for that service. {{ if .Documentation.NotEmpty }}
-// {{ range .Documentation }}
+// the load balancer for that service. {{ if .Service.Documentation.NotEmpty }}
+// {{ range .Service.Documentation }}
 // {{ . }}{{ end }}{{ end }}
-func New{{ .Name }}Client(address string, options ...rpc.ClientOption) *{{ .Name }}Client {
-	rpcClient := rpc.NewClient("{{ .Name }}", address, options...)
-	rpcClient.PathPrefix = "{{ .Gateway.PathPrefix }}"
-	return &{{ .Name }}Client{Client: rpcClient}
+func New{{ $clientName }}(address string, options ...rpc.ClientOption) *{{ $clientName }} {
+	rpcClient := rpc.NewClient("{{ $serviceName }}", address, options...)
+	rpcClient.PathPrefix = "{{ .Service.Gateway.PathPrefix }}"
+	return &{{ $clientName }}{Client: rpcClient}
 }
 
-// {{ .Name }}Client manages all interaction w/ a remote {{ .Name }} instance by letting you invoke functions
+// {{ $clientName }} manages all interaction w/ a remote {{ $serviceName }} instance by letting you invoke functions
 // on this instance as if you were doing it locally (hence... RPC client). You shouldn't instantiate this
-// manually. Instead, you should utilize the New{{ .Name }}Client() function to properly set this up.
-type {{ .Name }}Client struct {
+// manually. Instead, you should utilize the New{{ $clientName }}() function to properly set this up.
+type {{ $clientName }} struct {
 	rpc.Client
 }
 
-{{ $service := . }}
-{{ range .Functions }}
+{{ range .Service.Functions }}
 {{ range .Documentation }}
 // {{ . }}{{ end }}
-func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name | NoPointer }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name | NoPointer }}, error) {
+func (client *{{ $clientName }}) {{ .Name }} (ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name | NoPointer }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name | NoPointer }}, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
 	}
@@ -50,20 +51,19 @@ func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, reque
 }
 {{ end }}
 
-// {{ .Name }}Proxy fully implements the {{ .Name }} interface, but delegates all operations to a "real"
+// {{ $serviceName }}Proxy fully implements the {{ $serviceName }} interface, but delegates all operations to a "real"
 // instance of the service. You can embed this type in a struct of your choice so you can "override" or
-// decorate operations as you see fit. Any operations on {{ .Name }} that you don't explicitly define will
+// decorate operations as you see fit. Any operations on {{ $serviceName }} that you don't explicitly define will
 // simply delegate to the default implementation of the underlying 'Service' value.
 //
 // Since you have access to the underlying service, you are able to both implement custom handling logic AND
 // call the "real" implementation, so this can be used as special middleware that applies to only certain operations.
-type {{ .Name }}Proxy struct {
-	Service {{ $ctx.InputPackage.Name }}.{{ .Name }}
+type {{ $serviceName }}Proxy struct {
+	Service {{ $ctx.InputPackage.Name }}.{{ $serviceName }}
 }
 
-{{ range .Functions }}
-func (proxy *{{ $service.Name }}Proxy) {{ .Name }} (ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name }}, error) {
+{{ range .Service.Functions }}
+func (proxy *{{ $serviceName }}Proxy) {{ .Name }} (ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name }}, error) {
 	return proxy.Service.{{ .Name }}(ctx, request)
 }
-{{ end }}
 {{ end }}

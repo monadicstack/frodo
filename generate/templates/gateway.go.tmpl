@@ -13,29 +13,30 @@ import (
 )
 
 {{ $ctx := . }}
-{{ range .Services }}
-// New{{ .Name }}Gateway accepts your "real" {{ .Name }} instance (the thing that really does the work), and
+{{ $serviceName := .Service.Name }}
+{{ $gatewayName := (print $serviceName "Gateway") }}
+
+// New{{ $gatewayName }} accepts your "real" {{ $serviceName }} instance (the thing that really does the work), and
 // exposes it to other services/clients over RPC. The rpc.Gateway it returns implements http.Handler, so you
 // can pass it to any standard library HTTP server of your choice.
 //
 //	// How to fire up your service for RPC and/or your REST API
-//	service := {{ $ctx.InputPackage.Name }}.{{ .Name }}{ /* set up to your liking */ }
-//	gateway := {{ $ctx.OutputPackage.Name }}.New{{ .Name }}Gateway(service)
+//	service := {{ $ctx.InputPackage.Name }}.{{ $serviceName }}{ /* set up to your liking */ }
+//	gateway := {{ $ctx.OutputPackage.Name }}.New{{ $gatewayName }}(service)
 //	http.ListenAndServe(":8080", gateway)
 //
 // The default instance works well enough, but you can supply additional options such as WithMiddleware() which
 // accepts any negroni-compatible middleware handlers.
-func New{{ .Name }}Gateway(service {{ $ctx.InputPackage.Name }}.{{ .Name }}, options ...rpc.GatewayOption) rpc.Gateway {
+func New{{ $gatewayName }}(service {{ $ctx.InputPackage.Name }}.{{ $serviceName }}, options ...rpc.GatewayOption) rpc.Gateway {
 	gw := rpc.NewGateway(options...)
-	gw.Name = "{{ .Name }}"
-	gw.PathPrefix = "{{ .Gateway.PathPrefix }}"
+	gw.Name = "{{ $serviceName }}"
+	gw.PathPrefix = "{{ .Service.Gateway.PathPrefix }}"
 
-	{{ $service := . }}
-	{{ range $service.Functions }}
+	{{ range .Service.Functions }}
 	gw.Register(rpc.Endpoint{
 		Method:      "{{ .Gateway.Method }}",
 		Path:        "{{ .Gateway.Path }}",
-		ServiceName: "{{ $service.Name }}",
+		ServiceName: "{{ $ctx.Service.Name }}",
 		Name:        "{{ .Name }}",
 		Handler:     func(w http.ResponseWriter, req *http.Request) {
 			response := respond.To(w, req)
@@ -54,4 +55,3 @@ func New{{ .Name }}Gateway(service {{ $ctx.InputPackage.Name }}.{{ .Name }}, opt
 
 	return gw
 }
-{{end}}

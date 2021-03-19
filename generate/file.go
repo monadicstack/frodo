@@ -51,8 +51,10 @@ func File(ctx *parser.Context, fileTemplate FileTemplate) error {
 	}
 
 	// Step 4: Run the generated source code through "go fmt" (if generating a Go artifact)
+	original := sourceCode
 	sourceCode, err = prettify(fileTemplate, sourceCode)
 	if err != nil {
+		fmt.Println(string(original))
 		return fmt.Errorf("error running 'go fmt': %s: %v", fileTemplate.Name, err)
 	}
 
