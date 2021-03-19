@@ -30,7 +30,7 @@ paths:
                       {{ . }}{{ end }}
                   {{ end }}
                   schema:
-                      type: {{ .Field.Type.JSONType }}
+                      type: {{ .Field.Type | JSONType }}
                 {{ end }}
                 {{ range $queryFields }}
                 - in: query
@@ -40,7 +40,7 @@ paths:
                       {{ . }}{{ end }}
                   {{ end }}
                   schema:
-                      type: {{ .Field.Type.JSONType }}
+                      type: {{ .Field.Type | JSONType }}
                 {{ end }}
             {{ end }}
 
@@ -64,19 +64,23 @@ paths:
 
 components:
     schemas:
-        {{ range $model := .Models }}
-        {{ .Name }}:
-            type: {{ .Type.JSONType }}
+        {{ range .Types.NonBasicTypes }}
+        {{ .Name | NoPointer }}:
+            type: {{ . | JSONType }}
             {{ if .Fields.NotEmpty }}
             properties:
-                {{ range $field := .Fields }}
-                {{ if not .Binding.Omit }}
-                {{ .Binding.Name }}:
-                    type: {{ .Type.JSONType }}
+                {{ range $field := .NonOmittedFields }}
+                {{ .Binding.Name | NoPointer }}:
+                    {{ if .Type.Basic }}type: {{ .Type | JSONType }}{{ end }}
+                    {{ if not .Type.Basic }}$ref: "#/components/schemas/{{ .Type.Name | NoPointer }}"{{ end }}
+                    {{ if and .Type.Basic .Type.SliceLike }}
+                    items:
+                        {{ if .Type.Elem.Basic }}type: {{ .Type.Elem | JSONType }}{{ end }}
+                        {{ if not .Type.Elem.Basic }}$ref: "#/components/schemas/{{ .Type.Elem.Name | NoPointer }}"{{ end }}
+                    {{ end }}
                     {{ if .Documentation.NotEmpty }}description: > {{ range .Documentation }}
                         {{ . }}{{ end }}
                     {{ end }}
                 {{ end }}
-            {{ end }}
             {{ end }}
         {{ end }}

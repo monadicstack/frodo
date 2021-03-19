@@ -5,7 +5,7 @@
 /* global fetch,module */
 'use strict';
 
-const defaultFetch = fetch.bind(window);
+const defaultFetch = fetch && fetch.bind(window);
 
 {{ range $service := .Services }}/**
  * Exposes all of the standard operations for the remote {{ .Name }} service. These RPC calls
@@ -187,13 +187,12 @@ function trimSlashes(value) {
     return value;
 }
 
-{{ range .Models }}
-/** {{ range .Documentation }}
- * {{ . }}{{ end }}
- * @typedef { {{ .Type.JSONType }} } {{ .Name }}{{ range .Fields }}
- * @property { {{ .Type.JSONType }} } {{ .Binding.Name }}{{ end }}
- */
-{{ end }}
+{{ range $name, $type := .Types}}{{ if not $type.Basic }}
+/**
+ * @typedef { {{ . | JSTypedefType }} } {{ .Name | JoinPackageName | NoPointer }}{{ range .Fields }}
+ * @property { {{ .Type | JSPropertyType }} } [{{ .Binding.Name }}]{{ end }}
+*/
+{{end }}{{- end }}
 
 module.exports = {
     {{ range .Services }}{{ .Name }}Client,{{ end }}

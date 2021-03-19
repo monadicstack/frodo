@@ -15,6 +15,7 @@ import (
 // NewCalculatorServiceClient creates an RPC client that conforms to the CalculatorService interface, but delegates
 // work to remote instances. You must supply the base address of the remote service gateway instance or
 // the load balancer for that service.
+//
 // CalculatorService provides the ability to add and subtract at WEB SCALE!
 func NewCalculatorServiceClient(address string, options ...rpc.ClientOption) *CalculatorServiceClient {
 	rpcClient := rpc.NewClient("CalculatorService", address, options...)

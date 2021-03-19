@@ -16,8 +16,9 @@ import (
 {{ range .Services }}
 // New{{ .Name }}Client creates an RPC client that conforms to the {{ .Name }} interface, but delegates
 // work to remote instances. You must supply the base address of the remote service gateway instance or
-// the load balancer for that service. {{ range .Documentation }}
-// {{ . }}{{end}}
+// the load balancer for that service. {{ if .Documentation.NotEmpty }}
+// {{ range .Documentation }}
+// {{ . }}{{ end }}{{ end }}
 func New{{ .Name }}Client(address string, options ...rpc.ClientOption) *{{ .Name }}Client {
 	rpcClient := rpc.NewClient("{{ .Name }}", address, options...)
 	rpcClient.PathPrefix = "{{ .Gateway.PathPrefix }}"
@@ -35,7 +36,7 @@ type {{ .Name }}Client struct {
 {{ range .Functions }}
 {{ range .Documentation }}
 // {{ . }}{{ end }}
-func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name | NonPointer }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name | NonPointer }}, error) {
+func (client *{{ $service.Name }}Client) {{ .Name }} (ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name | NoPointer }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name | NoPointer }}, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
 	}

@@ -292,7 +292,7 @@ func (suite *ContextSuite) TestDocumentation_ForService_ForModel() {
 	}
 	checkModel := func(docs parser.Documentation, name string, expectedLines ...string) {
 		model := &parser.ServiceModelDeclaration{Name: name}
-		modelDocs := docs.ForModel(model)
+		modelDocs := docs.ForType(model)
 		suite.Require().Equal(parser.DocumentationLines(expectedLines).String(), modelDocs.String())
 	}
 	check := func(docs parser.Documentation, name string, expectedLines ...string) {

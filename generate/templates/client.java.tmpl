@@ -96,7 +96,19 @@ class ServiceModel {
 
 {{ range .Models }}
 public class {{ .Name }} extends ServiceModel {
+    {{ range .Fields -}}
+    private {{ .Type | JavaType }} {{ .Binding.Name | ToLowerCamel }};
+    {{ end -}}
 
+    {{ range .Fields }}
+    public void set{{.Binding.Name}}({{ .Type | JavaType }} value) {
+        this.{{ .Binding.Name | ToLowerCamel }} = value;
+    }
+
+    public {{ .Type | JavaType }} get{{ .Binding.Name }}() {
+        return this.{{ .Binding.Name | ToLowerCamel }};
+    }
+    {{ end }}
 }
 {{ end }}
 

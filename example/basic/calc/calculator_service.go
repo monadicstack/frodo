@@ -2,6 +2,8 @@ package calc
 
 import (
 	"context"
+	"net/http"
+	"time"
 )
 
 // CalculatorService provides the ability to add and subtract at WEB SCALE!
@@ -12,12 +14,33 @@ type CalculatorService interface {
 	Sub(context.Context, *SubRequest) (*SubResponse, error)
 }
 
+type PagingStuff struct {
+	Text   string
+	Tokens []string
+	// FixedTokens is 4 strings... please work.
+	FixedTokens [4]string
+	LookerThing
+	Stuff     map[string]uint64
+	Limit     uint16 `json:"take"`
+	Offset    uint64 `json:"skip"`
+	Enabled   bool
+	Timeout   *time.Duration
+	Time      time.Time
+	C         http.Client
+	fooBarBaz time.Time
+}
+
+type LookerThing map[int]string
+
 // AddRequest wrangles the two integers you plan to add together.
 type AddRequest struct {
 	// A is the first number to add.
 	A int
 	// B is the other number to add.
 	B int
+	// Paging is garbage
+	Paging *PagingStuff
+	nope   string
 }
 
 // AddResponse contains the result from adding two numbers.
