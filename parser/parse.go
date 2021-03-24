@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/monadicstack/frodo/internal/naming"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/packages"
 )
@@ -58,7 +59,7 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.Documentation, ctx.Tags, err = ParseDocumentation(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.RawTypes, ctx.Types, err = ParseTypeInformation(ctx); err != nil {
+	if ctx.RawTypes, ctx.Types, err = ParseTypes(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
 	if ctx.Service, err = ParseService(ctx); err != nil {
@@ -67,10 +68,10 @@ func ParseFile(inputPath string) (*Context, error) {
 	return ctx, nil
 }
 
-// ParseTypeInformation runs the syntax tree through the "go/types" processor so that we get detailed
+// ParseTypes runs the syntax tree through the "go/types" processor so that we get detailed
 // type information on all of the structs/types we defined, their fields, and the parameters/outputs
 // of our service functions.
-func ParseTypeInformation(ctx *Context) (*packages.Package, TypeRegistry, error) {
+func ParseTypes(ctx *Context) (*packages.Package, TypeRegistry, error) {
 	config := &packages.Config{
 		Tests: false,
 		Mode:  packages.NeedDeps | packages.NeedName | packages.NeedSyntax | packages.NeedTypes,
@@ -86,34 +87,7 @@ func ParseTypeInformation(ctx *Context) (*packages.Package, TypeRegistry, error)
 
 	targetPackage := loadedPackages[0]
 	targetScope := targetPackage.Types.Scope()
-	registry := TypeRegistry{
-		"string":  &TypeDeclaration{Basic: true, Name: "string", Kind: reflect.String},
-		"bool":    &TypeDeclaration{Basic: true, Name: "bool", Kind: reflect.Bool},
-		"rune":    &TypeDeclaration{Basic: true, Name: "rune", Kind: reflect.Int32},
-		"byte":    &TypeDeclaration{Basic: true, Name: "byte", Kind: reflect.Int8},
-		"int":     &TypeDeclaration{Basic: true, Name: "int", Kind: reflect.Int},
-		"int8":    &TypeDeclaration{Basic: true, Name: "int8", Kind: reflect.Int8},
-		"int16":   &TypeDeclaration{Basic: true, Name: "int16", Kind: reflect.Int16},
-		"int32":   &TypeDeclaration{Basic: true, Name: "int32", Kind: reflect.Int32},
-		"int64":   &TypeDeclaration{Basic: true, Name: "int64", Kind: reflect.Int64},
-		"uint":    &TypeDeclaration{Basic: true, Name: "uint", Kind: reflect.Uint},
-		"uint8":   &TypeDeclaration{Basic: true, Name: "uint8", Kind: reflect.Uint8},
-		"uint16":  &TypeDeclaration{Basic: true, Name: "uint16", Kind: reflect.Uint16},
-		"uint32":  &TypeDeclaration{Basic: true, Name: "uint32", Kind: reflect.Uint32},
-		"uint64":  &TypeDeclaration{Basic: true, Name: "uint64", Kind: reflect.Uint64},
-		"float32": &TypeDeclaration{Basic: true, Name: "float32", Kind: reflect.Float32},
-		"float64": &TypeDeclaration{Basic: true, Name: "float64", Kind: reflect.Float64},
-
-		// Yes, time is technically a struct, but for the purposes of transport, we want to treat
-		// time as an ISO string, so we're special casing this bad boy.
-		"time.Time": &TypeDeclaration{Basic: true, Name: "time.Time", Kind: reflect.String},
-
-		// Not supported in code generation, but there so we don't have nil pointers if you
-		// are silly enough to use them as service function inputs/outputs.
-		"uintptr":    &TypeDeclaration{Basic: true, Name: "uintptr", Kind: reflect.Uintptr},
-		"complex64":  &TypeDeclaration{Basic: true, Name: "complex64", Kind: reflect.Complex64},
-		"complex128": &TypeDeclaration{Basic: true, Name: "complex128", Kind: reflect.Complex128},
-	}
+	registry := NewTypeRegistry()
 
 	// Iterate our top level type definitions and then recursively iterate their fields' types to populate
 	// our entire type registry of every single type that this service requires.
@@ -122,15 +96,7 @@ func ParseTypeInformation(ctx *Context) (*packages.Package, TypeRegistry, error)
 		typeDeclaration := registerType(ctx, registry, t)
 		ApplyTypeDocumentation(ctx, typeDeclaration)
 	}
-
-	// Throw out types like channel and function fields since we can't really use those in service transport.
-	for _, typeDeclaration := range registry {
-		if typeDeclaration.Kind == reflect.Invalid {
-			registry.Unregister(typeDeclaration)
-		}
-	}
-
-	return targetPackage, registry, nil
+	return targetPackage, registry.WithoutInvalid(), nil
 }
 
 func registerType(ctx *Context, registry TypeRegistry, t types.Type) *TypeDeclaration {
@@ -142,62 +108,89 @@ func registerType(ctx *Context, registry TypeRegistry, t types.Type) *TypeDeclar
 	// Add it to the registry before iterating any struct fields so that if one of its fields is this type, we
 	// don't infinitely try to register it over and over (the if check above). A case for this might be like a linked
 	// list where a Node struct might have a pointer to the next Node.
-	typeDeclaration := registry.Register(&TypeDeclaration{
-		Name: typeName(t),
-		Type: t,
-	})
+	name := t.String()
+	name = naming.NoImport(name)
+	name = naming.NoPointer(name)
+	name = naming.CleanPrefix(name)
+	typeDeclaration := registry.Register(&TypeDeclaration{Name: name, Type: t})
 
-	parseTypeRegistryEntry(ctx, registry, t, typeDeclaration)
+	registerTypeEntry(ctx, registry, typeDeclaration, t)
 	return ApplyTypeDocumentation(ctx, typeDeclaration)
 }
 
-func parseTypeRegistryEntry(ctx *Context, registry TypeRegistry, t types.Type, entry *TypeDeclaration) {
+func registerTypeEntry(ctx *Context, registry TypeRegistry, entry *TypeDeclaration, t types.Type) {
 	switch tt := t.(type) {
 	case *types.Pointer:
-		parseTypeRegistryEntry(ctx, registry, tt.Elem(), entry)
+		// We track "pointer-ness" on fields whose type is a pointer, not on the type itself, so just apply
+		// the pointer type's information to the core type entry.
+		registerTypeEntry(ctx, registry, entry, tt.Elem())
+
+	case *types.Struct:
+		// Recursively parse the type information for all of the field members of the struct.
+		entry.Kind = reflect.Struct
+		parseStructFields(ctx, registry, entry, tt)
+
+	case *types.Named:
+		// The "Named" type doesn't actually have any meaningful information. For example, if the declaration
+		// is "type Foo []Bar", the Named type is "Foo", but we need to fill Foo's entry w/ information stored
+		// on the underlying type, "[]Bar".
+		registerTypeEntry(ctx, registry, entry, tt.Underlying())
+
 	case *types.Array:
 		entry.Basic = entry.Type == t
-		entry.Kind = reflect.Slice // for code gen purposes we don't distinguish arrays from slices
+		entry.Kind = reflect.Array
 		entry.Elem = registerType(ctx, registry, tt.Elem())
+
 	case *types.Slice:
 		entry.Basic = entry.Type == t
 		entry.Kind = reflect.Slice
 		entry.Elem = registerType(ctx, registry, tt.Elem())
+
 	case *types.Map:
 		entry.Basic = entry.Type == t
 		entry.Kind = reflect.Map
 		entry.Key = registerType(ctx, registry, tt.Key())
 		entry.Elem = registerType(ctx, registry, tt.Elem())
-	case *types.Struct:
-		entry.Kind = reflect.Struct
-		for _, structField := range flattenedStructFields(tt) {
-			fieldType := registerType(ctx, registry, structField.Type())
-			if fieldType.Kind == reflect.Invalid {
-				continue
-			}
 
-			fieldDecl := &FieldDeclaration{
-				Name:       structField.Name(),
-				ParentType: entry,
-				Type:       fieldType,
-				Pointer:    strings.HasPrefix(structField.Type().String(), "*"), // TODO: handle aliases to pointer types
-			}
-			fieldDecl.Binding = ParseBindingOptions(ctx, fieldDecl, structField)
-			ApplyFieldDocumentation(ctx, fieldDecl)
-			entry.Fields = append(entry.Fields, fieldDecl)
-		}
+	case *types.Basic:
+		// Our default registry should already have all of the basic types pre-populated, so just use that.
+		entry.Kind = registry[t.String()].Kind
+
 	case *types.Interface:
 		entry.Kind = reflect.Interface
-	case *types.Named:
-		parseTypeRegistryEntry(ctx, registry, tt.Underlying(), entry)
-	case *types.Basic:
-		entry.Kind = registry[t.String()].Kind
+
 	default:
 		// We don't allow channels or function types to be considered "valid" types on your request/response
 		// struct fields, so we're going to weed these out.
 		entry.Kind = reflect.Invalid
 		return
 	}
+}
+
+func parseStructFields(ctx *Context, registry TypeRegistry, model *TypeDeclaration, structType *types.Struct) {
+	for _, structField := range flattenedStructFields(structType) {
+		fieldDecl := parseStructField(ctx, registry, model, structField)
+		if fieldDecl == nil {
+			continue
+		}
+		model.Fields = append(model.Fields, fieldDecl)
+	}
+}
+
+func parseStructField(ctx *Context, registry TypeRegistry, model *TypeDeclaration, structField *types.Var) *FieldDeclaration {
+	fieldType := registerType(ctx, registry, structField.Type())
+	if fieldType.Kind == reflect.Invalid {
+		return nil
+	}
+
+	fieldDecl := &FieldDeclaration{
+		Name:       structField.Name(),
+		ParentType: model,
+		Type:       fieldType,
+		Pointer:    pointerType(structField.Type()),
+	}
+	fieldDecl.Binding = ParseBindingOptions(ctx, fieldDecl, structField)
+	return ApplyFieldDocumentation(ctx, fieldDecl)
 }
 
 // ParsePackageInfo overlays your project's "go.mod" file and your input file/path to figure
@@ -759,68 +752,46 @@ func ApplyTypeDocumentation(ctx *Context, t *TypeDeclaration) *TypeDeclaration {
 
 // ApplyFieldDocumentation takes the documentation comment block above your struct field
 // declaration and applies them to the model snapshot, parsing all Doc Options in the process.
-func ApplyFieldDocumentation(ctx *Context, field *FieldDeclaration) {
+func ApplyFieldDocumentation(ctx *Context, field *FieldDeclaration) *FieldDeclaration {
 	if field == nil {
-		return
+		return field
 	}
 	field.Documentation = ctx.Documentation.ForField(field).Trim()
+	return field
 }
 
 // fieldName returns the actual field name that should be used for this attribute within a struct.
 func fieldName(field *ast.Field) string {
-	if embeddedField(field) {
-		return noPointer(noPackage(fieldTypeName(field)))
+	// This is an embedded field, so the name is the raw name of the type.
+	if len(field.Names) == 0 {
+		return naming.NoPointer(naming.NoPackage(types.ExprString(field.Type)))
 	}
 	return field.Names[0].Name
 }
 
-// embeddedField returns true if it looks as though this struct field does not have a name; it just
-// has the type information.
-func embeddedField(field *ast.Field) bool {
-	return len(field.Names) == 0
-}
-
-// noPackage strips of any package prefixes from an identifier (e.g. "context.Context" -> "Context")
-func noPackage(ident string) string {
-	period := strings.LastIndex(ident, ".")
-	if period < 0 {
-		return ident
-	}
-	return ident[period+1:]
-}
-
-// noPointer strips off any "*" prefix your type identifier might have (e.g. "*Foo" -> "Foo")
-func noPointer(ident string) string {
-	return strings.TrimLeft(ident, "*")
-}
-
-func typeName(t types.Type) string {
-	name := t.String()
-
-	// Third party packages include the entire import path and package info (e.g. "github.com/module/pkg/subpkg.Foo")
-	slash := strings.LastIndex(name, "/")
-	if slash >= 0 {
-		name = name[slash+1:]
+// pointerType determines if 't' represents a pointer type; either directly or it's an alias of one... or
+// an alias of an alias of one, etc.
+func pointerType(t types.Type) bool {
+	if _, ok := t.(*types.Pointer); ok {
+		return true
 	}
 
-	// HACK: Depending on the context, types defined in the input file may be described w/ this prefix.
-	// Strip that off because it's not a "real" package prefix.
-	if strings.HasPrefix(name, "command-line-arguments.") {
-		return name[23:]
+	// You've hit some "root" type like a basic type or something like that, so it's definitely not a pointer.
+	underlying := t.Underlying()
+	if t == underlying {
+		return false
 	}
-	if strings.HasPrefix(name, "*command-line-arguments.") {
-		return name[24:]
-	}
-	return name
+	return pointerType(underlying)
 }
 
-func fieldTypeName(field *ast.Field) string {
-	return types.ExprString(field.Type)
-}
-
+// varName takes a struct attribute and returns the simple name that we'll use in our context. This
+// handles standard, named fields as well as embedded fields.
 func varName(v *types.Var) string {
 	if v.Embedded() {
-		return noPointer(noPackage(v.Type().String()))
+		name := v.Type().String()
+		name = naming.NoPackage(name)
+		name = naming.NoPointer(name)
+		return name
 	}
 	return v.Name()
 }

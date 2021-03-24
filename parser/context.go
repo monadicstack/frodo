@@ -530,10 +530,15 @@ func (reg TypeRegistry) Register(entry *TypeDeclaration) *TypeDeclaration {
 	return entry
 }
 
-// Unregister removes the given type from the type registry.
-func (reg TypeRegistry) Unregister(entry *TypeDeclaration) {
-	key := reg.key(entry.Type, entry.Name)
-	delete(reg, key)
+// WithoutInvalid removes all entries for types whose 'Kind' is 'Invalid'. This ensures that
+// your context doesn't contain any entries for fields/types that we don't support.
+func (reg TypeRegistry) WithoutInvalid() TypeRegistry {
+	for key, typeDeclaration := range reg {
+		if typeDeclaration.Kind == reflect.Invalid {
+			delete(reg, key)
+		}
+	}
+	return reg
 }
 
 // NonBasicTypes returns a slice containing only types not declared as "Basic". This way you only
@@ -555,4 +560,36 @@ func (reg TypeRegistry) key(t types.Type, name string) string {
 	name = naming.NoPointer(name)
 	name = naming.CleanPrefix(name)
 	return strings.ToLower(name)
+}
+
+// NewTypeRegistry creates a new type registry that is pre-filled with all of the base types already registered.
+func NewTypeRegistry() TypeRegistry {
+	return TypeRegistry{
+		"string":  &TypeDeclaration{Basic: true, Name: "string", Kind: reflect.String},
+		"bool":    &TypeDeclaration{Basic: true, Name: "bool", Kind: reflect.Bool},
+		"rune":    &TypeDeclaration{Basic: true, Name: "rune", Kind: reflect.Int32},
+		"byte":    &TypeDeclaration{Basic: true, Name: "byte", Kind: reflect.Int8},
+		"int":     &TypeDeclaration{Basic: true, Name: "int", Kind: reflect.Int},
+		"int8":    &TypeDeclaration{Basic: true, Name: "int8", Kind: reflect.Int8},
+		"int16":   &TypeDeclaration{Basic: true, Name: "int16", Kind: reflect.Int16},
+		"int32":   &TypeDeclaration{Basic: true, Name: "int32", Kind: reflect.Int32},
+		"int64":   &TypeDeclaration{Basic: true, Name: "int64", Kind: reflect.Int64},
+		"uint":    &TypeDeclaration{Basic: true, Name: "uint", Kind: reflect.Uint},
+		"uint8":   &TypeDeclaration{Basic: true, Name: "uint8", Kind: reflect.Uint8},
+		"uint16":  &TypeDeclaration{Basic: true, Name: "uint16", Kind: reflect.Uint16},
+		"uint32":  &TypeDeclaration{Basic: true, Name: "uint32", Kind: reflect.Uint32},
+		"uint64":  &TypeDeclaration{Basic: true, Name: "uint64", Kind: reflect.Uint64},
+		"float32": &TypeDeclaration{Basic: true, Name: "float32", Kind: reflect.Float32},
+		"float64": &TypeDeclaration{Basic: true, Name: "float64", Kind: reflect.Float64},
+
+		// Yes, time is technically a struct, but for the purposes of transport, we want to treat
+		// time as an ISO string, so we're special casing this bad boy.
+		"time.Time": &TypeDeclaration{Basic: true, Name: "time.Time", Kind: reflect.String},
+
+		// Not supported in code generation, but there so we don't have nil pointers if you
+		// are silly enough to use them as service function inputs/outputs.
+		"uintptr":    &TypeDeclaration{Basic: true, Name: "uintptr", Kind: reflect.Uintptr},
+		"complex64":  &TypeDeclaration{Basic: true, Name: "complex64", Kind: reflect.Complex64},
+		"complex128": &TypeDeclaration{Basic: true, Name: "complex128", Kind: reflect.Complex128},
+	}
 }
