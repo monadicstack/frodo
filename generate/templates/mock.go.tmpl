@@ -13,39 +13,40 @@ import (
 )
 
 {{ $ctx := . }}
-{{ range $service := .Services }}
-// Mock{{ .Name }} allows you to program behaviors into a mock instance of {{ .Name }}. You supply
+{{ $serviceName := .Service.Name }}
+{{ $mockName := (print "Mock" $serviceName) }}
+// {{ $mockName }} allows you to program behaviors into a mock instance of {{ $serviceName }}. You supply
 // dynamic functions named "XxxFunc" to provide the custom behavior; so if your service has a function
 // called 'CreateUser', you supply a function for 'CreateUserFunc'.
 //
 // You do not need to supply behaviors for every single service function; just the ones you plan to
 // test. If you do invoke a function without a programmed behavior, it will just return an error
 // with a message indicating that it wasn't implemented.
-type Mock{{ .Name }} struct {
-	{{ range $function := .Functions -}}
+type {{ $mockName }} struct {
+	{{ range $function := .Service.Functions -}}
 	  {{ .Name }}Func func(context.Context, *{{ $ctx.InputPackage.Name }}.{{ .Request.Name }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name }}, error)
 	{{ end }}
 	Calls struct {
-		{{ range $function := .Functions -}}
-		  {{ .Name }} calls{{ $service.Name }}{{ .Name }}
+		{{ range $function := .Service.Functions -}}
+		  {{ .Name }} calls{{ $serviceName }}{{ .Name }}
 		{{ end }}
 	}
 }
 
-{{ range $function := .Functions }}
-/* ---- {{ $service.Name }}.{{ .Name }} Mock Support For  ---- */
+{{ range $function := .Service.Functions }}
+/* ---- {{ $serviceName }}.{{ .Name }} Mock Support For  ---- */
 
-func (mock *Mock{{ $service.Name }}) {{ .Name }}(ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name }}, error) {
+func (mock *{{ $mockName }}) {{ .Name }}(ctx context.Context, request *{{ $ctx.InputPackage.Name }}.{{ .Request.Name }}) (*{{ $ctx.InputPackage.Name }}.{{ .Response.Name }}, error) {
 	mock.Calls.{{ .Name }} = mock.Calls.{{ .Name }}.invoked(*request)
 	if mock.{{ .Name }}Func == nil {
-		return nil, fmt.Errorf("{{ $service.Name }}.{{ .Name }} not implemented")
+		return nil, fmt.Errorf("{{ $serviceName }}.{{ .Name }} not implemented")
 	}
 	response, err := mock.{{ .Name }}Func(ctx, request)
 	return response, err
 }
 
-{{ $callsType := (print "calls" $service.Name .Name) }}
-{{ $callType := (print "call" $service.Name .Name) }}
+{{ $callsType := (print "calls" $serviceName .Name) }}
+{{ $callType := (print "call" $serviceName .Name) }}
 {{ $requestType := (print $ctx.InputPackage.Name "." .Request.Name) }}
 type {{ $callType }} struct {
 	Time    time.Time
@@ -84,6 +85,5 @@ func (calls {{ $callsType }}) TimesMatching(pred func({{ $requestType }}) bool) 
 	}
 	return count
 }
-{{ end }}
 {{ end }}
 

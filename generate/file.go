@@ -8,9 +8,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"text/template"
 
+	"github.com/monadicstack/frodo/internal/naming"
 	"github.com/monadicstack/frodo/parser"
 )
 
@@ -49,8 +51,10 @@ func File(ctx *parser.Context, fileTemplate FileTemplate) error {
 	}
 
 	// Step 4: Run the generated source code through "go fmt" (if generating a Go artifact)
+	original := sourceCode
 	sourceCode, err = prettify(fileTemplate, sourceCode)
 	if err != nil {
+		fmt.Println(string(original))
 		return fmt.Errorf("error running 'go fmt': %s: %v", fileTemplate.Name, err)
 	}
 
@@ -111,14 +115,15 @@ type FileTemplate struct {
 // Eval runs the given value through the Go template resolved by looking up Path in the FileSystem. The 'data'
 // value is the root context value we'll pass to the template when running Execute(). This will return the complete
 // set of bytes for the output file contents.
-func (tmpl FileTemplate) Eval(data interface{}) ([]byte, error) {
-	templateData, err := fs.ReadFile(tmpl.FileSystem, tmpl.Path)
+func (t FileTemplate) Eval(data interface{}) ([]byte, error) {
+	templateData, err := fs.ReadFile(t.FileSystem, t.Path)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read template: %w", err)
 	}
 
 	templateText := string(templateData)
-	codeTemplate, err := template.New(tmpl.Name).Funcs(templateFuncs).Parse(templateText)
+	codeTemplate, err := template.New(t.Name).Funcs(templateFuncs).Parse(templateText)
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse template: %w", err)
 	}
@@ -143,49 +148,147 @@ func prettify(t FileTemplate, sourceCode []byte) ([]byte, error) {
 // templateFuncs are all of pipe functions we want available when evaluating the Go template
 // to generate an artifact's source code.
 var templateFuncs = template.FuncMap{
-	// LeadingSlash adds... a leading slash to the given string.
-	"LeadingSlash": func(value string) string {
-		if strings.HasPrefix(value, "/") {
-			return value
+	// General purpose string manipulators
+	"NoPointer":       naming.NoPointer,
+	"NoPackage":       naming.NoPackage,
+	"JoinPackageName": naming.JoinPackageName,
+	"LeadingSlash":    naming.LeadingSlash,
+	"ToLowerCamel":    naming.ToLowerCamel,
+	"ToUpperCamel":    naming.ToUpperCamel,
+	"EmptyString":     naming.EmptyString,
+	"NotEmptyString":  naming.NotEmptyString,
+	"PathTokens":      naming.PathTokens,
+	"ToLower":         strings.ToLower,
+	"ToUpper":         strings.ToUpper,
+
+	// Language/format-specific value conversions
+	"JSPropertyType": jsFunctions{}.convertPropertyType,
+	"JSTypedefType":  jsFunctions{}.convertTypedefType,
+	"JSONType":       jsonFunctions{}.convertType,
+	"JavaPackage":    javaFunctions{}.convertPackage,
+	"JavaType":       javaFunctions{}.convertType,
+	"OpenAPIPath":    openapiFunctions{}.convertPath,
+}
+
+type jsFunctions struct{}
+
+func (funcs jsFunctions) convertPropertyType(t *parser.TypeDeclaration) string {
+	if !t.Basic {
+		return naming.JoinPackageName(naming.NoPointer(t.Name))
+	}
+	return funcs.convertTypedefType(t)
+}
+
+func (funcs jsFunctions) convertTypedefType(t *parser.TypeDeclaration) string {
+	switch t.Kind {
+	case reflect.String:
+		return "string"
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return "number"
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "number"
+	case reflect.Float32, reflect.Float64:
+		return "number"
+	case reflect.Complex64, reflect.Complex128:
+		return "number"
+	case reflect.Array, reflect.Slice:
+		elemType := funcs.convertPropertyType(t.Elem)
+		return "Array<" + elemType + ">"
+	case reflect.Map:
+		keyType := funcs.convertPropertyType(t.Key)
+		elemType := funcs.convertPropertyType(t.Elem)
+		return "Map<" + keyType + "," + elemType + ">"
+	case reflect.Struct, reflect.Interface:
+		return "object"
+	default:
+		return "*"
+	}
+}
+
+type jsonFunctions struct{}
+
+func (funcs jsonFunctions) convertType(t *parser.TypeDeclaration) string {
+	switch t.Kind {
+	case reflect.String:
+		return "string"
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return "number"
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "number"
+	case reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128:
+		return "number"
+	case reflect.Array, reflect.Slice:
+		return "array"
+	default:
+		return "object"
+	}
+}
+
+type javaFunctions struct{}
+
+func (funcs javaFunctions) convertPackage(packageName string) string {
+	// Split the package like "github.com/myorg/mymodule/a/b/c" into the segments
+	// separated by slashes. Omit the first segment which is the address; regardless
+	// of whether it's GitHub, GitLab, or whatever. Then put the remaining segments
+	// back together using periods. In the example, the result would be
+	// "myorg.mymodule.a.b.c"
+	segments := strings.Split(packageName, "/")
+	segments = segments[1:]
+	return strings.Join(segments, ".")
+}
+
+func (funcs javaFunctions) convertType(t *parser.TypeDeclaration) string {
+	switch t.Kind {
+	case reflect.String:
+		return "String"
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Int8, reflect.Uint8:
+		return "byte"
+	case reflect.Int16, reflect.Uint16:
+		return "short"
+	case reflect.Int, reflect.Int32, reflect.Uint, reflect.Uint32:
+		return "int"
+	case reflect.Int64, reflect.Uint64:
+		return "long"
+	case reflect.Float32:
+		return "float"
+	case reflect.Float64:
+		return "double"
+	case reflect.Complex64, reflect.Complex128:
+		return "double"
+	case reflect.Array, reflect.Slice:
+		elemType := funcs.convertType(t.Elem)
+		return "java.util.List<" + elemType + ">"
+	case reflect.Map:
+		elemType := funcs.convertType(t.Elem)
+		keyType := funcs.convertType(t.Key)
+		return "java.util.Map<" + keyType + "," + elemType + ">"
+	case reflect.Struct, reflect.Interface:
+		return t.Name
+	default:
+		return "Object"
+	}
+}
+
+type openapiFunctions struct{}
+
+// convertPath converts a router-compatible path pattern like "/foo/:bar/baz/:goo" to the equivalent
+// path that OpenAPI/Swagger prefers: "/foo/{bar}/baz/{goo}"
+func (funcs openapiFunctions) convertPath(path string) string {
+	segments := strings.Split(path, "/")
+	for i, segment := range segments {
+		if strings.HasPrefix(segment, ":") {
+			segments[i] = "{" + segment[1:] + "}"
 		}
-		return "/" + value
-	},
-	// NonPointer simply strips any Go reference/de-reference tokens from the beginning of the string. For
-	// example "*Foo" or "&Foo" will become just "Foo" while "Bar" will be left alone.
-	"NonPointer": func(value string) string {
-		if strings.HasPrefix(value, "*") {
-			return value[1:]
-		}
-		if strings.HasPrefix(value, "&") {
-			return value[1:]
-		}
-		return value
-	},
-	// ToLower converts the string to lower case.
-	"ToLower": func(value string) string {
-		return strings.ToLower(value)
-	},
-	// EmptyString is a predicate that returns true when the input value is "".
-	"EmptyString": func(value string) bool {
-		return value == ""
-	},
-	// NotEmptyString is a predicate that returns true when the input value is anything but "".
-	"NotEmptyString": func(value string) bool {
-		return value != ""
-	},
-	// OpenAPIPath converts a router-compatible path pattern like "/foo/:bar/baz/:goo" to the equivalent
-	// path that OpenAPI/Swagger prefers: "/foo/{bar}/baz/{goo}"
-	"OpenAPIPath": func(path string) string {
-		segments := strings.Split(path, "/")
-		for i, segment := range segments {
-			if strings.HasPrefix(segment, ":") {
-				segments[i] = "{" + segment[1:] + "}"
-			}
-		}
-		path = strings.Join(segments, "/")
-		if strings.HasPrefix(path, "/") {
-			return path
-		}
-		return "/" + path
-	},
+	}
+	path = strings.Join(segments, "/")
+	if strings.HasPrefix(path, "/") {
+		return path
+	}
+	return "/" + path
 }

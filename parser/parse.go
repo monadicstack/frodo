@@ -10,9 +10,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 
+	"github.com/monadicstack/frodo/internal/naming"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/packages"
 )
@@ -54,29 +56,22 @@ func ParseFile(inputPath string) (*Context, error) {
 	if ctx.InputPackage, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.TypeInfo, err = ParseTypeInformation(ctx); err != nil {
-		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
-	}
 	if ctx.Documentation, ctx.Tags, err = ParseDocumentation(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.Models, err = ParseModels(ctx); err != nil {
+	if ctx.RawTypes, ctx.Types, err = ParseTypes(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
 	}
-	if ctx.Services, err = ParseServices(ctx); err != nil {
+	if ctx.Service, err = ParseService(ctx); err != nil {
 		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
-	}
-
-	if len(ctx.Services) == 0 {
-		return nil, fmt.Errorf("[%s]: input does not contain any service interfaces", inputPath)
 	}
 	return ctx, nil
 }
 
-// ParseTypeInformation runs the syntax tree through the "go/types" processor so that we get detailed
+// ParseTypes runs the syntax tree through the "go/types" processor so that we get detailed
 // type information on all of the structs/types we defined, their fields, and the parameters/outputs
 // of our service functions.
-func ParseTypeInformation(ctx *Context) (*packages.Package, error) {
+func ParseTypes(ctx *Context) (*packages.Package, TypeRegistry, error) {
 	config := &packages.Config{
 		Tests: false,
 		Mode:  packages.NeedDeps | packages.NeedName | packages.NeedSyntax | packages.NeedTypes,
@@ -84,12 +79,118 @@ func ParseTypeInformation(ctx *Context) (*packages.Package, error) {
 
 	loadedPackages, err := packages.Load(config, ctx.Path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(loadedPackages) != 1 {
-		return nil, fmt.Errorf("multiple packages defined in input path; should be one")
+		return nil, nil, fmt.Errorf("multiple packages defined in input path; should be one")
 	}
-	return loadedPackages[0], nil
+
+	targetPackage := loadedPackages[0]
+	targetScope := targetPackage.Types.Scope()
+	registry := NewTypeRegistry()
+
+	// Iterate our top level type definitions and then recursively iterate their fields' types to populate
+	// our entire type registry of every single type that this service requires.
+	for _, scopeKey := range targetScope.Names() {
+		t := targetScope.Lookup(scopeKey).Type()
+		typeDeclaration := registerType(ctx, registry, t)
+		ApplyTypeDocumentation(ctx, typeDeclaration)
+	}
+	return targetPackage, registry.WithoutInvalid(), nil
+}
+
+func registerType(ctx *Context, registry TypeRegistry, t types.Type) *TypeDeclaration {
+	// We've already added this type to the registry, so avoid circular recursion.
+	if entry, ok := registry.Lookup(t); ok {
+		return entry
+	}
+
+	// Add it to the registry before iterating any struct fields so that if one of its fields is this type, we
+	// don't infinitely try to register it over and over (the if check above). A case for this might be like a linked
+	// list where a Node struct might have a pointer to the next Node.
+	name := t.String()
+	name = naming.NoImport(name)
+	name = naming.NoPointer(name)
+	name = naming.CleanPrefix(name)
+	typeDeclaration := registry.Register(&TypeDeclaration{Name: name, Type: t})
+
+	registerTypeEntry(ctx, registry, typeDeclaration, t)
+	return ApplyTypeDocumentation(ctx, typeDeclaration)
+}
+
+func registerTypeEntry(ctx *Context, registry TypeRegistry, entry *TypeDeclaration, t types.Type) {
+	switch tt := t.(type) {
+	case *types.Pointer:
+		// We track "pointer-ness" on fields whose type is a pointer, not on the type itself, so just apply
+		// the pointer type's information to the core type entry.
+		registerTypeEntry(ctx, registry, entry, tt.Elem())
+
+	case *types.Struct:
+		// Recursively parse the type information for all of the field members of the struct.
+		entry.Kind = reflect.Struct
+		parseStructFields(ctx, registry, entry, tt)
+
+	case *types.Named:
+		// The "Named" type doesn't actually have any meaningful information. For example, if the declaration
+		// is "type Foo []Bar", the Named type is "Foo", but we need to fill Foo's entry w/ information stored
+		// on the underlying type, "[]Bar".
+		registerTypeEntry(ctx, registry, entry, tt.Underlying())
+
+	case *types.Array:
+		entry.Basic = entry.Type == t
+		entry.Kind = reflect.Array
+		entry.Elem = registerType(ctx, registry, tt.Elem())
+
+	case *types.Slice:
+		entry.Basic = entry.Type == t
+		entry.Kind = reflect.Slice
+		entry.Elem = registerType(ctx, registry, tt.Elem())
+
+	case *types.Map:
+		entry.Basic = entry.Type == t
+		entry.Kind = reflect.Map
+		entry.Key = registerType(ctx, registry, tt.Key())
+		entry.Elem = registerType(ctx, registry, tt.Elem())
+
+	case *types.Basic:
+		// Our default registry should already have all of the basic types pre-populated, so just use that.
+		entry.Kind = registry[t.String()].Kind
+
+	case *types.Interface:
+		entry.Kind = reflect.Interface
+
+	default:
+		// We don't allow channels or function types to be considered "valid" types on your request/response
+		// struct fields, so we're going to weed these out.
+		entry.Kind = reflect.Invalid
+		return
+	}
+}
+
+func parseStructFields(ctx *Context, registry TypeRegistry, model *TypeDeclaration, structType *types.Struct) {
+	for _, structField := range flattenedStructFields(structType) {
+		fieldDecl := parseStructField(ctx, registry, model, structField)
+		if fieldDecl == nil {
+			continue
+		}
+		model.Fields = append(model.Fields, fieldDecl)
+	}
+}
+
+func parseStructField(ctx *Context, registry TypeRegistry, model *TypeDeclaration, structField *types.Var) *FieldDeclaration {
+	fieldType := registerType(ctx, registry, structField.Type())
+	if fieldType.Kind == reflect.Invalid {
+		return nil
+	}
+
+	fieldDecl := &FieldDeclaration{
+		Name:       structField.Name(),
+		ParentType: model,
+		Type:       fieldType,
+		Pointer:    pointerType(structField.Type()),
+	}
+	fieldDecl.Binding = ParseBindingOptions(ctx, fieldDecl, structField)
+	return ApplyFieldDocumentation(ctx, fieldDecl)
 }
 
 // ParsePackageInfo overlays your project's "go.mod" file and your input file/path to figure
@@ -165,106 +266,12 @@ func FindGoDotMod(dirName string) (string, error) {
 	return FindGoDotMod(filepath.Dir(dirName))
 }
 
-// ParseFieldType looks at the Go parser's type information for a given model attribute and extracts
-// all of the various info we need to get a complete picture of the type and how to unravel any
-// aliasing that might be going on.
-func ParseFieldType(ctx *Context, t types.Type) *FieldType {
-	fieldType := &FieldType{
-		Name:       typeName(t),
-		Type:       t,
-		Underlying: underlyingType(t),
-	}
-
-	switch fieldTypeType := fieldType.Type.(type) {
-	case *types.Pointer:
-		fieldType.Pointer = true
-		fieldType.Type = fieldTypeType.Elem()
-		fieldType.Underlying = underlyingType(fieldType.Type)
-	case *types.Array:
-		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
-	case *types.Slice:
-		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
-	case *types.Chan:
-		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
-	case *types.Map:
-		fieldType.Key = ParseFieldType(ctx, fieldTypeType.Key())
-		fieldType.Elem = ParseFieldType(ctx, fieldTypeType.Elem())
-	}
-
-	fieldType.JSONType = toJSON(ctx, fieldType.Underlying)
-	return fieldType
-}
-
-// toJSON maps the raw Go type to the closest JSON equivalent type (e.g. uint32 -> "number").
-func toJSON(ctx *Context, t types.Type) string {
-	switch raw := t.(type) {
-	case *types.Pointer:
-		return toJSON(ctx, raw.Elem())
-	case *types.Array, *types.Slice:
-		return "array"
-	}
-
-	jsonType, ok := jsonTypeMapping[t.String()]
-	if ok {
-		return jsonType
-	}
-	return "object"
-}
-
-var jsonTypeMapping = map[string]string{
-	"string":    "string",
-	"bool":      "boolean",
-	"rune":      "number",
-	"byte":      "number",
-	"int":       "number",
-	"int8":      "number",
-	"int16":     "number",
-	"int32":     "number",
-	"int64":     "number",
-	"uint":      "number",
-	"uint8":     "number",
-	"uint16":    "number",
-	"uint32":    "number",
-	"uint64":    "number",
-	"uintptr":   "number",
-	"float32":   "number",
-	"float64":   "number",
-	"time.Time": "string",
-
-	// Special case for 'time.Time' when you've dug down to the underlying root type.
-	"struct{wall uint64; ext int64; loc *time.Location}": "string",
-}
-
-func underlyingType(fieldType types.Type) types.Type {
-	name := fieldType.String()
-
-	// In an idea world we'd know if the type implemented MarshalJSON/UnmarshalJSON so
-	// that we know if the RPC transport for struct types is an object or some other type.
-	// In most cases, the transport for "time.Time" is an ISO8601 string, so we need to short
-	// circuit the recursion and stop here rather than going deeper to the "struct{}" type
-	// which is not how time is marshaled in Go.
-	if name == "time.Time" || name == "*time.Time" {
-		return fieldType
-	}
-
-	pointer, ok := fieldType.(*types.Pointer)
-	if ok {
-		return pointer.Elem()
-	}
-
-	underlying := fieldType.Underlying()
-	if underlying != fieldType {
-		return underlyingType(underlying)
-	}
-	return fieldType
-}
-
 // ParseDocumentation runs go/doc parsing on your input file to extract all of your documentation, comments, and
 // struct field tags. It returns 2 specialized lookup maps; one for doc comments and one for the struct field tags.
 // The keys to these maps are based on the names of the thing whose docs/tags you want; either "SERVICE",
 // "SERVICE.FUNCTION", "MODEL", or "MODEL.FIELD".
 func ParseDocumentation(ctx *Context) (Documentation, Tags, error) {
-	packageDocs, err := doc.NewFromFiles(ctx.TypeInfo.Fset, ctx.TypeInfo.Syntax, ctx.Module.Name)
+	packageDocs, err := doc.NewFromFiles(ctx.FileSet, []*ast.File{ctx.File}, ctx.Module.Name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -358,6 +365,31 @@ func toInterfaceTypeNode(t *doc.Type) (*ast.InterfaceType, bool) {
 	return interfaceNode, ok
 }
 
+// findServiceInterface fetches only the Interface type nodes from the scope/AST that look like service declarations.
+// It will return the name of the interface and the AST node type info for the service interface it finds. You'll
+// receive a non-nil error if there are no service interfaces or more than 1 service interface.
+func findServiceInterface(ctx *Context) (string, *types.Interface, error) {
+	var serviceName string
+	var serviceInterface *types.Interface
+
+	for _, name := range ctx.Scope().Names() {
+		nextService, ok := toServiceInterface(ctx.Scope().Lookup(name))
+		if !ok {
+			continue
+		}
+		if serviceInterface != nil {
+			return "", nil, fmt.Errorf("do not define multiple services in a single file")
+		}
+		serviceInterface = nextService
+		serviceName = name
+	}
+
+	if serviceInterface == nil {
+		return "", nil, fmt.Errorf("file does not contain any service interfaces")
+	}
+	return serviceName, serviceInterface, nil
+}
+
 // toServiceInterface accepts a 'type' from the packages type tree and returns the raw interface data for it
 // if and only if it meets our criteria for being a "service interface"
 //
@@ -391,45 +423,30 @@ func toModelStruct(typeObj types.Object) (*types.Struct, bool) {
 	return underlyingStruct(typeObj.Type())
 }
 
-// ParseServices looks for all 'type XxxService interface' declarations and extracts all
-// service/operation info from it that we need to generate our artifacts. Most of the time
-// the resulting slice will only contain 1 item since its generally good design to only define
-// a single service in a file, but you might have declared multiple.
-func ParseServices(ctx *Context) ([]*ServiceDeclaration, error) {
-	var services []*ServiceDeclaration
+// ParseService looks for 'type XxxService interface' declarations and extracts all
+// service/operation info from it that we need to generate our artifacts. This operation will
+// fail if you have multiple service interfaces in this file.
+func ParseService(ctx *Context) (*ServiceDeclaration, error) {
+	var err error
 
-	for _, name := range ctx.Scope().Names() {
-		interfaceType, ok := toServiceInterface(ctx.Scope().Lookup(name))
-		if !ok {
-			continue
-		}
-
-		service, err := ParseService(ctx, name, interfaceType)
-		if err != nil {
-			return nil, err
-		}
-		services = append(services, service)
+	// First, make sure we have one and only one service defined in this file.
+	serviceName, serviceInterface, err := findServiceInterface(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return services, nil
-}
 
-// ParseService accepts an interface node from the packages type tree and builds the appropriate service
-// declaration containing all service and function info.
-func ParseService(ctx *Context, name string, serviceInterface *types.Interface) (*ServiceDeclaration, error) {
-	service := &ServiceDeclaration{
-		Name:    name,
+	// Now scrape that one and only service's data into a declaration instance.
+	service := ApplyServiceDocumentation(ctx, &ServiceDeclaration{
+		Name:    serviceName,
 		Version: DefaultServiceVersion,
 		Gateway: &GatewayServiceOptions{},
-	}
+	})
 	service.Gateway.Service = service
 
-	functions, err := ParseServiceFunctions(ctx, service, serviceInterface)
+	service.Functions, err = ParseServiceFunctions(ctx, service, serviceInterface)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", service.Name, err)
 	}
-	service.Functions = functions
-
-	ApplyServiceDocumentation(ctx, service)
 	return service, nil
 }
 
@@ -498,70 +515,15 @@ func ParseServiceFunction(ctx *Context, service *ServiceDeclaration, funcType *t
 	// We're enforcing a convention that you define your request/response structs in the same file as the
 	// services that they correspond to. Even if you want to share common types across services, that's fine,
 	// but you need to define an alias or a new type where the common type is embedded in that file.
-	if function.Request = ctx.ModelByName(param2.Type().String()); function.Request == nil {
+	if function.Request, _ = ctx.Types.Lookup(param2.Type()); function.Request == nil {
 		return nil, fmt.Errorf("%s(): request struct must be defined in %s", function.Name, ctx.Path)
 	}
-	if function.Response = ctx.ModelByName(result1.Type().String()); function.Response == nil {
+	if function.Response, _ = ctx.Types.Lookup(result1.Type()); function.Response == nil {
 		return nil, fmt.Errorf("%s(): response struct must be defined in %s", function.Name, ctx.Path)
 	}
 
 	ApplyFunctionDocumentation(ctx, function)
 	return function, nil
-}
-
-// ParseModels looks for all of the structs defined in your input file and captures them as model declarations.
-func ParseModels(ctx *Context) ([]*ServiceModelDeclaration, error) {
-	var models []*ServiceModelDeclaration
-	for _, typeName := range ctx.Scope().Names() {
-		scopeObj := ctx.Scope().Lookup(typeName)
-		if _, ok := toModelStruct(scopeObj); !ok {
-			continue
-		}
-
-		model, err := ParseModel(ctx, scopeObj.Type())
-		if err != nil {
-			return nil, err
-		}
-		models = append(models, model)
-	}
-	return models, nil
-}
-
-// ParseModel accepts an exported struct type and captures all of the model's details including its doc options
-// and all of the field/type information.
-func ParseModel(ctx *Context, modelType types.Type) (*ServiceModelDeclaration, error) {
-	model := &ServiceModelDeclaration{
-		Name: noPackage(noPointer(modelType.String())),
-		Type: ParseFieldType(ctx, modelType),
-	}
-
-	fields, err := ParseModelFields(ctx, model, modelType)
-	if err != nil {
-		return nil, fmt.Errorf("%s: field parsing error: %v", model.Name, err)
-	}
-
-	model.Fields = fields
-	return model, nil
-}
-
-// ParseModelFields accepts the info for a model struct and constructs declarations for all of the fields
-// that belong to it. This includes all of the doc options and expanded type info.
-func ParseModelFields(ctx *Context, model *ServiceModelDeclaration, modelType types.Type) (FieldDeclarations, error) {
-	structType, ok := underlyingStruct(modelType)
-	if !ok {
-		return nil, fmt.Errorf("model type is not a struct")
-	}
-
-	fields := FieldDeclarations{}
-	structFields := flattenedStructFields(structType)
-	for _, fieldNode := range structFields {
-		field, err := ParseModelField(ctx, model, fieldNode)
-		if err != nil {
-			return nil, err
-		}
-		fields = append(fields, field)
-	}
-	return fields, nil
 }
 
 func flattenedStructFields(structType *types.Struct) []*types.Var {
@@ -598,18 +560,6 @@ func flattenedStructFields(structType *types.Struct) []*types.Var {
 		fields = append(fields, flattenedStructFields(embeddedStruct)...)
 	}
 	return fields
-}
-
-// ParseModelField takes the type tree node for a struct field and captures the necessary info into
-// a field declaration including all type info, binding info, and doc options.
-func ParseModelField(ctx *Context, model *ServiceModelDeclaration, fieldVar *types.Var) (*FieldDeclaration, error) {
-	field := &FieldDeclaration{
-		Name:  varName(fieldVar),
-		Type:  ParseFieldType(ctx, fieldVar.Type()),
-		Model: model,
-	}
-	field.Binding = ParseBindingOptions(ctx, field, fieldVar)
-	return field, nil
 }
 
 // ParseBindingOptions looks at the `json` tags of the given struct field and returns this field's binding
@@ -727,9 +677,9 @@ func parseHTTPStatus(statusText string) int {
 
 // ApplyServiceDocumentation takes the documentation comment block above your interface type
 // declaration and applies them to the service snapshot, parsing all Doc Options in the process.
-func ApplyServiceDocumentation(ctx *Context, service *ServiceDeclaration) {
+func ApplyServiceDocumentation(ctx *Context, service *ServiceDeclaration) *ServiceDeclaration {
 	if ctx == nil || service == nil {
-		return
+		return service
 	}
 
 	for _, line := range ctx.Documentation.ForService(service) {
@@ -745,6 +695,7 @@ func ApplyServiceDocumentation(ctx *Context, service *ServiceDeclaration) {
 		}
 	}
 	service.Documentation = service.Documentation.Trim()
+	return service
 }
 
 // ApplyFunctionDocumentation takes the documentation comment block above your interface function
@@ -789,79 +740,58 @@ func ApplyFunctionDocumentation(ctx *Context, function *ServiceFunctionDeclarati
 	function.Documentation = function.Documentation.Trim()
 }
 
-// ApplyModelDocumentation takes the documentation comment block above your struct/alias type
+// ApplyTypeDocumentation takes the documentation comment block above your struct/alias type
 // declaration and applies them to the model snapshot, parsing all Doc Options in the process.
-func ApplyModelDocumentation(ctx *Context, model *ServiceModelDeclaration) {
-	if model == nil {
-		return
+func ApplyTypeDocumentation(ctx *Context, t *TypeDeclaration) *TypeDeclaration {
+	if t == nil {
+		return t
 	}
-	model.Documentation = ctx.Documentation.ForModel(model).Trim()
+	t.Documentation = ctx.Documentation.ForType(t).Trim()
+	return t
 }
 
 // ApplyFieldDocumentation takes the documentation comment block above your struct field
 // declaration and applies them to the model snapshot, parsing all Doc Options in the process.
-func ApplyFieldDocumentation(ctx *Context, field *FieldDeclaration) {
+func ApplyFieldDocumentation(ctx *Context, field *FieldDeclaration) *FieldDeclaration {
 	if field == nil {
-		return
+		return field
 	}
 	field.Documentation = ctx.Documentation.ForField(field).Trim()
+	return field
 }
 
 // fieldName returns the actual field name that should be used for this attribute within a struct.
 func fieldName(field *ast.Field) string {
-	if embeddedField(field) {
-		return noPointer(noPackage(fieldTypeName(field)))
+	// This is an embedded field, so the name is the raw name of the type.
+	if len(field.Names) == 0 {
+		return naming.NoPointer(naming.NoPackage(types.ExprString(field.Type)))
 	}
 	return field.Names[0].Name
 }
 
-// embeddedField returns true if it looks as though this struct field does not have a name; it just
-// has the type information.
-func embeddedField(field *ast.Field) bool {
-	return len(field.Names) == 0
-}
-
-// noPackage strips of any package prefixes from an identifier (e.g. "context.Context" -> "Context")
-func noPackage(ident string) string {
-	period := strings.LastIndex(ident, ".")
-	if period < 0 {
-		return ident
-	}
-	return ident[period+1:]
-}
-
-// noPointer strips off any "*" prefix your type identifier might have (e.g. "*Foo" -> "Foo")
-func noPointer(ident string) string {
-	return strings.TrimLeft(ident, "*")
-}
-
-func typeName(t types.Type) string {
-	name := t.String()
-
-	// Third party packages include the entire import path and package info (e.g. "github.com/module/pkg/subpkg.Foo")
-	slash := strings.LastIndex(name, "/")
-	if slash >= 0 {
-		name = name[slash+1:]
+// pointerType determines if 't' represents a pointer type; either directly or it's an alias of one... or
+// an alias of an alias of one, etc.
+func pointerType(t types.Type) bool {
+	if _, ok := t.(*types.Pointer); ok {
+		return true
 	}
 
-	// HACK: Depending on the context, types defined in the input file may be described w/ this prefix.
-	// Strip that off because it's not a "real" package prefix.
-	if strings.HasPrefix(name, "command-line-arguments.") {
-		return name[23:]
+	// You've hit some "root" type like a basic type or something like that, so it's definitely not a pointer.
+	underlying := t.Underlying()
+	if t == underlying {
+		return false
 	}
-	if strings.HasPrefix(name, "*command-line-arguments.") {
-		return name[24:]
-	}
-	return name
+	return pointerType(underlying)
 }
 
-func fieldTypeName(field *ast.Field) string {
-	return types.ExprString(field.Type)
-}
-
+// varName takes a struct attribute and returns the simple name that we'll use in our context. This
+// handles standard, named fields as well as embedded fields.
 func varName(v *types.Var) string {
 	if v.Embedded() {
-		return noPointer(noPackage(v.Type().String()))
+		name := v.Type().String()
+		name = naming.NoPackage(name)
+		name = naming.NoPointer(name)
+		return name
 	}
 	return v.Name()
 }

@@ -46,6 +46,8 @@ func (c GenerateClient) Exec(request *GenerateClientRequest) error {
 		return c.generate(request, request.ToFileTemplate("client.go"))
 	case "js", "javascript", "node", "nodejs":
 		return c.generate(request, request.ToFileTemplate("client.js"))
+	case "java":
+		return c.generate(request, request.ToFileTemplate("client.java"))
 	default:
 		return fmt.Errorf("unsupported client language")
 	}

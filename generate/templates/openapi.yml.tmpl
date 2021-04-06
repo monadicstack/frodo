@@ -2,17 +2,16 @@
 #
 #   https://github.com/monadicstack/frodo
 #
-{{ range $service := .Services -}}
 openapi: 3.0.0
 info:
-    title: {{ .Name }}
-    version: "{{ .Version }}"
+    title: {{ .Service.Name }}
+    version: "{{ .Service.Version }}"
 
 servers:
-    - url: {{ .Gateway.PathPrefix | LeadingSlash }}
+    - url: {{ .Service.Gateway.PathPrefix | LeadingSlash }}
 
 paths:
-    {{ range $method := .Functions }}
+    {{ range $method := .Service.Functions }}
     {{ $pathFields := .Gateway.PathParameters }}
     {{ $queryFields := .Gateway.QueryParameters }}
     "{{ .Gateway.Path | OpenAPIPath }}":
@@ -30,7 +29,7 @@ paths:
                       {{ . }}{{ end }}
                   {{ end }}
                   schema:
-                      type: {{ .Field.Type.JSONType }}
+                      type: {{ .Field.Type | JSONType }}
                 {{ end }}
                 {{ range $queryFields }}
                 - in: query
@@ -40,7 +39,7 @@ paths:
                       {{ . }}{{ end }}
                   {{ end }}
                   schema:
-                      type: {{ .Field.Type.JSONType }}
+                      type: {{ .Field.Type | JSONType }}
                 {{ end }}
             {{ end }}
 
@@ -60,23 +59,26 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/{{ .Response.Name }}'
     {{ end }}
-    {{ end }}
 
 components:
     schemas:
-        {{ range $model := .Models }}
-        {{ .Name }}:
-            type: {{ .Type.JSONType }}
+        {{ range .Types.NonBasicTypes }}
+        {{ .Name | NoPointer }}:
+            type: {{ . | JSONType }}
             {{ if .Fields.NotEmpty }}
             properties:
-                {{ range $field := .Fields }}
-                {{ if not .Binding.Omit }}
-                {{ .Binding.Name }}:
-                    type: {{ .Type.JSONType }}
+                {{ range $field := .NonOmittedFields }}
+                {{ .Binding.Name | NoPointer }}:
+                    {{ if .Type.Basic }}type: {{ .Type | JSONType }}{{ end }}
+                    {{ if not .Type.Basic }}$ref: "#/components/schemas/{{ .Type.Name | NoPointer }}"{{ end }}
+                    {{ if and .Type.Basic .Type.SliceLike }}
+                    items:
+                        {{ if .Type.Elem.Basic }}type: {{ .Type.Elem | JSONType }}{{ end }}
+                        {{ if not .Type.Elem.Basic }}$ref: "#/components/schemas/{{ .Type.Elem.Name | NoPointer }}"{{ end }}
+                    {{ end }}
                     {{ if .Documentation.NotEmpty }}description: > {{ range .Documentation }}
                         {{ . }}{{ end }}
                     {{ end }}
                 {{ end }}
-            {{ end }}
             {{ end }}
         {{ end }}

@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/monadicstack/frodo/internal/naming"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -18,6 +19,8 @@ import (
 // that were defined in the file, etc. It's the output of Parse() and is the input value when we
 // evaluate Go templates to generate other source files based on this service definition info.
 type Context struct {
+	// --- Fields tracking the input file that we parsed.
+
 	// FileSet is the collection of related files we're going to give to the Go AST parser.
 	FileSet *token.FileSet
 	// File is the entire syntax tree from when we parsed your input file.
@@ -26,54 +29,38 @@ type Context struct {
 	Path string
 	// AbsolutePath is the absolute path to the service definition file we're parsing.
 	AbsolutePath string
+
+	// --- Fields related to orienting ourselves to the user's module/package.
+
+	// Module contains info from "go.mod" about the entire module where the service/package is defined.
+	Module *ModuleDeclaration
 	// InputPackage contains information about the package where the service definition resides.
 	InputPackage *PackageDeclaration
 	// OutputPackage contains information about the package where the generated code will go.
 	OutputPackage *PackageDeclaration
-	// Module contains info from "go.mod" about the entire module where the service/package is defined.
-	Module *ModuleDeclaration
-	// Services encapsulates snapshot info for all service interfaces that were defined in the input file.
-	Services []*ServiceDeclaration
-	// Models encapsulates snapshot info for all service request/response structs that were defined in the input file.
-	Models []*ServiceModelDeclaration
-	// TypeInfo contains the tree of all parsed type information.
-	TypeInfo *packages.Package
+
+	// --- Fields related to the actual service info that we're parsing.
+
+	// Service contains the parsed info about the service declared in our input file.
+	Service *ServiceDeclaration
+	// Types captures snapshots of every model type, primitive type, and recursive field type for
+	// any field referenced by any of your request/response models. It contains all of the referenced types
+	// for every single field and their fields and their fields, and so on.
+	Types TypeRegistry
+
+	// --- Fields that cache various types of parsed syntax/type info so the parser can look it up easily.
+
 	// Documentation stores the GoDoc comments for the services/functions/models/fields in the parsed code.
 	Documentation Documentation
 	// Tags stores the struct field tags annotated on fields in your input file.
 	Tags Tags
+	// RawTypes contains the tree of all raw, parsed type information as we get it from the AST.
+	RawTypes *packages.Package
 }
 
 // Scope returns the root of the parsed type tree for the source file we parsed.
 func (ctx Context) Scope() *types.Scope {
-	return ctx.TypeInfo.Types.Scope()
-}
-
-// ServiceByName looks through "Services" to find the one with the matching interface name. This search
-// is CASE INSENSITIVE so "fooservice" will find "FooService".
-func (ctx Context) ServiceByName(name string) *ServiceDeclaration {
-	for _, service := range ctx.Services {
-		if strings.EqualFold(service.Name, name) {
-			return service
-		}
-	}
-	return nil
-}
-
-// ModelByName looks through "Models" to find the one whose method/function name matches 'name'. This search
-//// is CASE INSENSITIVE so "foorequest" will find "FooRequest".
-func (ctx Context) ModelByName(name string) *ServiceModelDeclaration {
-	// These lookups likely happen when we perform lookups for service method parameters. Those are
-	// usually pointers (e.g. "*GetPostRequest). The model name we put on the context does not have
-	// any sort of pointer identification, so strip that off.
-	name = noPackage(noPointer(name))
-
-	for _, model := range ctx.Models {
-		if strings.EqualFold(model.Name, name) {
-			return model
-		}
-	}
-	return nil
+	return ctx.RawTypes.Types.Scope()
 }
 
 // ServiceDeclaration wrangles all of the information we could grab about the service from the
@@ -87,7 +74,7 @@ type ServiceDeclaration struct {
 	// Gateway contains the configuration HTTP-related options for this service.
 	Gateway *GatewayServiceOptions
 	// Functions are all of the functions explicitly defined on this service.
-	Functions []*ServiceFunctionDeclaration
+	Functions ServiceFunctionDeclarations
 	// Documentation are all of the comments documenting this service.
 	Documentation DocumentationLines
 }
@@ -103,14 +90,17 @@ func (service ServiceDeclaration) FunctionByName(name string) *ServiceFunctionDe
 	return nil
 }
 
+// ServiceFunctionDeclarations defines a collection of related service functions/operations.
+type ServiceFunctionDeclarations []*ServiceFunctionDeclaration
+
 // ServiceFunctionDeclaration defines a single operation/function within a service (one of the interface functions).
 type ServiceFunctionDeclaration struct {
 	// Name is the name of the function defined in the service interface (the function name to call this operation).
 	Name string
 	// Request contains the details about the model/type/struct for this operation's input/request value.
-	Request *ServiceModelDeclaration
+	Request *TypeDeclaration
 	// Response contains the details about the model/type/struct for this operation's output/response value.
-	Response *ServiceModelDeclaration
+	Response *TypeDeclaration
 	// Gateway wrangles all of the HTTP-related options for this function (method, path, etc).
 	Gateway *GatewayFunctionOptions
 	// Documentation are all of the comments documenting this operation.
@@ -126,23 +116,6 @@ func (f ServiceFunctionDeclaration) String() string {
 		f.Request,
 		f.Response,
 	)
-}
-
-// ServiceModelDeclaration contains information about request/response structs defined in your declaration file.
-type ServiceModelDeclaration struct {
-	// Name is the name of the type/struct used when defining the request/response value.
-	Name string
-	// Documentation are all of the comments documenting this operation.
-	Documentation DocumentationLines
-	// Fields are the individual data attributes on this model/struct.
-	Fields FieldDeclarations
-	// Type contains the runtime type data about this model.
-	Type *FieldType
-}
-
-// String just returns the model type's name.
-func (model ServiceModelDeclaration) String() string {
-	return model.Name
 }
 
 // FieldDeclarations collects the fields/attributes on a service model.
@@ -169,6 +142,18 @@ func (fields FieldDeclarations) ByName(name string) *FieldDeclaration {
 	return nil
 }
 
+// TransportFields returns the subset of child fields for this field that
+// are NOT omitted (i.e. should be included in JSON/transport).
+func (fields FieldDeclarations) TransportFields() FieldDeclarations {
+	var result FieldDeclarations
+	for _, f := range fields {
+		if f.Binding.NotOmit() {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
 // ByBindingName looks for a field whose (possibly) re-mapped name matches the given value. This
 // comparison is CASE INSENSITIVE, so "id" will find the field "ID".
 func (fields FieldDeclarations) ByBindingName(name string) *FieldDeclaration {
@@ -184,14 +169,16 @@ func (fields FieldDeclarations) ByBindingName(name string) *FieldDeclaration {
 type FieldDeclaration struct {
 	// Name the name of the field/attribute.
 	Name string
+	// ParentType is a back-pointer to the type that this field is a member of.
+	ParentType *TypeDeclaration
 	// Type contains the data type information for this field.
-	Type *FieldType
+	Type *TypeDeclaration
+	// Pointer indicates if this field is a pointer type (true) or value type (false).
+	Pointer bool
 	// Documentation are all of the comments documenting this field.
 	Documentation DocumentationLines
 	// Binding describes the custom binding instructions used when unmarshaling request data onto this field.
 	Binding *FieldBindingOptions
-	// Model describes the service request/response that this field is a member of.
-	Model *ServiceModelDeclaration
 }
 
 // FieldBindingOptions provides hints to the generation tools about how the runtime binder will
@@ -207,27 +194,6 @@ type FieldBindingOptions struct {
 // client and documentation templates/tooling.
 func (opts FieldBindingOptions) NotOmit() bool {
 	return !opts.Omit
-}
-
-// FieldType captures a whole bunch of type data related to a single filed on a request/response struct.
-type FieldType struct {
-	// Name is the fully qualified name/expression for the type (e.g. "uint", "time.Time", "*Foo", "[]byte", etc).
-	Name string
-	// Pointer indicates if the field's type is a pointer or not.
-	Pointer bool
-	// Type is the raw, parsed type that is the right-hand-side of the line where the field is defined.
-	Type types.Type
-	// Underlying peels away all of the type aliases of 'Type' until we get to the raw primitive or struct
-	// that truly indicates what this field represents.
-	Underlying types.Type
-	// Elem is only non-nil for slice/array/chan types. If the slice is this field type, the ElemType
-	// describes what the type of each element describes.
-	Elem *FieldType
-	// Key is only non-nil for tuple/map types where there's some key/value pairing. It describes the type
-	// of all of the keys in the collection whereas ElemType describes the value.
-	Key *FieldType
-	// JSONType is the name of the JS/JSON type that this most naturally maps to (number/string/boolean/object/array).
-	JSONType string
 }
 
 // ModuleDeclaration contains information about the Go module that the service belongs
@@ -291,14 +257,14 @@ func (docs Documentation) ForFunction(f *ServiceFunctionDeclaration) Documentati
 	return docs.lookup(f.Service.Name, f.Name)
 }
 
-// ForModel finds the GoDoc comments for the request/response struct.
-func (docs Documentation) ForModel(m *ServiceModelDeclaration) DocumentationLines {
-	return docs.lookup(m.Name)
+// ForType finds the GoDoc comments for the request/response struct.
+func (docs Documentation) ForType(t *TypeDeclaration) DocumentationLines {
+	return docs.lookup(t.Name)
 }
 
 // ForField find the GoDoc comments for the attribute of a request/response struct
 func (docs Documentation) ForField(f *FieldDeclaration) DocumentationLines {
-	return docs.lookup(f.Model.Name, f.Name)
+	return docs.lookup(f.ParentType.Name, f.Name)
 }
 
 var noTag = reflect.StructTag("")
@@ -323,7 +289,7 @@ func (tags Tags) Set(model string, field string, tag *ast.BasicLit) {
 // ForField looks up the tag annotations for the given model field. If the field does not have any tags
 // you'll get back the zero-value StructTag that always gives you empty for any value lookups.
 func (tags Tags) ForField(f *FieldDeclaration) reflect.StructTag {
-	if tag, ok := tags[f.Model.Name+"."+f.Name]; ok {
+	if tag, ok := tags[f.ParentType.Name+"."+f.Name]; ok {
 		return reflect.StructTag(tag)
 	}
 	return noTag
@@ -500,4 +466,146 @@ type GatewayParameter struct {
 	// Field indicates which model attribute will be populated when this parameter goes
 	// through the request binder.
 	Field *FieldDeclaration
+}
+
+// TypeDeclaration is a snapshot of the type information for any type referenced, directly or indirectly, in
+// your service declaration file.
+type TypeDeclaration struct {
+	// Name is the "package.Type" formatted name of the type as it is used in our source file. For types that
+	// are defined in the declaration file, the name might only be "FooRequest" (no package).
+	Name string
+	// Type is the raw Go type information that we used to build this snapshot.
+	Type types.Type
+	// Kind classifies our types. Our definition aligns fairly closely with the reflect package's definition, so
+	// we use it to describe whether a type, at its lowest level, describes a struct, int, slice, etc.
+	Kind reflect.Kind
+	// Elem is used by slice and map-like declarations to describe the type info for the underlying value type.
+	Elem *TypeDeclaration
+	// Key is used by map-like declarations to describe the type info for the lookup key.
+	Key *TypeDeclaration
+	// Basic indicates if this type is one of our base types (primitives, etc).
+	Basic bool
+	// Fields (for struct types) contains all of the attribute/type info for all members of the struct.
+	Fields FieldDeclarations
+	// Documentation are all of the comments documenting this operation.
+	Documentation DocumentationLines
+}
+
+// String returns the name of the type. That is all.
+func (t TypeDeclaration) String() string {
+	return t.Name
+}
+
+// SliceLike returns true for array or slice types. This will also be true for any alias to an array/slice type.
+func (t TypeDeclaration) SliceLike() bool {
+	return t.Kind == reflect.Slice || t.Kind == reflect.Array
+}
+
+// MapLike returns true for map types. This will also be true for any alias to a map type.
+func (t TypeDeclaration) MapLike() bool {
+	return t.Kind == reflect.Map
+}
+
+// NonOmittedFields returns just the subset of fields that should be included in this model's transport/binding.
+func (t TypeDeclaration) NonOmittedFields() FieldDeclarations {
+	var results FieldDeclarations
+	for _, f := range t.Fields {
+		if !f.Binding.Omit {
+			results = append(results, f)
+		}
+	}
+	return results
+}
+
+// TypeRegistry is a quick lookup of all types we encountered when processing your declaration file.
+type TypeRegistry map[string]*TypeDeclaration
+
+// Lookup finds our parsed snapshot for the raw type. It returns the snapshot an an "ok" boolean to indicate
+// whether we found it or not.
+func (reg TypeRegistry) Lookup(t types.Type) (*TypeDeclaration, bool) {
+	key := reg.key(t, t.String())
+	info, ok := reg[key]
+	return info, ok
+}
+
+// LookupByName finds our parsed snapshot for the type name. It returns the snapshot an an "ok" boolean to indicate
+// whether we found it or not.
+func (reg TypeRegistry) LookupByName(name string) (*TypeDeclaration, bool) {
+	info, ok := reg[strings.ToLower(name)]
+	return info, ok
+}
+
+// Register adds the given type declaration to the registry.
+func (reg TypeRegistry) Register(entry *TypeDeclaration) *TypeDeclaration {
+	key := reg.key(entry.Type, entry.Name)
+	reg[key] = entry
+	return entry
+}
+
+// WithoutInvalid removes all entries for types whose 'Kind' is 'Invalid'. This ensures that
+// your context doesn't contain any entries for fields/types that we don't support.
+func (reg TypeRegistry) WithoutInvalid() TypeRegistry {
+	for key, typeDeclaration := range reg {
+		if typeDeclaration.Kind == reflect.Invalid {
+			delete(reg, key)
+		}
+	}
+	return reg
+}
+
+// NonBasicTypes returns a slice containing only types not declared as "Basic". This way you only
+// iterate complex types that you defined or imported.
+func (reg TypeRegistry) NonBasicTypes() []*TypeDeclaration {
+	var results []*TypeDeclaration
+	for _, t := range reg {
+		if t.Basic {
+			continue
+		}
+		if t.Kind == reflect.Interface {
+			continue
+		}
+		results = append(results, t)
+	}
+	return results
+}
+
+func (reg TypeRegistry) key(t types.Type, name string) string {
+	if t != nil {
+		name = t.String()
+	}
+	name = naming.NoPointer(name)
+	name = naming.CleanPrefix(name)
+	return strings.ToLower(name)
+}
+
+// NewTypeRegistry creates a new type registry that is pre-filled with all of the base types already registered.
+func NewTypeRegistry() TypeRegistry {
+	return TypeRegistry{
+		"string":  &TypeDeclaration{Basic: true, Name: "string", Kind: reflect.String},
+		"bool":    &TypeDeclaration{Basic: true, Name: "bool", Kind: reflect.Bool},
+		"rune":    &TypeDeclaration{Basic: true, Name: "rune", Kind: reflect.Int32},
+		"byte":    &TypeDeclaration{Basic: true, Name: "byte", Kind: reflect.Int8},
+		"int":     &TypeDeclaration{Basic: true, Name: "int", Kind: reflect.Int},
+		"int8":    &TypeDeclaration{Basic: true, Name: "int8", Kind: reflect.Int8},
+		"int16":   &TypeDeclaration{Basic: true, Name: "int16", Kind: reflect.Int16},
+		"int32":   &TypeDeclaration{Basic: true, Name: "int32", Kind: reflect.Int32},
+		"int64":   &TypeDeclaration{Basic: true, Name: "int64", Kind: reflect.Int64},
+		"uint":    &TypeDeclaration{Basic: true, Name: "uint", Kind: reflect.Uint},
+		"uint8":   &TypeDeclaration{Basic: true, Name: "uint8", Kind: reflect.Uint8},
+		"uint16":  &TypeDeclaration{Basic: true, Name: "uint16", Kind: reflect.Uint16},
+		"uint32":  &TypeDeclaration{Basic: true, Name: "uint32", Kind: reflect.Uint32},
+		"uint64":  &TypeDeclaration{Basic: true, Name: "uint64", Kind: reflect.Uint64},
+		"float32": &TypeDeclaration{Basic: true, Name: "float32", Kind: reflect.Float32},
+		"float64": &TypeDeclaration{Basic: true, Name: "float64", Kind: reflect.Float64},
+
+		// Yes, time is technically a struct, but for the purposes of transport, we want to treat
+		// time as an ISO string, so we're special casing this bad boy.
+		"time.Time": &TypeDeclaration{Basic: true, Name: "time.Time", Kind: reflect.String},
+
+		// Not supported in code generation, but there so we don't have nil pointers if you
+		// are silly enough to use them as service function inputs/outputs.
+		"uintptr":    &TypeDeclaration{Basic: true, Name: "uintptr", Kind: reflect.Uintptr},
+		"complex64":  &TypeDeclaration{Basic: true, Name: "complex64", Kind: reflect.Complex64},
+		"complex128": &TypeDeclaration{Basic: true, Name: "complex128", Kind: reflect.Complex128},
+	}
 }

@@ -7,10 +7,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-/*
- * OTHER TESTS TO WRITE:
- * Models in different packages
- */
 type ParserSuite struct {
 	suite.Suite
 }
@@ -19,9 +15,9 @@ type ParserSuite struct {
 func (suite *ParserSuite) TestBasic() {
 	ctx, err := parser.ParseFile("testdata/basic/service.go")
 	suite.Require().NoError(err)
-	suite.assertContext(ctx, expectedContext{NumServices: 1, NumModels: 2})
+	suite.Require().NotNil(ctx, "Context should not be nil")
 
-	service := ctx.ServiceByName("DudeService")
+	service := ctx.Service
 	suite.assertService(service, expectedService{
 		Name:         "DudeService",
 		NumFunctions: 1,
@@ -34,11 +30,11 @@ func (suite *ParserSuite) TestBasic() {
 		Gateway:       expectedGateway{Method: "POST", Path: "/DudeService.Bowl", Status: 200},
 	})
 
-	model := ctx.ModelByName("BowlRequest")
+	model, _ := ctx.Types.LookupByName("BowlRequest")
 	suite.assertModel(model, expectedModel{Name: "BowlRequest", NumFields: 1})
 	suite.assertField(model, "BowlerID", expectedField{TypeName: "string"})
 
-	model = ctx.ModelByName("BowlResponse")
+	model, _ = ctx.Types.LookupByName("BowlResponse")
 	suite.assertModel(model, expectedModel{Name: "BowlResponse", NumFields: 2})
 	suite.assertField(model, "BowlerID", expectedField{TypeName: "string"})
 	suite.assertField(model, "Pins", expectedField{TypeName: "int"})
@@ -48,9 +44,9 @@ func (suite *ParserSuite) TestBasic() {
 func (suite *ParserSuite) TestDocOptions() {
 	ctx, err := parser.ParseFile("testdata/docoptions/service.go")
 	suite.Require().NoError(err)
-	suite.assertContext(ctx, expectedContext{NumServices: 1, NumModels: 2})
+	suite.Require().NotNil(ctx, "Context should not be nil")
 
-	service := ctx.ServiceByName("LebowskiService")
+	service := ctx.Service
 	suite.assertService(service, expectedService{
 		Name:         "LebowskiService",
 		Version:      "999.12",
@@ -106,7 +102,7 @@ func (suite *ParserSuite) TestBindingOptions() {
 	ctx, err := parser.ParseFile("testdata/bindingopts/service.go")
 	suite.Require().NoError(err)
 
-	request := ctx.ModelByName("Request")
+	request, _ := ctx.Types.LookupByName("Request")
 
 	binding := request.Fields.ByName("ID").Binding
 	suite.Require().Equal("record_id", binding.Name)
@@ -133,10 +129,13 @@ func (suite *ParserSuite) TestFieldTypes() {
 	ctx, err := parser.ParseFile("testdata/fieldtypes/service.go")
 	suite.Require().NoError(err)
 
-	fields := ctx.ModelByName("Request").Fields
+	model, _ := ctx.Types.LookupByName("Request")
+	suite.Require().NotNil(model, "Type registry should have 'Request' type")
+
+	fields := model.Fields
 
 	suite.assertFieldType(fields, "Basic", expectedFieldType{Name: "string", Pointer: false, JSON: "string"})
-	suite.assertFieldType(fields, "BasicPointer", expectedFieldType{Name: "*string", Pointer: true, JSON: "string"})
+	suite.assertFieldType(fields, "BasicPointer", expectedFieldType{Name: "string", Pointer: true, JSON: "string"})
 
 	suite.assertFieldType(fields, "ExportedStruct", expectedFieldType{Name: "ExportedStruct", Pointer: false, JSON: "object"})
 	suite.assertFieldType(fields, "ExportedStructPointer", expectedFieldType{Name: "ExportedStruct", Pointer: true, JSON: "object"})
@@ -145,10 +144,10 @@ func (suite *ParserSuite) TestFieldTypes() {
 	suite.assertFieldType(fields, "NotExportedStructPointer", expectedFieldType{Name: "notExportedStruct", Pointer: true, JSON: "object"})
 
 	suite.assertFieldType(fields, "Time", expectedFieldType{Name: "time.Time", Pointer: false, JSON: "string"})
-	suite.assertFieldType(fields, "TimePointer", expectedFieldType{Name: "*time.Time", Pointer: true, JSON: "string"})
+	suite.assertFieldType(fields, "TimePointer", expectedFieldType{Name: "time.Time", Pointer: true, JSON: "string"})
 
 	suite.assertFieldType(fields, "Duration", expectedFieldType{Name: "time.Duration", Pointer: false, JSON: "number"})
-	suite.assertFieldType(fields, "DurationPointer", expectedFieldType{Name: "*time.Duration", Pointer: true, JSON: "number"})
+	suite.assertFieldType(fields, "DurationPointer", expectedFieldType{Name: "time.Duration", Pointer: true, JSON: "number"})
 
 	suite.assertFieldType(fields, "BasicSlice", expectedFieldType{Name: "[]string", Pointer: false, JSON: "array", ElemName: "string"})
 	suite.assertFieldType(fields, "BasicMap", expectedFieldType{Name: "map[string]string", Pointer: false, JSON: "array", ElemName: "string", KeyName: "string"})
@@ -165,8 +164,8 @@ func (suite *ParserSuite) TestFieldTypes() {
 	suite.assertFieldType(fields, "AliasStruct", expectedFieldType{Name: "AliasStruct", Pointer: false, JSON: "object"})
 	suite.assertFieldType(fields, "AliasStructPointer", expectedFieldType{Name: "AliasStruct", Pointer: true, JSON: "object"})
 
-	suite.assertFieldType(fields, "AliasSlice", expectedFieldType{Name: "AliasSlice", Pointer: false, JSON: "array"})
-	suite.assertFieldType(fields, "AliasSlicePointer", expectedFieldType{Name: "AliasSlice", Pointer: true, JSON: "array"})
+	suite.assertFieldType(fields, "AliasSlice", expectedFieldType{Name: "AliasSlice", Pointer: false, JSON: "array", ElemName: "string"})
+	suite.assertFieldType(fields, "AliasSlicePointer", expectedFieldType{Name: "AliasSlice", Pointer: true, JSON: "array", ElemName: "string"})
 
 	// Make sure we support types defined outside of this file and package; types that are defined in another package
 	// of this project as well as those that belong to third party packages.
@@ -188,14 +187,11 @@ func (suite *ParserSuite) TestFieldTypes() {
 	suite.Require().Nil(fields.ByName("notExported"))
 }
 
-// Ensures that you can have multiple services defined in the same file (though not preferred).
+// Ensures that you can only have one service defined in the same file.
 func (suite *ParserSuite) TestMultiService() {
-	ctx, err := parser.ParseFile("testdata/multiservice/service.go")
-	suite.Require().NoError(err)
-	suite.assertContext(ctx, expectedContext{NumServices: 2, NumModels: 4})
-
-	suite.assertService(ctx.ServiceByName("FooService"), expectedService{Name: "FooService", NumFunctions: 1})
-	suite.assertService(ctx.ServiceByName("BarService"), expectedService{Name: "BarService", NumFunctions: 2})
+	_, err := parser.ParseFile("testdata/multiservice/service.go")
+	suite.Require().Error(err, "Should fail when more than one service is defined in a file")
+	suite.Require().Contains(err.Error(), "multiple")
 }
 
 func (suite *ParserSuite) TestErrorBadGoMod() {
@@ -270,14 +266,6 @@ func (suite *ParserSuite) TestErrorResponseNotStruct() {
  * ----------- Assertion Helpers ----------------------
  */
 
-// assertContext checks the top-level parsing information; basically just making sure that we've captured the
-// correct number of services and models.
-func (suite *ParserSuite) assertContext(ctx *parser.Context, expected expectedContext) {
-	suite.Require().NotNil(ctx, "Context should not be nil")
-	suite.Require().Equal(expected.NumServices, len(ctx.Services), "Incorrect service count")
-	suite.Require().Equal(expected.NumModels, len(ctx.Models), "Incorrect model count")
-}
-
 // assertService makes sure that a service declaration from the parsed context contains all of the
 // attributes we would expect given the input source code. It does not perform any assertions on the
 // functions of the service other than the count; those need to be done separately.
@@ -316,16 +304,16 @@ func (suite *ParserSuite) assertFunction(service *parser.ServiceDeclaration, fun
 	if expected.RequestType != "" {
 		request := f.Request
 		suite.Require().NotNil(request, "%s: Request Struct: Not found", name)
-		suite.Require().Equal(expected.RequestType, request.Type.Name, "%s: Request Struct: Wrong type name", name)
+		suite.Require().Equal(expected.RequestType, request.Name, "%s: Request Struct: Wrong type name", name)
 	}
 	if expected.ResponseType != "" {
 		response := f.Response
 		suite.Require().NotNil(response, "%s: Response Struct: Not found", name)
-		suite.Require().Equal(expected.ResponseType, response.Type.Name, "%s: Response Struct: Wrong type name", name)
+		suite.Require().Equal(expected.ResponseType, response.Name, "%s: Response Struct: Wrong type name", name)
 	}
 }
 
-func (suite *ParserSuite) assertModel(m *parser.ServiceModelDeclaration, expected expectedModel) {
+func (suite *ParserSuite) assertModel(m *parser.TypeDeclaration, expected expectedModel) {
 	name := expected.Name
 	suite.Require().NotNil(m, "%s: Not found", name)
 	suite.Require().Equal(expected.Name, m.Name, "%s: Incorrect name", name)
@@ -334,31 +322,29 @@ func (suite *ParserSuite) assertModel(m *parser.ServiceModelDeclaration, expecte
 
 	fieldType := m.Type
 	suite.Require().NotNil(fieldType, "%s: Type: Not found", name)
-	suite.Require().False(fieldType.Pointer, "%s: Type: Should not be a pointer", name)
 }
 
-func (suite *ParserSuite) assertField(model *parser.ServiceModelDeclaration, fieldName string, expected expectedField) {
+func (suite *ParserSuite) assertField(model *parser.TypeDeclaration, fieldName string, expected expectedField) {
 	f := model.Fields.ByName(fieldName)
 	name := model.Name + "." + fieldName
 
 	suite.Require().NotNil(f, "%s: Not found", name)
 	suite.Require().Equal(fieldName, f.Name, "%s: Incorrect name", name)
-	suite.Require().Equal(model, f.Model, "%s: Incorrect model back-pointer", name)
 	suite.Require().Equal(expected.Documentation.String(), f.Documentation.String(), "%s: Incorrect documentation", name)
+	suite.Require().Equal(expected.TypePointer, f.Pointer, "%s: Type: Incorrect pointer flag", name)
 
 	fieldType := f.Type
 	suite.Require().NotNil(fieldType, "%s: Type: Not found", name)
 	suite.Require().Equal(expected.TypeName, fieldType.Name, "%s: Type: Incorrect name", name)
-	suite.Require().Equal(expected.TypePointer, fieldType.Pointer, "%s: Type: Incorrect pointer flag", name)
 }
 
 func (suite *ParserSuite) assertFieldType(fields parser.FieldDeclarations, name string, expected expectedFieldType) {
 	field := fields.ByName(name)
 	suite.Require().NotNil(field, "%s: Field is missing altogether", name)
+	suite.Require().Equal(expected.Pointer, field.Pointer, "%s: Incorrect pointer flag", name)
 
 	t := field.Type
 	suite.Require().Equal(expected.Name, t.Name, "%s: Incorrect name", name)
-	suite.Require().Equal(expected.Pointer, t.Pointer, "%s: Incorrect pointer flag", name)
 
 	if expected.ElemName == "" {
 		suite.Require().Nil(t.Elem, "%s: Elem type should be nil", name)
