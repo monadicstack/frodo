@@ -142,6 +142,18 @@ func (fields FieldDeclarations) ByName(name string) *FieldDeclaration {
 	return nil
 }
 
+// TransportFields returns the subset of child fields for this field that
+// are NOT omitted (i.e. should be included in JSON/transport).
+func (fields FieldDeclarations) TransportFields() FieldDeclarations {
+	var result FieldDeclarations
+	for _, f := range fields {
+		if f.Binding.NotOmit() {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
 // ByBindingName looks for a field whose (possibly) re-mapped name matches the given value. This
 // comparison is CASE INSENSITIVE, so "id" will find the field "ID".
 func (fields FieldDeclarations) ByBindingName(name string) *FieldDeclaration {
@@ -546,9 +558,13 @@ func (reg TypeRegistry) WithoutInvalid() TypeRegistry {
 func (reg TypeRegistry) NonBasicTypes() []*TypeDeclaration {
 	var results []*TypeDeclaration
 	for _, t := range reg {
-		if !t.Basic {
-			results = append(results, t)
+		if t.Basic {
+			continue
 		}
+		if t.Kind == reflect.Interface {
+			continue
+		}
+		results = append(results, t)
 	}
 	return results
 }

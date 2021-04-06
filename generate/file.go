@@ -154,9 +154,10 @@ var templateFuncs = template.FuncMap{
 	"JoinPackageName": naming.JoinPackageName,
 	"LeadingSlash":    naming.LeadingSlash,
 	"ToLowerCamel":    naming.ToLowerCamel,
+	"ToUpperCamel":    naming.ToUpperCamel,
 	"EmptyString":     naming.EmptyString,
 	"NotEmptyString":  naming.NotEmptyString,
-	"Indent":          naming.Indent,
+	"PathTokens":      naming.PathTokens,
 	"ToLower":         strings.ToLower,
 	"ToUpper":         strings.ToUpper,
 

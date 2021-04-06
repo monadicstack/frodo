@@ -36,8 +36,14 @@ func CleanPrefix(ident string) string {
 	if strings.HasPrefix(ident, "command-line-arguments.") {
 		return ident[23:]
 	}
+	if strings.HasPrefix(ident, "command-line-arguments") {
+		return ident[22:]
+	}
 	if strings.HasPrefix(ident, "*command-line-arguments.") {
 		return ident[24:]
+	}
+	if strings.HasPrefix(ident, "*command-line-arguments") {
+		return ident[23:]
 	}
 	return ident
 }
@@ -60,6 +66,16 @@ func ToLowerCamel(value string) string {
 	return strings.ToLower(firstChar) + value[1:]
 }
 
+// ToUpperCamel converts the string to upper camel-cased.
+func ToUpperCamel(value string) string {
+	// This is a shitty implementation.
+	if value == "" {
+		return ""
+	}
+	firstChar := value[0:1]
+	return strings.ToUpper(firstChar) + value[1:]
+}
+
 // EmptyString is a predicate that returns true when the input value is "".
 func EmptyString(value string) bool {
 	return value == ""
@@ -70,7 +86,14 @@ func NotEmptyString(value string) bool {
 	return value != ""
 }
 
-// Indent returns a string with a specific number of spaces left-padded on the content; useful in templates.
-func Indent(spaces int, content interface{}) string {
-	return strings.Repeat(" ", spaces)
+// PathTokens accepts a path string like "foo/bar/baz" and returns a slice of the individual
+// path segment tokens such as ["foo", "bar", "baz"]. This will ignore leading/trailing slashes
+// in your path so that you don't get leading/trailing "" tokens in your slice. This does not,
+// however, clean up empty tokens caused by "//" somewhere in your path.
+func PathTokens(path string) []string {
+	path = strings.Trim(path, "/")
+	if path == "" {
+		return []string{}
+	}
+	return strings.Split(path, "/")
 }
