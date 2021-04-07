@@ -1,7 +1,6 @@
 package generate_test
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -11,17 +10,6 @@ import (
 
 type FileTemplateSuite struct {
 	suite.Suite
-	tempDir string
-}
-
-func (suite *FileTemplateSuite) SetupTest() {
-	suite.tempDir, _ = ioutil.TempDir("", "frodo-file-test-*")
-}
-
-func (suite *FileTemplateSuite) TearDownTest() {
-	if suite.tempDir != "" {
-		_ = os.RemoveAll(suite.tempDir)
-	}
 }
 
 // Ensures that Eval() fails if we can't find/read the template on the file system.

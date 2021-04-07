@@ -67,4 +67,5 @@ shows you that you can customize your routes and consume your service using any 
 * How you can consume multiple services in the same program.
 * Use doc options to customize RESTful paths for all operations.
 * You can use json tags to customize marshaling structure.
+* How to generate 4XX status error codes using the `rpc/errors` package.
 * Reduce verbosity by using aliases when creating identical request/response structs.
