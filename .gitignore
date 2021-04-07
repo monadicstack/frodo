@@ -1,5 +1,3 @@
 .idea/
 *~
 out/
-testdata/gen/
-testdata/*/gen/
