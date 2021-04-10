@@ -54,7 +54,7 @@ func (client *CalculatorServiceClient) Sub(ctx context.Context, request *calc.Su
 	}
 
 	response := &calc.SubResponse{}
-	err := client.Invoke(ctx, "GET", "/sub/:A/:B/please", request, response)
+	err := client.Invoke(ctx, "POST", "/CalculatorService.Sub", request, response)
 	return response, err
 }
 
