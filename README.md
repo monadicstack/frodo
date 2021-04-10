@@ -9,7 +9,7 @@ generate all of your client/server communication code.
 
 * No .proto files. Your services are just idiomatic Go code.
 * Auto-generate APIs that play nicely with `net/http`, middleware, and other standard library compatible API solutions.  
-* Auto-generate RPC-style clients in multiple languages like Go and JavaScript.
+* Auto-generate RPC-style clients in multiple languages like Go, JavaScript, Dart, etc.
 * Auto-generate strongly-typed mock implementations of your service for unit testing.
 * Create OpenAPI documentation so others know how to interact with your API (if they can't use the client).
 
@@ -17,6 +17,8 @@ Frodo automates all the boilerplate associated with service
 communication, data marshaling, routing, error handling, etc. You
 get to focus on writing business logic and features while Frodo gives
 you all of that other stuff to turn it into a distributed system for free.
+Bonus - because Frodo generates clients in multiple languages, your web
+and mobile frontends get to consume your services for free.
 
 Tools like gRPC solve similar problems by giving you a complex
 airplane cockpit filled with knobs and dials most of us don't want/need.
@@ -33,6 +35,7 @@ with as little fuss as possible.
 * [Middleware](https://github.com/monadicstack/frodo#middleware)
 * [Request Scoped Metadata](https://github.com/monadicstack/frodo#request-scoped-metadata)
 * [Create a JavaScript Client](https://github.com/monadicstack/frodo#creating-a-javascript-client)
+* [Create a Dart/Flutter Client](https://github.com/monadicstack/frodo#creating-a-dartflutter-client)
 * [Authorization](https://github.com/monadicstack/frodo#authorization)
 * [Composing Gateways](https://github.com/monadicstack/frodo#composing-gateways)
 * [Mocking Services](https://github.com/monadicstack/frodo#mocking-services)
@@ -483,9 +486,9 @@ of the decoders in the standard library.
 ## Creating a JavaScript Client
 
 The `frodo` tool can actually generate a JS client that you
-can add to your frontend code to hide the complexity of making
-all the API calls to your backend service. Without any plugins
-or fuss, we can create a JS client of the same
+can add to your frontend code (or React Native mobile code)
+to hide the complexity of making API calls to your backend
+service. Without any plugins or fuss, we can create a JS client of the same
 CalculatorService from earlier...
 
 ```shell
@@ -502,9 +505,9 @@ import {CalculatorService} from 'lib/calculator_service.gen.client';
 // The service client is a class that exposes all of the
 // operations as 'async' functions that resolve with the
 // result of the service call.
-const service = new CalculatorService('http://localhost:9000')
-const add = await service.Add({A:5, B:2})
-const sub = await service.Sub({A:5, B:2})
+const service = new CalculatorService('http://localhost:9000');
+const add = await service.Add({A:5, B:2});
+const sub = await service.Sub({A:5, B:2});
 
 // Should print:
 // Add(5, 2) = 7
@@ -532,9 +535,37 @@ const fetch = require('node-fetch');
 
 // Just inject your 'fetch' implementation to the construtor and everything
 // should work exactly the same.
-const service = new CalculatorService('http://localhost:9000', {fetch})
-const add = await service.Add({A:5, B:2})
-const sub = await service.Sub({A:5, B:2})
+const service = new CalculatorService('http://localhost:9000', {fetch});
+const add = await service.Add({A:5, B:2});
+const sub = await service.Sub({A:5, B:2});
+```
+
+## Creating a Dart/Flutter Client
+
+Just like the JS client, Frodo can create a Dart client that you can embed
+in your Flutter apps so mobile frontends can consume your service.
+
+```shell
+frodo client calc/calculator_service.go --language=dart
+  or
+frodo client calc/calculator_service.go --language=flutter
+```
+
+This will create the file `calculator_service.gen.client.dart`. Add it
+to your Flutter codebase and it behaves very similarly to the JS client.
+
+```dart
+import 'lib/calculator_service.gen.client.dart';
+
+var service = CalculatorServiceClient("http://localhost:9000");
+var add = await service.Add(A:5, B:2);
+var sub = await service.Sub(A:5, B:2);
+
+// Should print:
+// Add(5, 2) = 7
+// Sub(5, 2) = 3
+print('Add(5, 2) = ${add.Result}');
+print('Sub(5, 2) = ${sub.Result}');
 ```
 
 ## Authorization
@@ -630,10 +661,20 @@ you supply it via an options argument when making your
 service call:
 
 ```js
-client = new ServiceAClient('...');
-client.Hello({ Name: 'Bob' }, {
-    authorization: 'Token 12345'
-});
+const client = new ServiceAClient('...');
+const req = { Name: 'Bob' };
+client.Hello(req, { authorization: 'Token 12345' });
+```
+
+### Authorization Using the Dart/Flutter Client
+
+The pattern is similar to the JS client above. Since we don't have a Go
+context equivalent, it's an optional named argument to each of the service methods.
+
+```dart
+var client = ServiceAClient('...');
+var req = HelloRequest(Name: 'Bob');
+client.Hello(req, authorization: 'Token 12345');
 ```
 
 ## Composing Gateways

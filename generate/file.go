@@ -149,24 +149,27 @@ func prettify(t FileTemplate, sourceCode []byte) ([]byte, error) {
 // to generate an artifact's source code.
 var templateFuncs = template.FuncMap{
 	// General purpose string manipulators
-	"NoPointer":       naming.NoPointer,
-	"NoPackage":       naming.NoPackage,
-	"JoinPackageName": naming.JoinPackageName,
-	"LeadingSlash":    naming.LeadingSlash,
-	"ToLowerCamel":    naming.ToLowerCamel,
-	"ToUpperCamel":    naming.ToUpperCamel,
-	"EmptyString":     naming.EmptyString,
-	"NotEmptyString":  naming.NotEmptyString,
-	"PathTokens":      naming.PathTokens,
-	"ToLower":         strings.ToLower,
-	"ToUpper":         strings.ToUpper,
+	"CleanPrefix":        naming.CleanPrefix,
+	"CleanTypeNameUpper": naming.CleanTypeNameUpper,
+	"NoPointer":          naming.NoPointer,
+	"NoPackage":          naming.NoPackage,
+	"JoinPackageName":    naming.JoinPackageName,
+	"LeadingSlash":       naming.LeadingSlash,
+	"ToLowerCamel":       naming.ToLowerCamel,
+	"ToUpperCamel":       naming.ToUpperCamel,
+	"EmptyString":        naming.EmptyString,
+	"NotEmptyString":     naming.NotEmptyString,
+	"PathTokens":         naming.PathTokens,
+	"ToLower":            strings.ToLower,
+	"ToUpper":            strings.ToUpper,
 
 	// Language/format-specific value conversions
+	"JSONType":       jsonFunctions{}.convertType,
 	"JSPropertyType": jsFunctions{}.convertPropertyType,
 	"JSTypedefType":  jsFunctions{}.convertTypedefType,
-	"JSONType":       jsonFunctions{}.convertType,
 	"JavaPackage":    javaFunctions{}.convertPackage,
 	"JavaType":       javaFunctions{}.convertType,
+	"DartType":       dartFunctions{}.convertType,
 	"OpenAPIPath":    openapiFunctions{}.convertPath,
 }
 
@@ -272,6 +275,39 @@ func (funcs javaFunctions) convertType(t *parser.TypeDeclaration) string {
 		return t.Name
 	default:
 		return "Object"
+	}
+}
+
+type dartFunctions struct{}
+
+func (funcs dartFunctions) convertType(t *parser.TypeDeclaration) string {
+	if !t.Basic {
+		return naming.JoinPackageName(naming.NoPointer(t.Name))
+	}
+	switch t.Kind {
+	case reflect.String:
+		return "String"
+	case reflect.Bool:
+		return "bool"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return "int"
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "int"
+	case reflect.Float32, reflect.Float64:
+		return "double"
+	case reflect.Complex64, reflect.Complex128:
+		return "double"
+	case reflect.Array, reflect.Slice:
+		elemType := funcs.convertType(t.Elem)
+		return "List<" + elemType + ">"
+	case reflect.Map:
+		keyType := funcs.convertType(t.Key)
+		elemType := funcs.convertType(t.Elem)
+		return "Map<" + keyType + "," + elemType + ">"
+	case reflect.Struct, reflect.Interface:
+		return "dynamic"
+	default:
+		return "dynamic"
 	}
 }
 
