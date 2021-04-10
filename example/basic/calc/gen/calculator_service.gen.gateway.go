@@ -48,8 +48,8 @@ func NewCalculatorServiceGateway(service calc.CalculatorService, options ...rpc.
 	})
 
 	gw.Register(rpc.Endpoint{
-		Method:      "POST",
-		Path:        "/CalculatorService.Sub",
+		Method:      "GET",
+		Path:        "/sub/:A/:B/please",
 		ServiceName: "CalculatorService",
 		Name:        "Sub",
 		Handler: func(w http.ResponseWriter, req *http.Request) {

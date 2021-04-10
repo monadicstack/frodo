@@ -16,6 +16,15 @@ func NoPointer(ident string) string {
 	return strings.TrimLeft(ident, "*")
 }
 
+// NoSlice takes a string like "[]Foo" or "[456]Foo", strips off the slice/array braces, leaving you with "Foo".
+func NoSlice(ident string) string {
+	closeBrace := strings.Index(ident, "]")
+	if closeBrace < 0 {
+		return ident
+	}
+	return ident[closeBrace+1:]
+}
+
 // JoinPackageName converts a package-qualified type such as "fmt.Stringer" into a single "safe" identifier
 // such as "fmtStringer". This is useful when converting types to languages with different naming semantics.
 func JoinPackageName(ident string) string {
@@ -33,18 +42,8 @@ func NoImport(ident string) string {
 // CleanPrefix strips the "command-line-arguments." prefix that the Go 'packages' package prepends to type
 // identifier for types defined in the source file we're parsing.
 func CleanPrefix(ident string) string {
-	if strings.HasPrefix(ident, "command-line-arguments.") {
-		return ident[23:]
-	}
-	if strings.HasPrefix(ident, "command-line-arguments") {
-		return ident[22:]
-	}
-	if strings.HasPrefix(ident, "*command-line-arguments.") {
-		return ident[24:]
-	}
-	if strings.HasPrefix(ident, "*command-line-arguments") {
-		return ident[23:]
-	}
+	ident = strings.ReplaceAll(ident, "command-line-arguments.", "")
+	ident = strings.ReplaceAll(ident, "command-line-arguments", "")
 	return ident
 }
 
@@ -96,4 +95,13 @@ func PathTokens(path string) []string {
 		return []string{}
 	}
 	return strings.Split(path, "/")
+}
+
+func CleanTypeNameUpper(typeName string) string {
+	typeName = CleanPrefix(typeName)
+	typeName = NoSlice(typeName)
+	typeName = NoPointer(typeName)
+	typeName = JoinPackageName(typeName)
+	typeName = ToUpperCamel(typeName)
+	return typeName
 }

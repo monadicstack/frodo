@@ -2,6 +2,7 @@ package calc
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/monadicstack/frodo/rpc/errors"
 )
@@ -12,6 +13,7 @@ import (
 type CalculatorServiceHandler struct{}
 
 func (c CalculatorServiceHandler) Add(_ context.Context, req *AddRequest) (*AddResponse, error) {
+	fmt.Println(">> CRITERIA", req.Criteria.Limit, req.Criteria.Offset, req.Criteria.Person.ID)
 	sum := req.A + req.B
 	if sum == 12345 {
 		// https://www.youtube.com/watch?v=li9Qf-nQgWE
@@ -21,6 +23,7 @@ func (c CalculatorServiceHandler) Add(_ context.Context, req *AddRequest) (*AddR
 }
 
 func (c CalculatorServiceHandler) Sub(_ context.Context, req *SubRequest) (*SubResponse, error) {
+	fmt.Println(">> CRITERIA", req.Criteria.Limit, req.Criteria.Offset, req.Criteria.Person.ID)
 	if req.A < req.B {
 		return nil, errors.BadRequest("calculator service does not support negative numbers")
 	}

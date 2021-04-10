@@ -48,6 +48,8 @@ func (c GenerateClient) Exec(request *GenerateClientRequest) error {
 		return c.generate(request, request.ToFileTemplate("client.js"))
 	case "java":
 		return c.generate(request, request.ToFileTemplate("client.java"))
+	case "dart", "flutter":
+		return c.generate(request, request.ToFileTemplate("client.dart"))
 	default:
 		return fmt.Errorf("unsupported client language")
 	}

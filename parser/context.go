@@ -506,6 +506,29 @@ func (t TypeDeclaration) MapLike() bool {
 	return t.Kind == reflect.Map
 }
 
+// PrimitiveLike returns true for types that represent some sort of basic/primitive type like numbers/bools/strings.
+func (t TypeDeclaration) PrimitiveLike() bool {
+	return t.Kind == reflect.String ||
+		t.Kind == reflect.Bool ||
+		t.Kind == reflect.Int ||
+		t.Kind == reflect.Int8 ||
+		t.Kind == reflect.Int16 ||
+		t.Kind == reflect.Int32 ||
+		t.Kind == reflect.Int64 ||
+		t.Kind == reflect.Uint ||
+		t.Kind == reflect.Uint8 ||
+		t.Kind == reflect.Uint16 ||
+		t.Kind == reflect.Uint32 ||
+		t.Kind == reflect.Uint64 ||
+		t.Kind == reflect.Float32 ||
+		t.Kind == reflect.Float64
+}
+
+// ObjectLike returns true for types that represent some sort complex object (i.e. struct/interface).
+func (t TypeDeclaration) ObjectLike() bool {
+	return t.Kind == reflect.Struct || t.Kind == reflect.Interface
+}
+
 // NonOmittedFields returns just the subset of fields that should be included in this model's transport/binding.
 func (t TypeDeclaration) NonOmittedFields() FieldDeclarations {
 	var results FieldDeclarations

@@ -70,12 +70,15 @@ func (suite *NamingSuite) TestCleanPrefix() {
 	r.Equal("*foo/bar.Baz", naming.CleanPrefix("*foo/bar.Baz"))
 	r.Equal("", naming.CleanPrefix("command-line-arguments"))
 	r.Equal("", naming.CleanPrefix("command-line-arguments."))
-	r.Equal("", naming.CleanPrefix("*command-line-arguments"))
-	r.Equal("****command-line-arguments.", naming.CleanPrefix("****command-line-arguments."))
+	r.Equal("*", naming.CleanPrefix("*command-line-arguments"))
+	r.Equal("****", naming.CleanPrefix("****command-line-arguments."))
 	r.Equal("foo.Bar", naming.CleanPrefix("command-line-arguments.foo.Bar"))
-	r.Equal("foo.Bar", naming.CleanPrefix("*command-line-arguments.foo.Bar"))
-	r.Equal("****command-line-arguments.foo.Bar", naming.CleanPrefix("****command-line-arguments.foo.Bar"))
-	r.Equal("COMMAND-line-arguments.foo.Bar", naming.CleanPrefix("COMMAND-line-arguments.foo.Bar")) // case sensitive
+	r.Equal("*foo.Bar", naming.CleanPrefix("*command-line-arguments.foo.Bar"))
+	r.Equal("****foo.Bar", naming.CleanPrefix("****command-line-arguments.foo.Bar"))
+	r.Equal("foo.Bar", naming.CleanPrefix("COMMAND-line-arguments.foo.Bar")) // case insensitive
+	r.Equal("[]foo.Bar", naming.CleanPrefix("[]command-line-arguments.foo.Bar"))
+	r.Equal("[]*foo.Bar", naming.CleanPrefix("[]*command-line-arguments.foo.Bar"))
+	r.Equal("[123]*foo.Bar", naming.CleanPrefix("[123]*command-line-arguments.foo.Bar"))
 }
 
 func (suite *NamingSuite) TestLeadingSlash() {
