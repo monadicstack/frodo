@@ -25,7 +25,7 @@ class {{ $clientName }} {
   {{- if .Documentation.NotEmpty }}{{- range .Documentation }}
   /// {{ . }}
   {{- end }}{{- end }}
-  Future<{{ .Response.Name }}> {{ .Name | ToLowerCamel }}({{ .Request.Name }} serviceRequest, {String authorization = ''}) async {
+  Future<{{ .Response.Name }}> {{ .Name }}({{ .Request.Name }} serviceRequest, {String authorization = ''}) async {
     var requestJson = serviceRequest.toJson();
     var method = '{{ .Gateway.Method }}';
     var route = '{{ .Gateway.Path }}';
