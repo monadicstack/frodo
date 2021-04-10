@@ -35,7 +35,7 @@ with as little fuss as possible.
 * [Middleware](https://github.com/monadicstack/frodo#middleware)
 * [Request Scoped Metadata](https://github.com/monadicstack/frodo#request-scoped-metadata)
 * [Create a JavaScript Client](https://github.com/monadicstack/frodo#creating-a-javascript-client)
-* [Create a Dart/Flutter Client](https://github.com/monadicstack/frodo#creating-a-dart-flutter-client)
+* [Create a Dart/Flutter Client](https://github.com/monadicstack/frodo#creating-a-dartflutter-client)
 * [Authorization](https://github.com/monadicstack/frodo#authorization)
 * [Composing Gateways](https://github.com/monadicstack/frodo#composing-gateways)
 * [Mocking Services](https://github.com/monadicstack/frodo#mocking-services)
