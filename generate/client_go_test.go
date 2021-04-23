@@ -1,3 +1,5 @@
+// +build client
+
 package generate_test
 
 import (

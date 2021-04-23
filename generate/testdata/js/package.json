@@ -1,0 +1,9 @@
+{
+  "name": "frodo-js-test",
+  "version": "0.0.1",
+  "description": "Testing harness for Frodo JS client",
+  "author": "Rob Signorelli",
+  "devDependencies": {
+    "node-fetch": "2.6.1"
+  }
+}
