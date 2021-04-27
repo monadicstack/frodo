@@ -5,6 +5,7 @@
 package names
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/monadicstack/frodo/example/names"
@@ -23,7 +24,7 @@ import (
 //
 // The default instance works well enough, but you can supply additional options such as WithMiddleware() which
 // accepts any negroni-compatible middleware handlers.
-func NewNameServiceGateway(service names.NameService, options ...rpc.GatewayOption) rpc.Gateway {
+func NewNameServiceGateway(service names.NameService, options ...rpc.GatewayOption) NameServiceGateway {
 	gw := rpc.NewGateway(options...)
 	gw.Name = "NameService"
 	gw.PathPrefix = ""
@@ -104,5 +105,30 @@ func NewNameServiceGateway(service names.NameService, options ...rpc.GatewayOpti
 		},
 	})
 
-	return gw
+	return NameServiceGateway{gateway: gw, service: service}
+}
+
+type NameServiceGateway struct {
+	gateway rpc.Gateway
+	service names.NameService
+}
+
+func (gw NameServiceGateway) FirstName(ctx context.Context, request *names.FirstNameRequest) (*names.FirstNameResponse, error) {
+	return gw.service.FirstName(ctx, request)
+}
+
+func (gw NameServiceGateway) LastName(ctx context.Context, request *names.LastNameRequest) (*names.LastNameResponse, error) {
+	return gw.service.LastName(ctx, request)
+}
+
+func (gw NameServiceGateway) SortName(ctx context.Context, request *names.SortNameRequest) (*names.SortNameResponse, error) {
+	return gw.service.SortName(ctx, request)
+}
+
+func (gw NameServiceGateway) Split(ctx context.Context, request *names.SplitRequest) (*names.SplitResponse, error) {
+	return gw.service.Split(ctx, request)
+}
+
+func (gw NameServiceGateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	gw.gateway.ServeHTTP(w, req)
 }

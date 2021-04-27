@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/monadicstack/frodo/rpc"
 	"github.com/monadicstack/frodo/rpc/errors"
 	"github.com/stretchr/testify/suite"
 )
@@ -27,8 +26,8 @@ type ExternalClientSuite struct {
 
 // StartService runs an instance of the gateway on the given address/port (e.g. ":9100"). Once this function returns
 // you can fire off your client runner to hit this service.
-func (suite *ExternalClientSuite) StartService(addr string, gateway rpc.Gateway) {
-	suite.Server = &http.Server{Addr: addr, Handler: gateway}
+func (suite *ExternalClientSuite) StartService(addr string, handler http.Handler) {
+	suite.Server = &http.Server{Addr: addr, Handler: handler}
 	go func() {
 		err := suite.Server.ListenAndServe()
 		if err != http.ErrServerClosed {

@@ -17,7 +17,7 @@ class NameServiceClient {
       this.authorization = '',
   });
 
-
+  
   Future<FirstNameResponse> FirstName(FirstNameRequest serviceRequest, {String authorization = ''}) async {
     var requestJson = serviceRequest.toJson();
     var method = 'POST';
@@ -33,7 +33,7 @@ class NameServiceClient {
     var httpResponse = await httpRequest.close();
     return _handleResponse(httpResponse, (json) => FirstNameResponse.fromJson(json));
   }
-
+  
   Future<LastNameResponse> LastName(LastNameRequest serviceRequest, {String authorization = ''}) async {
     var requestJson = serviceRequest.toJson();
     var method = 'POST';
@@ -49,7 +49,7 @@ class NameServiceClient {
     var httpResponse = await httpRequest.close();
     return _handleResponse(httpResponse, (json) => LastNameResponse.fromJson(json));
   }
-
+  
   Future<SortNameResponse> SortName(SortNameRequest serviceRequest, {String authorization = ''}) async {
     var requestJson = serviceRequest.toJson();
     var method = 'POST';
@@ -65,7 +65,7 @@ class NameServiceClient {
     var httpResponse = await httpRequest.close();
     return _handleResponse(httpResponse, (json) => SortNameResponse.fromJson(json));
   }
-
+  
   Future<SplitResponse> Split(SplitRequest serviceRequest, {String authorization = ''}) async {
     var requestJson = serviceRequest.toJson();
     var method = 'POST';
@@ -81,7 +81,7 @@ class NameServiceClient {
     var httpResponse = await httpRequest.close();
     return _handleResponse(httpResponse, (json) => SplitResponse.fromJson(json));
   }
-
+  
 
   String _buildRequestPath(String method, String route, Map<String, dynamic> requestJson) {
     String stringify(Map<String, dynamic> json, String key) {
@@ -195,168 +195,168 @@ class NameServiceException implements Exception {
 }
 
 
-class LastNameRequest implements NameServiceModelJSON {
+class NameRequest implements NameServiceModelJSON { 
   String? Name;
 
-  LastNameRequest({
+  NameRequest({ 
     this.Name,
   });
 
-  LastNameRequest.fromJson(Map<String, dynamic> json) {
+  NameRequest.fromJson(Map<String, dynamic> json) { 
     Name = json['Name'];
   }
 
   Map<String, dynamic> toJson() {
-    return {
+    return { 
       'Name': Name,
     };
   }
 }
 
-class LastNameResponse implements NameServiceModelJSON {
-  String? LastName;
-
-  LastNameResponse({
-    this.LastName,
-  });
-
-  LastNameResponse.fromJson(Map<String, dynamic> json) {
-    LastName = json['LastName'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'LastName': LastName,
-    };
-  }
-}
-
-class SplitResponse implements NameServiceModelJSON {
+class SplitResponse implements NameServiceModelJSON { 
   String? FirstName;
   String? LastName;
 
-  SplitResponse({
+  SplitResponse({ 
     this.FirstName,
     this.LastName,
   });
 
-  SplitResponse.fromJson(Map<String, dynamic> json) {
+  SplitResponse.fromJson(Map<String, dynamic> json) { 
     FirstName = json['FirstName'];
     LastName = json['LastName'];
   }
 
   Map<String, dynamic> toJson() {
-    return {
+    return { 
       'FirstName': FirstName,
       'LastName': LastName,
     };
   }
 }
 
-class SortNameRequest implements NameServiceModelJSON {
+class LastNameRequest implements NameServiceModelJSON { 
   String? Name;
 
-  SortNameRequest({
+  LastNameRequest({ 
     this.Name,
   });
 
-  SortNameRequest.fromJson(Map<String, dynamic> json) {
+  LastNameRequest.fromJson(Map<String, dynamic> json) { 
     Name = json['Name'];
   }
 
   Map<String, dynamic> toJson() {
-    return {
+    return { 
       'Name': Name,
     };
   }
 }
 
-class FirstNameRequest implements NameServiceModelJSON {
-  String? Name;
+class LastNameResponse implements NameServiceModelJSON { 
+  String? LastName;
 
-  FirstNameRequest({
-    this.Name,
+  LastNameResponse({ 
+    this.LastName,
   });
 
-  FirstNameRequest.fromJson(Map<String, dynamic> json) {
-    Name = json['Name'];
+  LastNameResponse.fromJson(Map<String, dynamic> json) { 
+    LastName = json['LastName'];
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'Name': Name,
+    return { 
+      'LastName': LastName,
     };
   }
 }
 
-class SplitRequest implements NameServiceModelJSON {
-  String? Name;
-
-  SplitRequest({
-    this.Name,
-  });
-
-  SplitRequest.fromJson(Map<String, dynamic> json) {
-    Name = json['Name'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'Name': Name,
-    };
-  }
-}
-
-class FirstNameResponse implements NameServiceModelJSON {
-  String? FirstName;
-
-  FirstNameResponse({
-    this.FirstName,
-  });
-
-  FirstNameResponse.fromJson(Map<String, dynamic> json) {
-    FirstName = json['FirstName'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'FirstName': FirstName,
-    };
-  }
-}
-
-class NameRequest implements NameServiceModelJSON {
-  String? Name;
-
-  NameRequest({
-    this.Name,
-  });
-
-  NameRequest.fromJson(Map<String, dynamic> json) {
-    Name = json['Name'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'Name': Name,
-    };
-  }
-}
-
-class SortNameResponse implements NameServiceModelJSON {
+class SortNameResponse implements NameServiceModelJSON { 
   String? SortName;
 
-  SortNameResponse({
+  SortNameResponse({ 
     this.SortName,
   });
 
-  SortNameResponse.fromJson(Map<String, dynamic> json) {
+  SortNameResponse.fromJson(Map<String, dynamic> json) { 
     SortName = json['SortName'];
   }
 
   Map<String, dynamic> toJson() {
-    return {
+    return { 
       'SortName': SortName,
+    };
+  }
+}
+
+class SortNameRequest implements NameServiceModelJSON { 
+  String? Name;
+
+  SortNameRequest({ 
+    this.Name,
+  });
+
+  SortNameRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+    };
+  }
+}
+
+class SplitRequest implements NameServiceModelJSON { 
+  String? Name;
+
+  SplitRequest({ 
+    this.Name,
+  });
+
+  SplitRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+    };
+  }
+}
+
+class FirstNameResponse implements NameServiceModelJSON { 
+  String? FirstName;
+
+  FirstNameResponse({ 
+    this.FirstName,
+  });
+
+  FirstNameResponse.fromJson(Map<String, dynamic> json) { 
+    FirstName = json['FirstName'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'FirstName': FirstName,
+    };
+  }
+}
+
+class FirstNameRequest implements NameServiceModelJSON { 
+  String? Name;
+
+  FirstNameRequest({ 
+    this.Name,
+  });
+
+  FirstNameRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
     };
   }
 }

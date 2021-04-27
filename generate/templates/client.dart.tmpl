@@ -95,9 +95,9 @@ class {{ $clientName }} {
   }
 
   String _authorize(String callAuthorization) {
-    return authorization.trim().isNotEmpty
-      ? authorization
-      : callAuthorization;
+    return callAuthorization.trim().isNotEmpty
+      ? callAuthorization
+      : authorization;
   }
 
   String _joinUrl(List<String> segments) {

@@ -354,23 +354,28 @@ class GatewayError {
 
 
 /**
- * @typedef { object } FirstNameResponse
- * @property { string } [FirstName]
-*/
-/**
  * @typedef { object } SortNameResponse
  * @property { string } [SortName]
 */
 /**
- * @typedef { object } FirstNameRequest
- * @property { string } [Name]
-*/
-/**
- * @typedef { object } LastNameResponse
- * @property { string } [LastName]
+ * @typedef { object } FirstNameResponse
+ * @property { string } [FirstName]
 */
 /**
  * @typedef { object } NameRequest
+ * @property { string } [Name]
+*/
+/**
+ * @typedef { object } SplitRequest
+ * @property { string } [Name]
+*/
+/**
+ * @typedef { object } SplitResponse
+ * @property { string } [FirstName]
+ * @property { string } [LastName]
+*/
+/**
+ * @typedef { object } FirstNameRequest
  * @property { string } [Name]
 */
 /**
@@ -382,13 +387,8 @@ class GatewayError {
  * @property { string } [Name]
 */
 /**
- * @typedef { object } SplitResponse
- * @property { string } [FirstName]
+ * @typedef { object } LastNameResponse
  * @property { string } [LastName]
-*/
-/**
- * @typedef { object } SplitRequest
- * @property { string } [Name]
 */
 
 module.exports = {
