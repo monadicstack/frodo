@@ -15,6 +15,7 @@ import (
 // NewGameServiceClient creates an RPC client that conforms to the GameService interface, but delegates
 // work to remote instances. You must supply the base address of the remote service gateway instance or
 // the load balancer for that service.
+//
 // GameService manages the catalog info for all of the games in our system.
 func NewGameServiceClient(address string, options ...rpc.ClientOption) *GameServiceClient {
 	rpcClient := rpc.NewClient("GameService", address, options...)

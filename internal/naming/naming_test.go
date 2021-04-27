@@ -1,3 +1,5 @@
+// +build unit
+
 package naming_test
 
 import (
@@ -75,7 +77,7 @@ func (suite *NamingSuite) TestCleanPrefix() {
 	r.Equal("foo.Bar", naming.CleanPrefix("command-line-arguments.foo.Bar"))
 	r.Equal("*foo.Bar", naming.CleanPrefix("*command-line-arguments.foo.Bar"))
 	r.Equal("****foo.Bar", naming.CleanPrefix("****command-line-arguments.foo.Bar"))
-	r.Equal("foo.Bar", naming.CleanPrefix("COMMAND-line-arguments.foo.Bar")) // case insensitive
+	r.Equal("COMMAND-line-arguments.foo.Bar", naming.CleanPrefix("COMMAND-line-arguments.foo.Bar")) // case sensitive - not how go gives it to us
 	r.Equal("[]foo.Bar", naming.CleanPrefix("[]command-line-arguments.foo.Bar"))
 	r.Equal("[]*foo.Bar", naming.CleanPrefix("[]*command-line-arguments.foo.Bar"))
 	r.Equal("[123]*foo.Bar", naming.CleanPrefix("[123]*command-line-arguments.foo.Bar"))

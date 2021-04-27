@@ -15,6 +15,7 @@ import (
 // NewScoreServiceClient creates an RPC client that conforms to the ScoreService interface, but delegates
 // work to remote instances. You must supply the base address of the remote service gateway instance or
 // the load balancer for that service.
+//
 // ScoreService is a shared leaderboard service that tracks the high scores that people have
 // achieved while playing various games.
 func NewScoreServiceClient(address string, options ...rpc.ClientOption) *ScoreServiceClient {

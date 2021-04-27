@@ -5,6 +5,7 @@
 package {{ .OutputPackage.Name }}
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/monadicstack/respond"
@@ -27,7 +28,7 @@ import (
 //
 // The default instance works well enough, but you can supply additional options such as WithMiddleware() which
 // accepts any negroni-compatible middleware handlers.
-func New{{ $gatewayName }}(service {{ $ctx.InputPackage.Name }}.{{ $serviceName }}, options ...rpc.GatewayOption) rpc.Gateway {
+func New{{ $gatewayName }}(service {{ $ctx.InputPackage.Name }}.{{ $serviceName }}, options ...rpc.GatewayOption) {{ $gatewayName }} {
 	gw := rpc.NewGateway(options...)
 	gw.Name = "{{ $serviceName }}"
 	gw.PathPrefix = "{{ .Service.Gateway.PathPrefix }}"
@@ -53,5 +54,22 @@ func New{{ $gatewayName }}(service {{ $ctx.InputPackage.Name }}.{{ $serviceName 
 	})
 	{{ end }}
 
-	return gw
+	return {{ $gatewayName }}{gateway: gw, service: service}
+}
+
+type {{ $gatewayName }} struct {
+	gateway rpc.Gateway
+	service {{ $ctx.InputPackage.Name}}.{{ $serviceName }}
+}
+
+{{ range .Service.Functions }}
+{{ $requestName := (print $ctx.InputPackage.Name "." .Request.Name) -}}
+{{ $responseName := (print $ctx.InputPackage.Name "." .Response.Name) -}}
+func (gw {{ $gatewayName }}) {{ .Name }}(ctx context.Context, request *{{ $requestName }}) (*{{ $responseName}}, error) {
+	return gw.service.{{ .Name }}(ctx, request)
+}
+{{ end }}
+
+func (gw {{ $gatewayName }}) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	gw.gateway.ServeHTTP(w, req)
 }

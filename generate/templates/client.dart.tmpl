@@ -14,11 +14,11 @@ class {{ $clientName }} {
   static const String pathPrefix = '{{ .Service.Gateway.PathPrefix }}';
 
   final String baseURL;
-  String? authorization;
+  String authorization;
   HttpClient httpClient = HttpClient();
 
   {{ $clientName }}(this.baseURL, {
-      this.authorization,
+      this.authorization = '',
   });
 
   {{ range .Service.Functions }}
@@ -33,7 +33,7 @@ class {{ $clientName }} {
 
     var httpRequest = await httpClient.openUrl(method, Uri.parse(url));
     httpRequest.headers.set('Accept', 'application/json');
-    httpRequest.headers.set('Authorization', this.authorization ?? authorization);
+    httpRequest.headers.set('Authorization', _authorize(authorization));
     httpRequest.headers.set('Content-Type', 'application/json');
     {{ if .Gateway.SupportsBody }}httpRequest.write(jsonEncode(requestJson));{{ end }}
 
@@ -78,10 +78,26 @@ class {{ $clientName }} {
     var bodyText = await bodyCompleter.future;
 
     if (httpResponse.statusCode >= 400) {
-      throw new CalculatorServiceException(httpResponse.statusCode, bodyText);
+      throw new {{ $exceptionName }}(httpResponse.statusCode, _parseErrorMessage(bodyText));
     }
 
     return factory(jsonDecode(bodyText));
+  }
+
+  String _parseErrorMessage(String bodyText) {
+    try {
+      Map<String, dynamic> json = jsonDecode(bodyText);
+      return json['message'] ?? json['error'] ?? bodyText;
+    }
+    catch (_) {
+      return bodyText;
+    }
+  }
+
+  String _authorize(String callAuthorization) {
+    return callAuthorization.trim().isNotEmpty
+      ? callAuthorization
+      : authorization;
   }
 
   String _joinUrl(List<String> segments) {
@@ -132,9 +148,9 @@ class {{ $clientName }} {
 
 class {{ $exceptionName }} implements Exception {
     int status;
-    String cause;
+    String message;
 
-    {{ $exceptionName }}(this.status, this.cause);
+    {{ $exceptionName }}(this.status, this.message);
 }
 
 {{ range .Types.NonBasicTypes }}
@@ -142,7 +158,7 @@ class {{ $exceptionName }} implements Exception {
 {{- if .Documentation.NotEmpty }}{{- range .Documentation }}
 /// {{ . }}
 {{- end }}{{- end }}
-class {{ $typeName }} { {{ range .Fields }}
+class {{ $typeName }} implements {{ $serviceName }}ModelJSON { {{ range .Fields }}
   {{ .Type | DartType }}? {{ .Binding.Name }};
   {{- end }}
 
@@ -187,6 +203,12 @@ class {{ $typeName }} { {{ range .Fields }}
 }
 {{ end }}
 
-List<T>? _map<T>(List<dynamic>? jsonList, T Function(dynamic) mapping) {
+class {{$serviceName}}ModelJSON {
+  Map<String, dynamic> toJson() {
+    throw new Exception('toJson not implemented');
+  }
+}
+
+        List<T>? _map<T>(List<dynamic>? jsonList, T Function(dynamic) mapping) {
   return jsonList == null ? null : jsonList.map(mapping).toList();
 }
