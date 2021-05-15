@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/monadicstack/frodo/internal/implements"
 	"github.com/monadicstack/frodo/internal/naming"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/tools/go/packages"
@@ -135,6 +136,15 @@ func registerTypeEntry(ctx *Context, registry TypeRegistry, entry *TypeDeclarati
 		// is "type Foo []Bar", the Named type is "Foo", but we need to fill Foo's entry w/ information stored
 		// on the underlying type, "[]Bar".
 		registerTypeEntry(ctx, registry, entry, tt.Underlying())
+
+		// Check to see if any/all of our raw file interfaces are implemented. This will serve as helper data for the
+		// client/gateway generators to know when a response should be treated as JSON (default) or raw bytes.
+		entry.Implements.ContentReader = implements.Method(tt, "Content", nil, []string{"io.ReadCloser"})
+		entry.Implements.ContentTypeReader = implements.Method(tt, "ContentType", nil, []string{"string"})
+		entry.Implements.ContentFileNameReader = implements.Method(tt, "ContentFileName", nil, []string{"string"})
+		entry.Implements.ContentWriter = implements.Method(tt, "SetContent", []string{"io.ReadCloser"}, nil)
+		entry.Implements.ContentTypeWriter = implements.Method(tt, "SetContentType", []string{"string"}, nil)
+		entry.Implements.ContentFileNameWriter = implements.Method(tt, "SetContentFileName", []string{"string"}, nil)
 
 	case *types.Array:
 		entry.Basic = entry.Type == t
@@ -530,6 +540,7 @@ func flattenedStructFields(structType *types.Struct) []*types.Var {
 	var fields []*types.Var
 	for i := 0; i < structType.NumFields(); i++ {
 		field := structType.Field(i)
+
 		if !field.Exported() {
 			continue
 		}

@@ -31,8 +31,9 @@ with as little fuss as possible.
 * [Example](https://github.com/monadicstack/frodo#example)
 * [Customize HTTP Route, Status, etc](https://github.com/monadicstack/frodo#doc-options-custom-urls-status-etc)
 * [Error Handling](https://github.com/monadicstack/frodo#error-handling)
-* [HTTP Redirects](https://github.com/monadicstack/frodo#http-redirects)
 * [Middleware](https://github.com/monadicstack/frodo#middleware)
+
+* [HTTP Redirects](https://github.com/monadicstack/frodo#http-redirects)
 * [Request Scoped Metadata](https://github.com/monadicstack/frodo#request-scoped-metadata)
 * [Create a JavaScript Client](https://github.com/monadicstack/frodo#creating-a-javascript-client)
 * [Create a Dart/Flutter Client](https://github.com/monadicstack/frodo#creating-a-dartflutter-client)
@@ -352,6 +353,51 @@ probably good enough for most people, take a look at the
 documentation for [github.com/monadicstack/respond](https://github.com/monadicstack/respond#how-does-it-know-which-4xx5xx-status-to-use)
 to see how you can roll your own custom errors, but still
 drive which 4XX/5XX status your service generates.
+
+## Returning Raw File Data
+
+Let's say that you're writing `ProfilePictureService`. One of the
+operations you might want is the ability to return the raw JPG data
+for a user's profile picture. You do this the same way that you 
+handle JSON-based responses; just implement some interfaces so that
+Frodo knows to treat it a little different:
+
+```go
+type ServeResponse struct {
+    file *io.File
+}
+
+// By implementing io.Reader, that tells Frodo to respond w/ raw
+// data rather than JSON. Whatever it reads from here, that's what
+// the caller will receive.
+func (res ServeResponse) Read(b []byte) (int, error) {
+    return res.file.Read(b)
+}
+
+// By implementing ContentTypeSpecifier, this lets you dictate the
+// underlying HTTP Content-Type header. Without this Frodo will have
+// nothing to go on and assume "application/octet-stream".
+func (res ServeResponse) ContentType() string {
+    return "image/jpeg"
+}
+
+// --- and now in your service ---
+
+func (svc ProfilePictureService) Serve(ctx context.Context, req *ServeRequest) (*ServeResponse, error) {
+    // Ignore the fact that you probably don't store profile pictures on the
+    // hard drive of your service boxes...
+    f, err := os.Open("./pictures/" + req.UserID + ".jpg")
+    if err != nil {
+        return nil, errors.NotFound("no profile picture for user %s", req.UserID)
+    }
+    return &ServeResponse{file: f}, nil
+}
+```
+
+Since `ServeResponse` implements `io.Reader`, the raw JPG bytes will
+be sent to the caller instead of the JSON-marshaled version of the
+result. Also, since it implements the `ContentType()` function, the
+caller will see it as an "image/jpg" rather than "application/octet-stream".
 
 ## HTTP Redirects
 

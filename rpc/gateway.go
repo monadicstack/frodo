@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 
@@ -309,4 +310,22 @@ func Compose(gateways ...Gateway) CompositeGateway {
 type route struct {
 	method string
 	path   string
+}
+
+type ContentReader respond.ContentReader
+
+type ContentWriter interface {
+	SetContent(reader io.ReadCloser)
+}
+
+type ContentTypeReader respond.ContentTypeReader
+
+type ContentTypeWriter interface {
+	SetContentType(contentType string)
+}
+
+type ContentFileNameReader respond.ContentFileNameReader
+
+type ContentFileNameWriter interface {
+	SetContentFileName(contentFileName string)
 }

@@ -1,7 +1,9 @@
 package names
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"strings"
 
 	"github.com/monadicstack/frodo/rpc/authorization"
@@ -53,4 +55,37 @@ func (svc NameServiceHandler) SortName(ctx context.Context, req *SortNameRequest
 		return &SortNameResponse{SortName: strings.ToLower(res.FirstName)}, nil
 	}
 	return &SortNameResponse{SortName: strings.ToLower(res.LastName + ", " + res.FirstName)}, nil
+}
+
+func (svc NameServiceHandler) Download(ctx context.Context, req *DownloadRequest) (*DownloadResponse, error) {
+	split, err := svc.Split(ctx, &SplitRequest{Name: req.Name})
+	if err != nil {
+		return nil, err
+	}
+
+	buf := bytes.Buffer{}
+	buf.WriteString("first,last\n")
+	buf.WriteString(split.FirstName)
+	buf.WriteString(",")
+	buf.WriteString(split.LastName)
+	return &DownloadResponse{reader: io.NopCloser(&buf)}, nil
+}
+
+func (svc NameServiceHandler) DownloadExt(ctx context.Context, req *DownloadExtRequest) (*DownloadExtResponse, error) {
+	split, err := svc.Split(ctx, &SplitRequest{Name: req.Name})
+	if err != nil {
+		return nil, err
+	}
+
+	buf := bytes.Buffer{}
+	buf.WriteString("first,last\n")
+	buf.WriteString(split.FirstName)
+	buf.WriteString(",")
+	buf.WriteString(split.LastName)
+
+	res := DownloadExtResponse{}
+	res.reader = io.NopCloser(&buf)
+	res.contentType = "text/" + req.Ext
+	res.contentFileName = "name." + req.Ext
+	return &res, nil
 }

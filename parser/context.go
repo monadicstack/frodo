@@ -489,6 +489,15 @@ type TypeDeclaration struct {
 	Fields FieldDeclarations
 	// Documentation are all of the comments documenting this operation.
 	Documentation DocumentationLines
+
+	Implements struct {
+		ContentReader         bool
+		ContentWriter         bool
+		ContentTypeReader     bool
+		ContentTypeWriter     bool
+		ContentFileNameReader bool
+		ContentFileNameWriter bool
+	}
 }
 
 // String returns the name of the type. That is all.
