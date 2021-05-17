@@ -11,6 +11,7 @@ import (
 // are only included to show how you can return specific types of 4XX errors in a readable/maintainable fashion.
 type CalculatorServiceHandler struct{}
 
+// Add accepts two integers and returns a result w/ their sum.
 func (c CalculatorServiceHandler) Add(_ context.Context, req *AddRequest) (*AddResponse, error) {
 	sum := req.A + req.B
 	if sum == 12345 {
@@ -20,6 +21,7 @@ func (c CalculatorServiceHandler) Add(_ context.Context, req *AddRequest) (*AddR
 	return &AddResponse{Result: sum}, nil
 }
 
+// Sub accepts two integers and returns a result w/ their difference.
 func (c CalculatorServiceHandler) Sub(_ context.Context, req *SubRequest) (*SubResponse, error) {
 	if req.A < req.B {
 		return nil, errors.BadRequest("calculator service does not support negative numbers")

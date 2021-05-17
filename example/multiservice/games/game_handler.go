@@ -14,6 +14,7 @@ type GameServiceHandler struct {
 	Repo Repo
 }
 
+// GetByID looks up a game record given its unique id.
 func (svc *GameServiceHandler) GetByID(ctx context.Context, req *GetByIDRequest) (*GetByIDResponse, error) {
 	if req.ID == "" {
 		return nil, errors.BadRequest("id is required")
@@ -28,6 +29,7 @@ func (svc *GameServiceHandler) GetByID(ctx context.Context, req *GetByIDRequest)
 	return &response, nil
 }
 
+// Register adds another game record to our gaming database.
 func (svc *GameServiceHandler) Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error) {
 	if req.Name == "" {
 		return nil, errors.BadRequest("create: name is required")

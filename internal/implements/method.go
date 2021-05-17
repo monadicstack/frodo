@@ -9,16 +9,35 @@ import (
 // you can just supply the qualified names of the types for your params and return values (e.g. "io.Reader"
 // or "http.Client").
 func Method(t types.Type, name string, paramTypes []string, returnTypes []string) bool {
-	named, ok := t.(*types.Named)
-	if !ok {
-		return false
+	if structType, ok := t.(*types.Struct); ok {
+		return methodOnStruct(structType, name, paramTypes, returnTypes)
 	}
+	if named, ok := t.(*types.Named); ok {
+		return methodOnNamed(named, name, paramTypes, returnTypes)
+	}
+	return false
+}
 
-	for i := 0; i < named.NumMethods(); i++ {
-		fn := named.Method(i)
-		if Signature(fn, name, paramTypes, returnTypes) {
+func methodOnStruct(structType *types.Struct, name string, paramTypes []string, returnTypes []string) bool {
+	for i := 0; i < structType.NumFields(); i++ {
+		field := structType.Field(i)
+		if field.Embedded() && Method(field.Type(), name, paramTypes, returnTypes) {
 			return true
 		}
+	}
+	return false
+}
+
+func methodOnNamed(namedType *types.Named, name string, paramTypes []string, returnTypes []string) bool {
+	for i := 0; i < namedType.NumMethods(); i++ {
+		method := namedType.Method(i)
+		if Signature(method, name, paramTypes, returnTypes) {
+			return true
+		}
+	}
+
+	if underlying := namedType.Underlying(); namedType != underlying {
+		return Method(underlying, name, paramTypes, returnTypes)
 	}
 	return false
 }

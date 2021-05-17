@@ -97,6 +97,7 @@ func PathTokens(path string) []string {
 	return strings.Split(path, "/")
 }
 
+// CleanTypeNameUpper normalizes a raw type's name to be a single token name in upper camel case.
 func CleanTypeNameUpper(typeName string) string {
 	typeName = CleanPrefix(typeName)
 	typeName = NoSlice(typeName)
@@ -106,6 +107,7 @@ func CleanTypeNameUpper(typeName string) string {
 	return typeName
 }
 
+// DispositionFileName extracts the "filename" from an HTTP Content-Disposition header value.
 func DispositionFileName(contentDisposition string) string {
 	// The start or the file name in the header is the index of "filename=" plus the 9
 	// characters in that substring.

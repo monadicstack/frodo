@@ -56,14 +56,18 @@ class {{ .Service.Name }}Client {
             method: '{{ .Gateway.Method }}',
             headers: {
                 'Authorization': authorization || this._authorization,
-                'Accept': 'application/json',
+                'Accept': 'application/json,*/*',
                 'Content-Type': 'application/json; charset=utf-8',
             },
             {{ if .Gateway.SupportsBody }}body: JSON.stringify(serviceRequest),{{ end }}
         };
 
         const response = await this._fetch(url, fetchOptions);
-        return handleResponse(response);
+        {{- if .Response.Implements.ContentWriter }}
+        return handleResponseRaw(response);
+        {{- else }}
+        return handleResponseJSON(response);
+        {{- end }}
     }
     {{ end }}
 }
@@ -142,20 +146,79 @@ function attributeValue(struct, attributeName) {
     return null;
 }
 
+
 /**
  * Accepts the full response data and the request's promise resolve/reject and determines
  * which to invoke. This will also JSON-unmarshal the response data if need be.
  */
-async function handleResponse(response) {
-    const contentType = response.headers.get('content-type');
-    const responseValue = !contentType || contentType.startsWith('application/json')
+async function handleResponseJSON(response) {
+    if (response.status >= 400) {
+        throw await newError(response);
+    }
+    return await response.json();
+}
+
+/**
+ * Accepts the full response data and the request's promise resolve/reject and determines
+ * which to invoke. This assumes that you want the raw bytes as a blob from the HTTP response
+ * rather than treating it like JSON. This will also capture the Content-Type value as well as
+ * the "filename" from the Content-Disposition if it's set to "attachment".
+ *
+ * @returns { {content: Blob, contentType: string, contentFileName: string} }
+ */
+async function handleResponseRaw(response) {
+    if (response.status >= 400) {
+        throw await newError(response);
+    }
+    const content = await response.blob();
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    const contentFileName = dispositionFileName(response.headers.get('content-disposition'));
+    return {
+        Content: content,
+        ContentType: contentType,
+        ContentFileName: contentFileName,
+    }
+}
+
+/**
+ * Creates a new GatewayError with all of the meaningful status/message info extracted
+ * from the HTTP response.
+ *
+ * @returns {Promise<GatewayError>}
+ */
+async function newError(response) {
+    const responseValue = isJSON(response)
         ? await response.json()
         : await response.text();
 
-    if (response.status >= 400) {
-        throw new GatewayError(response.status, parseErrorMessage(responseValue));
+    throw new GatewayError(response.status, parseErrorMessage(responseValue));
+}
+
+/**
+ * Parses a value from the Content-Disposition header to extract just the filename attribute.
+ *
+ * @param {string} contentDisposition
+ * @returns {string}
+ */
+function dispositionFileName(contentDisposition = '') {
+    const fileNameAttrPos = contentDisposition.indexOf('filename=');
+    if (fileNameAttrPos < 0) {
+        return '';
     }
-    return responseValue;
+
+    let fileName = contentDisposition.substring(fileNameAttrPos + 9);
+    fileName = fileName.startsWith('"') ? fileName.substring(1) : fileName;
+    fileName = fileName.endsWith('"') ? fileName.substring(0, fileName.length - 1) : fileName;
+    fileName = fileName.replace(/\\"/g, '"');
+    return fileName;
+}
+
+/**
+ * Determines whether or not the response has a content type of JSON.
+ */
+function isJSON(response) {
+    const contentType = response.headers.get('content-type');
+    return contentType && contentType.toLowerCase().startsWith('application/json');
 }
 
 /**

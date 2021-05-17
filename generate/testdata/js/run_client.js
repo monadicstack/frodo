@@ -12,6 +12,7 @@ class TestSuite {
     async testNotConnected() {
         const client = new NameServiceClient('http://localhost:9999', {fetch});
         await output(client.Split({ Name: 'Jeff Lebowski' }));
+        await output(client.Download({ Name: 'Jeff Lebowski' }));
     }
 
     async testBadFetch() {
@@ -28,6 +29,18 @@ class TestSuite {
         await output(client.SortName({ Name: 'Dude' }));
     }
 
+    async testSuccessRaw() {
+        const client = new NameServiceClient('http://localhost:9100', {fetch});
+        await outputRaw(client.Download({ Name: 'Jeff Lebowski' }));
+    }
+
+    async testSuccessRawHeaders() {
+        const client = new NameServiceClient('http://localhost:9100', {fetch});
+        await outputRaw(client.DownloadExt({ Name: 'Jeff Lebowski', Ext: 'csv' }));
+        await outputRaw(client.DownloadExt({ Name: 'Jeff Lebowski', Ext: 'txt' }));
+        await outputRaw(client.DownloadExt({ Name: 'Jeff Lebowski', Ext: 't"x"t' }));
+    }
+
     async testValidationFailure() {
         const client = new NameServiceClient('http://localhost:9100', {fetch});
         await output(client.Split({ Name: '' }));
@@ -38,6 +51,10 @@ class TestSuite {
         await output(client.LastName({ }));
         await output(client.SortName({ Name: '' }));
         await output(client.SortName({ }));
+
+        // Raw failures should be output as JSON, too.
+        await outputRaw(client.Download({ }));
+        await outputRaw(client.DownloadExt({ }));
     }
 
     async testAuthFailureClient() {
@@ -65,8 +82,16 @@ class TestSuite {
     }
 }
 
-async function output(value) {
+async function outputRaw(value) {
+    return output(value, true);
+}
+
+async function output(value, raw = false) {
     try {
+        value = await value;
+        if (raw) {
+            value.Content = await value.Content.text();
+        }
         console.info('OK ' + JSON.stringify(await value));
     }
     catch (e) {

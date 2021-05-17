@@ -36,11 +36,16 @@ func (suite *JavaScriptClientSuite) Run(testName string, expectedLines int) test
 // Ensures that we get a connection refused error when connecting to a not-running server.
 func (suite *JavaScriptClientSuite) TestNotConnected() {
 	assert := suite.Require()
-	output := suite.Run("NotConnected", 1)
+	output := suite.Run("NotConnected", 2)
 
-	fail0 := errors.RPCError{}
-	suite.ExpectFail(output, 0, &fail0, func() {
-		assert.Contains(fail0.Message, "ECONNREFUSED")
+	fail := errors.RPCError{}
+	suite.ExpectFail(output, 0, &fail, func() {
+		assert.Contains(fail.Message, "ECONNREFUSED")
+	})
+
+	fail = errors.RPCError{}
+	suite.ExpectFail(output, 0, &fail, func() {
+		assert.Contains(fail.Message, "ECONNREFUSED")
 	})
 }
 
@@ -82,9 +87,49 @@ func (suite *JavaScriptClientSuite) TestSuccess() {
 	})
 }
 
+// Ensures that all of our service functions succeed when they return "raw" results.
+func (suite *JavaScriptClientSuite) TestSuccessRaw() {
+	assert := suite.Require()
+	output := suite.Run("SuccessRaw", 1)
+
+	res0 := RawNodeResult{}
+	suite.ExpectPass(output, 0, &res0, func() {
+		assert.Equal("first,last\nJeff,Lebowski", res0.Content)
+		assert.Equal("application/octet-stream", res0.ContentType)
+		assert.Equal("", res0.ContentFileName)
+	})
+}
+
+// Ensures that raw response calls support content type and disposition header processing.
+func (suite *JavaScriptClientSuite) TestSuccessRawHeaders() {
+	assert := suite.Require()
+	output := suite.Run("SuccessRawHeaders", 3)
+
+	res := RawNodeResult{}
+	suite.ExpectPass(output, 0, &res, func() {
+		assert.Equal("first,last\nJeff,Lebowski", res.Content)
+		assert.Equal("text/csv", res.ContentType)
+		assert.Equal("name.csv", res.ContentFileName)
+	})
+
+	res = RawNodeResult{}
+	suite.ExpectPass(output, 1, &res, func() {
+		assert.Equal("first,last\nJeff,Lebowski", res.Content)
+		assert.Equal("text/txt", res.ContentType)
+		assert.Equal("name.txt", res.ContentFileName)
+	})
+
+	res = RawNodeResult{}
+	suite.ExpectPass(output, 2, &res, func() {
+		assert.Equal("first,last\nJeff,Lebowski", res.Content)
+		assert.Equal(`text/t"x"t`, res.ContentType)
+		assert.Equal(`name.t"x"t`, res.ContentFileName)
+	})
+}
+
 // Ensures that validation failures are properly propagated from the server.
 func (suite *JavaScriptClientSuite) TestValidationFailure() {
-	output := suite.Run("ValidationFailure", 8)
+	output := suite.Run("ValidationFailure", 10)
 
 	suite.ExpectFailStatus(output, 0, 400)
 	suite.ExpectFailStatus(output, 1, 400)
@@ -94,6 +139,10 @@ func (suite *JavaScriptClientSuite) TestValidationFailure() {
 	suite.ExpectFailStatus(output, 5, 400)
 	suite.ExpectFailStatus(output, 6, 400)
 	suite.ExpectFailStatus(output, 7, 400)
+
+	// These are the two "raw" failures.
+	suite.ExpectFailStatus(output, 8, 400)
+	suite.ExpectFailStatus(output, 9, 400)
 }
 
 // Ensures that calls fail with a 403 if you have a bad authorization value on the entire client.
@@ -145,4 +194,15 @@ func (suite *JavaScriptClientSuite) TestAuthFailureCallOverride() {
 
 func TestJavaScriptClientSuite(t *testing.T) {
 	suite.Run(t, new(JavaScriptClientSuite))
+}
+
+// RawNodeResult matches the data structure of the Node/JS object returned by service
+// functions that result in "raw" byte responses.
+type RawNodeResult struct {
+	// Content contains the raw byte content output by the service call.
+	Content string
+	// ContentType contains the captured "Content-Type" header data.
+	ContentType string
+	// ContentFileName contains the captured file name from the "Content-Disposition" header data.
+	ContentFileName string
 }
