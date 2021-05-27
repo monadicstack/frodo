@@ -18,6 +18,43 @@ class NameServiceClient {
   });
 
   
+  /// Download returns a raw CSV file containing the parsed name.
+  Future<DownloadResponse> Download(DownloadRequest serviceRequest, {String authorization = ''}) async {
+    var requestJson = serviceRequest.toJson();
+    var method = 'POST';
+    var route = '/NameService.Download';
+    var url = _joinUrl([baseURL, pathPrefix, _buildRequestPath(method, route, requestJson)]);
+
+    var httpRequest = await httpClient.openUrl(method, Uri.parse(url));
+    httpRequest.headers.set('Accept', 'application/json');
+    httpRequest.headers.set('Authorization', _authorize(authorization));
+    httpRequest.headers.set('Content-Type', 'application/json');
+    httpRequest.write(jsonEncode(requestJson));
+
+    var httpResponse = await httpRequest.close();
+    return _handleResponseRaw(httpResponse, (json) => DownloadResponse.fromJson(json));
+  }
+  
+  /// DownloadExt returns a raw CSV file containing the parsed name. This differs from Download
+  /// by giving you the "Ext" knob which will let you exercise the content type and disposition
+  /// interfaces that Frodo supports for raw responses.
+  Future<DownloadExtResponse> DownloadExt(DownloadExtRequest serviceRequest, {String authorization = ''}) async {
+    var requestJson = serviceRequest.toJson();
+    var method = 'POST';
+    var route = '/NameService.DownloadExt';
+    var url = _joinUrl([baseURL, pathPrefix, _buildRequestPath(method, route, requestJson)]);
+
+    var httpRequest = await httpClient.openUrl(method, Uri.parse(url));
+    httpRequest.headers.set('Accept', 'application/json');
+    httpRequest.headers.set('Authorization', _authorize(authorization));
+    httpRequest.headers.set('Content-Type', 'application/json');
+    httpRequest.write(jsonEncode(requestJson));
+
+    var httpResponse = await httpRequest.close();
+    return _handleResponseRaw(httpResponse, (json) => DownloadExtResponse.fromJson(json));
+  }
+  
+  /// FirstName extracts just the first name from a full name string.
   Future<FirstNameResponse> FirstName(FirstNameRequest serviceRequest, {String authorization = ''}) async {
     var requestJson = serviceRequest.toJson();
     var method = 'POST';
@@ -32,8 +69,10 @@ class NameServiceClient {
 
     var httpResponse = await httpRequest.close();
     return _handleResponse(httpResponse, (json) => FirstNameResponse.fromJson(json));
+    
   }
   
+  /// LastName extracts just the last name from a full name string.
   Future<LastNameResponse> LastName(LastNameRequest serviceRequest, {String authorization = ''}) async {
     var requestJson = serviceRequest.toJson();
     var method = 'POST';
@@ -48,8 +87,10 @@ class NameServiceClient {
 
     var httpResponse = await httpRequest.close();
     return _handleResponse(httpResponse, (json) => LastNameResponse.fromJson(json));
+    
   }
   
+  /// SortName establishes the "phone book" name for the given full name.
   Future<SortNameResponse> SortName(SortNameRequest serviceRequest, {String authorization = ''}) async {
     var requestJson = serviceRequest.toJson();
     var method = 'POST';
@@ -64,8 +105,10 @@ class NameServiceClient {
 
     var httpResponse = await httpRequest.close();
     return _handleResponse(httpResponse, (json) => SortNameResponse.fromJson(json));
+    
   }
   
+  /// Split separates a first and last name.
   Future<SplitResponse> Split(SplitRequest serviceRequest, {String authorization = ''}) async {
     var requestJson = serviceRequest.toJson();
     var method = 'POST';
@@ -80,6 +123,7 @@ class NameServiceClient {
 
     var httpResponse = await httpRequest.close();
     return _handleResponse(httpResponse, (json) => SplitResponse.fromJson(json));
+    
   }
   
 
@@ -114,25 +158,24 @@ class NameServiceClient {
   }
 
   Future<T> _handleResponse<T>(HttpClientResponse httpResponse, T Function(Map<String, dynamic>) factory) async {
-    var bodyCompleter = new Completer<String>();
-    httpResponse.transform(utf8.decoder).listen(bodyCompleter.complete);
-    var bodyText = await bodyCompleter.future;
-
     if (httpResponse.statusCode >= 400) {
-      throw new NameServiceException(httpResponse.statusCode, _parseErrorMessage(bodyText));
+      throw await NameServiceException.fromResponse(httpResponse);
     }
 
-    return factory(jsonDecode(bodyText));
+    var bodyJson = await _streamToString(httpResponse);
+    return factory(jsonDecode(bodyJson));
   }
 
-  String _parseErrorMessage(String bodyText) {
-    try {
-      Map<String, dynamic> json = jsonDecode(bodyText);
-      return json['message'] ?? json['error'] ?? bodyText;
+  Future<T> _handleResponseRaw<T>(HttpClientResponse httpResponse, T Function(Map<String, dynamic>) factory) async {
+    if (httpResponse.statusCode >= 400) {
+      throw await NameServiceException.fromResponse(httpResponse);
     }
-    catch (_) {
-      return bodyText;
-    }
+
+    return factory({
+      'Content': httpResponse,
+      'ContentType': httpResponse.headers.value('Content-Type') ?? 'application/octet-stream',
+      'ContentFileName': _dispositionFileName(httpResponse.headers.value('Content-Disposition')),
+    });
   }
 
   String _authorize(String callAuthorization) {
@@ -185,24 +228,55 @@ class NameServiceClient {
     json.keys.forEach((key) => flattenEntry("", key, json[key], result));
     return result;
   }
+
+  String _dispositionFileName(String? contentDisposition) {
+    if (contentDisposition == null) {
+      return '';
+    }
+
+    var fileNameAttrPos = contentDisposition.indexOf("filename=");
+    if (fileNameAttrPos < 0) {
+      return '';
+    }
+
+    var fileName = contentDisposition.substring(fileNameAttrPos + 9);
+    fileName = fileName.startsWith('"') ? fileName.substring(1) : fileName;
+    fileName = fileName.endsWith('"') ? fileName.substring(0, fileName.length - 1) : fileName;
+    fileName = fileName.replaceAll('\\"', '\"');
+    return fileName;
+  }
 }
 
 class NameServiceException implements Exception {
-    int status;
-    String message;
+  int status;
+  String message;
 
-    NameServiceException(this.status, this.message);
+  NameServiceException(this.status, this.message);
+
+  static Future<NameServiceException> fromResponse(HttpClientResponse response) async {
+    var body = await _streamToString(response);
+    var message = '';
+    try {
+      Map<String, dynamic> json = jsonDecode(body);
+      message = json['message'] ?? json['error'] ?? body;
+    }
+    catch (_) {
+      message = body;
+    }
+    throw new NameServiceException(response.statusCode, message);
+  }
 }
 
 
-class NameRequest implements NameServiceModelJSON { 
+/// SortNameRequest is the input for the SortName function.
+class SortNameRequest implements NameServiceModelJSON { 
   String? Name;
 
-  NameRequest({ 
+  SortNameRequest({ 
     this.Name,
   });
 
-  NameRequest.fromJson(Map<String, dynamic> json) { 
+  SortNameRequest.fromJson(Map<String, dynamic> json) { 
     Name = json['Name'];
   }
 
@@ -213,6 +287,56 @@ class NameRequest implements NameServiceModelJSON {
   }
 }
 
+/// SortNameResponse is the output for the SortName function.
+class SortNameResponse implements NameServiceModelJSON { 
+  String? SortName;
+
+  SortNameResponse({ 
+    this.SortName,
+  });
+
+  SortNameResponse.fromJson(Map<String, dynamic> json) { 
+    SortName = json['SortName'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'SortName': SortName,
+    };
+  }
+}
+
+/// DownloadResponse is the output for the Download function.
+class DownloadResponse implements NameServiceModelJSON { 
+  Stream<List<int>>? Content;
+  String? ContentType;
+  String? ContentFileName;
+
+  DownloadResponse({ 
+    this.Content,
+    this.ContentType,
+    this.ContentFileName,
+    
+  });
+
+  DownloadResponse.fromJson(Map<String, dynamic> json) { 
+    Content = json['Content'] as Stream<List<int>>?;
+    ContentType = json['ContentType'] ?? 'application/octet-stream';
+    ContentFileName = json['ContentFileName'] ?? '';
+    
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Content': _streamToString(Content),
+      'ContentType': ContentType ?? 'application/octet-stream',
+      'ContentFileName': ContentFileName ?? '',
+      
+    };
+  }
+}
+
+/// SplitResponse is the output for the Split function.
 class SplitResponse implements NameServiceModelJSON { 
   String? FirstName;
   String? LastName;
@@ -235,6 +359,68 @@ class SplitResponse implements NameServiceModelJSON {
   }
 }
 
+/// DownloadRequest is the input for the Download function.
+class DownloadRequest implements NameServiceModelJSON { 
+  String? Name;
+
+  DownloadRequest({ 
+    this.Name,
+  });
+
+  DownloadRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+    };
+  }
+}
+
+/// FirstNameRequest is the input for the FirstName function.
+class FirstNameRequest implements NameServiceModelJSON { 
+  String? Name;
+
+  FirstNameRequest({ 
+    this.Name,
+  });
+
+  FirstNameRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+    };
+  }
+}
+
+/// DownloadExtRequest is the input for the DownloadExt function.
+class DownloadExtRequest implements NameServiceModelJSON { 
+  String? Name;
+  String? Ext;
+
+  DownloadExtRequest({ 
+    this.Name,
+    this.Ext,
+  });
+
+  DownloadExtRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+    Ext = json['Ext'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+      'Ext': Ext,
+    };
+  }
+}
+
+/// LastNameRequest is the output for the LastName function.
 class LastNameRequest implements NameServiceModelJSON { 
   String? Name;
 
@@ -253,6 +439,7 @@ class LastNameRequest implements NameServiceModelJSON {
   }
 }
 
+/// LastNameResponse is the output for the LastName function.
 class LastNameResponse implements NameServiceModelJSON { 
   String? LastName;
 
@@ -271,38 +458,70 @@ class LastNameResponse implements NameServiceModelJSON {
   }
 }
 
-class SortNameResponse implements NameServiceModelJSON { 
-  String? SortName;
-
-  SortNameResponse({ 
-    this.SortName,
-  });
-
-  SortNameResponse.fromJson(Map<String, dynamic> json) { 
-    SortName = json['SortName'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'SortName': SortName,
-    };
-  }
-}
-
-class SortNameRequest implements NameServiceModelJSON { 
+/// NameRequest generalizes the data we pass to any of the name service functions.
+class NameRequest implements NameServiceModelJSON { 
   String? Name;
 
-  SortNameRequest({ 
+  NameRequest({ 
     this.Name,
   });
 
-  SortNameRequest.fromJson(Map<String, dynamic> json) { 
+  NameRequest.fromJson(Map<String, dynamic> json) { 
     Name = json['Name'];
   }
 
   Map<String, dynamic> toJson() {
     return { 
       'Name': Name,
+    };
+  }
+}
+
+/// DownloadExtResponse is the output for the DownloadExt function.
+class DownloadExtResponse implements NameServiceModelJSON { 
+  Stream<List<int>>? Content;
+  String? ContentType;
+  String? ContentFileName;
+
+  DownloadExtResponse({ 
+    this.Content,
+    this.ContentType,
+    this.ContentFileName,
+    
+  });
+
+  DownloadExtResponse.fromJson(Map<String, dynamic> json) { 
+    Content = json['Content'] as Stream<List<int>>?;
+    ContentType = json['ContentType'] ?? 'application/octet-stream';
+    ContentFileName = json['ContentFileName'] ?? '';
+    
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Content': _streamToString(Content),
+      'ContentType': ContentType ?? 'application/octet-stream',
+      'ContentFileName': ContentFileName ?? '',
+      
+    };
+  }
+}
+
+/// FirstNameResponse is the output for the FirstName function.
+class FirstNameResponse implements NameServiceModelJSON { 
+  String? FirstName;
+
+  FirstNameResponse({ 
+    this.FirstName,
+  });
+
+  FirstNameResponse.fromJson(Map<String, dynamic> json) { 
+    FirstName = json['FirstName'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'FirstName': FirstName,
     };
   }
 }
@@ -325,42 +544,6 @@ class SplitRequest implements NameServiceModelJSON {
   }
 }
 
-class FirstNameResponse implements NameServiceModelJSON { 
-  String? FirstName;
-
-  FirstNameResponse({ 
-    this.FirstName,
-  });
-
-  FirstNameResponse.fromJson(Map<String, dynamic> json) { 
-    FirstName = json['FirstName'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'FirstName': FirstName,
-    };
-  }
-}
-
-class FirstNameRequest implements NameServiceModelJSON { 
-  String? Name;
-
-  FirstNameRequest({ 
-    this.Name,
-  });
-
-  FirstNameRequest.fromJson(Map<String, dynamic> json) { 
-    Name = json['Name'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'Name': Name,
-    };
-  }
-}
-
 
 class NameServiceModelJSON {
   Map<String, dynamic> toJson() {
@@ -368,6 +551,15 @@ class NameServiceModelJSON {
   }
 }
 
-        List<T>? _map<T>(List<dynamic>? jsonList, T Function(dynamic) mapping) {
+List<T>? _map<T>(List<dynamic>? jsonList, T Function(dynamic) mapping) {
   return jsonList == null ? null : jsonList.map(mapping).toList();
+}
+
+Future<String> _streamToString(Stream<List<int>>? stream) async {
+  if (stream == null) {
+    return '';
+  }
+  var bodyCompleter = new Completer<String>();
+  stream.transform(utf8.decoder).listen(bodyCompleter.complete);
+  return bodyCompleter.future;
 }

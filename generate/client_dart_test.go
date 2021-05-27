@@ -28,7 +28,7 @@ func (suite *DartClientSuite) TearDownTest() {
 
 func (suite *DartClientSuite) Run(testName string, expectedLines int) testext.ClientTestResults {
 	output, err := testext.RunClientTest("dart", "testdata/dart/run_client.dart", testName)
-	suite.Require().NoError(err, "Executing client runner should not give an error")
+	suite.Require().NoError(err, "Executing client runner should not give an error: %v", err)
 	suite.Require().Len(output, expectedLines)
 	return output
 }
@@ -36,11 +36,16 @@ func (suite *DartClientSuite) Run(testName string, expectedLines int) testext.Cl
 // Ensures that we get a connection refused error when connecting to a not-running server.
 func (suite *DartClientSuite) TestNotConnected() {
 	assert := suite.Require()
-	output := suite.Run("NotConnected", 1)
+	output := suite.Run("NotConnected", 2)
 
-	fail0 := errors.RPCError{}
-	suite.ExpectFail(output, 0, &fail0, func() {
-		assert.Contains(fail0.Message, "Connection refused")
+	fail := errors.RPCError{}
+	suite.ExpectFail(output, 0, &fail, func() {
+		assert.Contains(fail.Message, "Connection refused")
+	})
+
+	fail = errors.RPCError{}
+	suite.ExpectFail(output, 1, &fail, func() {
+		assert.Contains(fail.Message, "Connection refused")
 	})
 }
 
@@ -73,6 +78,44 @@ func (suite *DartClientSuite) TestSuccess() {
 	res4 := names.SortNameResponse{}
 	suite.ExpectPass(output, 4, &res4, func() {
 		assert.Equal("dude", res4.SortName)
+	})
+}
+
+func (suite *DartClientSuite) TestSuccessRaw() {
+	assert := suite.Require()
+	output := suite.Run("SuccessRaw", 1)
+
+	res := RawDartResult{}
+	suite.ExpectPass(output, 0, &res, func() {
+		assert.Equal("first,last\nJeff,Lebowski", res.Content)
+		assert.Equal("application/octet-stream", res.ContentType)
+		assert.Equal("", res.ContentFileName)
+	})
+}
+
+func (suite *DartClientSuite) TestSuccessRawHeaders() {
+	assert := suite.Require()
+	output := suite.Run("SuccessRawHeaders", 3)
+
+	res := RawNodeResult{}
+	suite.ExpectPass(output, 0, &res, func() {
+		assert.Equal("first,last\nJeff,Lebowski", res.Content)
+		assert.Equal("text/csv", res.ContentType)
+		assert.Equal("name.csv", res.ContentFileName)
+	})
+
+	res = RawNodeResult{}
+	suite.ExpectPass(output, 1, &res, func() {
+		assert.Equal("first,last\nJeff,Lebowski", res.Content)
+		assert.Equal("text/txt", res.ContentType)
+		assert.Equal("name.txt", res.ContentFileName)
+	})
+
+	res = RawNodeResult{}
+	suite.ExpectPass(output, 2, &res, func() {
+		assert.Equal("first,last\nJeff,Lebowski", res.Content)
+		assert.Equal(`text/t"x"t`, res.ContentType)
+		assert.Equal(`name.t"x"t`, res.ContentFileName)
 	})
 }
 
@@ -139,4 +182,15 @@ func (suite *DartClientSuite) TestAuthFailureCallOverride() {
 
 func TestDartClientSuite(t *testing.T) {
 	suite.Run(t, new(DartClientSuite))
+}
+
+// RawDartResult matches the data structure of the Node/JS object returned by service
+// functions that result in "raw" byte responses.
+type RawDartResult struct {
+	// Content contains the raw byte content output by the service call.
+	Content string
+	// ContentType contains the captured "Content-Type" header data.
+	ContentType string
+	// ContentFileName contains the captured file name from the "Content-Disposition" header data.
+	ContentFileName string
 }

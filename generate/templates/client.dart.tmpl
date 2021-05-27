@@ -38,7 +38,11 @@ class {{ $clientName }} {
     {{ if .Gateway.SupportsBody }}httpRequest.write(jsonEncode(requestJson));{{ end }}
 
     var httpResponse = await httpRequest.close();
+    {{- if .Response.Implements.ContentReader }}
+    return _handleResponseRaw(httpResponse, (json) => {{ .Response.Name }}.fromJson(json));
+    {{- else }}
     return _handleResponse(httpResponse, (json) => {{ .Response.Name }}.fromJson(json));
+    {{ end }}
   }
   {{ end }}
 
@@ -73,25 +77,24 @@ class {{ $clientName }} {
   }
 
   Future<T> _handleResponse<T>(HttpClientResponse httpResponse, T Function(Map<String, dynamic>) factory) async {
-    var bodyCompleter = new Completer<String>();
-    httpResponse.transform(utf8.decoder).listen(bodyCompleter.complete);
-    var bodyText = await bodyCompleter.future;
-
     if (httpResponse.statusCode >= 400) {
-      throw new {{ $exceptionName }}(httpResponse.statusCode, _parseErrorMessage(bodyText));
+      throw await {{ $exceptionName }}.fromResponse(httpResponse);
     }
 
-    return factory(jsonDecode(bodyText));
+    var bodyJson = await _streamToString(httpResponse);
+    return factory(jsonDecode(bodyJson));
   }
 
-  String _parseErrorMessage(String bodyText) {
-    try {
-      Map<String, dynamic> json = jsonDecode(bodyText);
-      return json['message'] ?? json['error'] ?? bodyText;
+  Future<T> _handleResponseRaw<T>(HttpClientResponse httpResponse, T Function(Map<String, dynamic>) factory) async {
+    if (httpResponse.statusCode >= 400) {
+      throw await {{ $exceptionName }}.fromResponse(httpResponse);
     }
-    catch (_) {
-      return bodyText;
-    }
+
+    return factory({
+      'Content': httpResponse,
+      'ContentType': httpResponse.headers.value('Content-Type') ?? 'application/octet-stream',
+      'ContentFileName': _dispositionFileName(httpResponse.headers.value('Content-Disposition')),
+    });
   }
 
   String _authorize(String callAuthorization) {
@@ -144,13 +147,43 @@ class {{ $clientName }} {
     json.keys.forEach((key) => flattenEntry("", key, json[key], result));
     return result;
   }
+
+  String _dispositionFileName(String? contentDisposition) {
+    if (contentDisposition == null) {
+      return '';
+    }
+
+    var fileNameAttrPos = contentDisposition.indexOf("filename=");
+    if (fileNameAttrPos < 0) {
+      return '';
+    }
+
+    var fileName = contentDisposition.substring(fileNameAttrPos + 9);
+    fileName = fileName.startsWith('"') ? fileName.substring(1) : fileName;
+    fileName = fileName.endsWith('"') ? fileName.substring(0, fileName.length - 1) : fileName;
+    fileName = fileName.replaceAll('\\"', '\"');
+    return fileName;
+  }
 }
 
 class {{ $exceptionName }} implements Exception {
-    int status;
-    String message;
+  int status;
+  String message;
 
-    {{ $exceptionName }}(this.status, this.message);
+  {{ $exceptionName }}(this.status, this.message);
+
+  static Future<{{ $exceptionName }}> fromResponse(HttpClientResponse response) async {
+    var body = await _streamToString(response);
+    var message = '';
+    try {
+      Map<String, dynamic> json = jsonDecode(body);
+      message = json['message'] ?? json['error'] ?? body;
+    }
+    catch (_) {
+      message = body;
+    }
+    throw new {{ $exceptionName }}(response.statusCode, message);
+  }
 }
 
 {{ range .Types.NonBasicTypes }}
@@ -161,10 +194,20 @@ class {{ $exceptionName }} implements Exception {
 class {{ $typeName }} implements {{ $serviceName }}ModelJSON { {{ range .Fields }}
   {{ .Type | DartType }}? {{ .Binding.Name }};
   {{- end }}
+  {{- if .Implements.ContentReader }}
+  Stream<List<int>>? Content;
+  String? ContentType;
+  String? ContentFileName;
+  {{- end }}
 
   {{ $typeName }}({ {{ range .Fields }}
     this.{{ .Binding.Name }},
-  {{- end }}
+    {{- end }}
+    {{- if .Implements.ContentReader }}
+    this.Content,
+    this.ContentType,
+    this.ContentFileName,
+    {{ end }}
   });
 
   {{ $typeName }}.fromJson(Map<String, dynamic> json) { {{ range .Fields -}}
@@ -181,6 +224,11 @@ class {{ $typeName }} implements {{ $serviceName }}ModelJSON { {{ range .Fields 
     {{- end }}
     {{- end }}
     {{- end }}
+    {{- if .Implements.ContentReader }}
+    Content = json['Content'] as Stream<List<int>>?;
+    ContentType = json['ContentType'] ?? 'application/octet-stream';
+    ContentFileName = json['ContentFileName'] ?? '';
+    {{ end }}
   }
 
   Map<String, dynamic> toJson() {
@@ -198,6 +246,11 @@ class {{ $typeName }} implements {{ $serviceName }}ModelJSON { {{ range .Fields 
       {{- end }}
       {{- end }}
       {{- end }}
+      {{- if .Implements.ContentReader }}
+      'Content': _streamToString(Content),
+      'ContentType': ContentType ?? 'application/octet-stream',
+      'ContentFileName': ContentFileName ?? '',
+      {{ end }}
     };
   }
 }
@@ -209,6 +262,15 @@ class {{$serviceName}}ModelJSON {
   }
 }
 
-        List<T>? _map<T>(List<dynamic>? jsonList, T Function(dynamic) mapping) {
+List<T>? _map<T>(List<dynamic>? jsonList, T Function(dynamic) mapping) {
   return jsonList == null ? null : jsonList.map(mapping).toList();
+}
+
+Future<String> _streamToString(Stream<List<int>>? stream) async {
+  if (stream == null) {
+    return '';
+  }
+  var bodyCompleter = new Completer<String>();
+  stream.transform(utf8.decoder).listen(bodyCompleter.complete);
+  return bodyCompleter.future;
 }
