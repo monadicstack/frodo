@@ -97,6 +97,7 @@ func PathTokens(path string) []string {
 	return strings.Split(path, "/")
 }
 
+// CleanTypeNameUpper normalizes a raw type's name to be a single token name in upper camel case.
 func CleanTypeNameUpper(typeName string) string {
 	typeName = CleanPrefix(typeName)
 	typeName = NoSlice(typeName)
@@ -104,4 +105,26 @@ func CleanTypeNameUpper(typeName string) string {
 	typeName = JoinPackageName(typeName)
 	typeName = ToUpperCamel(typeName)
 	return typeName
+}
+
+// DispositionFileName extracts the "filename" from an HTTP Content-Disposition header value.
+func DispositionFileName(contentDisposition string) string {
+	// The start or the file name in the header is the index of "filename=" plus the 9
+	// characters in that substring.
+	fileNameAttrIndex := strings.Index(contentDisposition, "filename=")
+	if fileNameAttrIndex < 0 {
+		return ""
+	}
+
+	// Support the fact that all of these are valid for the disposition header:
+	//
+	//   attachment; filename=foo.pdf
+	//   attachment; filename="foo.pdf"
+	//   attachment; filename='foo.pdf'
+	//
+	// This just makes sure that you don't have any quotes in your final value.
+	fileName := contentDisposition[fileNameAttrIndex+9:]
+	fileName = strings.Trim(fileName, `"'`)
+	fileName = strings.ReplaceAll(fileName, `\"`, `"`)
+	return fileName
 }

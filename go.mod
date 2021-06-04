@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/dimfeld/httptreemux/v5 v5.2.2
-	github.com/monadicstack/respond v0.3.0
+	github.com/monadicstack/respond v0.4.2
 	github.com/spf13/cobra v1.1.1
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/mod v0.4.0

@@ -8,7 +8,8 @@
 /**
  * Exposes all of the standard operations for the remote NameService service. These RPC calls
  * will be sent over http(s) to the backend service instances. 
- * 
+ * NameService performs parsing/processing on a person's name. This is primarily just
+ * used as a reference service for integration testing our generated clients.
  */
 class NameServiceClient {
     _baseURL;
@@ -34,7 +35,75 @@ class NameServiceClient {
 
     
     /**
-     *  
+     * Download returns a raw CSV file containing the parsed name. 
+     *
+     * @param { DownloadRequest } serviceRequest The input parameters
+     * @param {object} [options]
+     * @param { string } [options.authorization] The HTTP Authorization header value to include
+     *     in the request. This will override any authorization you might have applied when
+     *     constructing this client. Use this in multi-tenant situations where multiple users
+     *     might utilize this service.
+     * @returns {Promise<DownloadResponse>} The JSON-encoded return value of the operation.
+     */
+    async Download(serviceRequest, {authorization} = {}) {
+        if (!serviceRequest) {
+            throw new Error('precondition failed: empty request');
+        }
+
+        const method = 'POST';
+        const route = '/NameService.Download';
+        const url = this._baseURL + '/' + buildRequestPath(method, route, serviceRequest);
+        const fetchOptions = {
+            method: 'POST',
+            headers: {
+                'Authorization': authorization || this._authorization,
+                'Accept': 'application/json,*/*',
+                'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: JSON.stringify(serviceRequest),
+        };
+
+        const response = await this._fetch(url, fetchOptions);
+        return handleResponseRaw(response);
+    }
+    
+    /**
+     * DownloadExt returns a raw CSV file containing the parsed name. This differs from Download 
+     * by giving you the "Ext" knob which will let you exercise the content type and disposition 
+     * interfaces that Frodo supports for raw responses. 
+     *
+     * @param { DownloadExtRequest } serviceRequest The input parameters
+     * @param {object} [options]
+     * @param { string } [options.authorization] The HTTP Authorization header value to include
+     *     in the request. This will override any authorization you might have applied when
+     *     constructing this client. Use this in multi-tenant situations where multiple users
+     *     might utilize this service.
+     * @returns {Promise<DownloadExtResponse>} The JSON-encoded return value of the operation.
+     */
+    async DownloadExt(serviceRequest, {authorization} = {}) {
+        if (!serviceRequest) {
+            throw new Error('precondition failed: empty request');
+        }
+
+        const method = 'POST';
+        const route = '/NameService.DownloadExt';
+        const url = this._baseURL + '/' + buildRequestPath(method, route, serviceRequest);
+        const fetchOptions = {
+            method: 'POST',
+            headers: {
+                'Authorization': authorization || this._authorization,
+                'Accept': 'application/json,*/*',
+                'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: JSON.stringify(serviceRequest),
+        };
+
+        const response = await this._fetch(url, fetchOptions);
+        return handleResponseRaw(response);
+    }
+    
+    /**
+     * FirstName extracts just the first name from a full name string. 
      *
      * @param { FirstNameRequest } serviceRequest The input parameters
      * @param {object} [options]
@@ -56,18 +125,18 @@ class NameServiceClient {
             method: 'POST',
             headers: {
                 'Authorization': authorization || this._authorization,
-                'Accept': 'application/json',
+                'Accept': 'application/json,*/*',
                 'Content-Type': 'application/json; charset=utf-8',
             },
             body: JSON.stringify(serviceRequest),
         };
 
         const response = await this._fetch(url, fetchOptions);
-        return handleResponse(response);
+        return handleResponseJSON(response);
     }
     
     /**
-     *  
+     * LastName extracts just the last name from a full name string. 
      *
      * @param { LastNameRequest } serviceRequest The input parameters
      * @param {object} [options]
@@ -89,18 +158,18 @@ class NameServiceClient {
             method: 'POST',
             headers: {
                 'Authorization': authorization || this._authorization,
-                'Accept': 'application/json',
+                'Accept': 'application/json,*/*',
                 'Content-Type': 'application/json; charset=utf-8',
             },
             body: JSON.stringify(serviceRequest),
         };
 
         const response = await this._fetch(url, fetchOptions);
-        return handleResponse(response);
+        return handleResponseJSON(response);
     }
     
     /**
-     *  
+     * SortName establishes the "phone book" name for the given full name. 
      *
      * @param { SortNameRequest } serviceRequest The input parameters
      * @param {object} [options]
@@ -122,18 +191,18 @@ class NameServiceClient {
             method: 'POST',
             headers: {
                 'Authorization': authorization || this._authorization,
-                'Accept': 'application/json',
+                'Accept': 'application/json,*/*',
                 'Content-Type': 'application/json; charset=utf-8',
             },
             body: JSON.stringify(serviceRequest),
         };
 
         const response = await this._fetch(url, fetchOptions);
-        return handleResponse(response);
+        return handleResponseJSON(response);
     }
     
     /**
-     *  
+     * Split separates a first and last name. 
      *
      * @param { SplitRequest } serviceRequest The input parameters
      * @param {object} [options]
@@ -155,14 +224,14 @@ class NameServiceClient {
             method: 'POST',
             headers: {
                 'Authorization': authorization || this._authorization,
-                'Accept': 'application/json',
+                'Accept': 'application/json,*/*',
                 'Content-Type': 'application/json; charset=utf-8',
             },
             body: JSON.stringify(serviceRequest),
         };
 
         const response = await this._fetch(url, fetchOptions);
-        return handleResponse(response);
+        return handleResponseJSON(response);
     }
     
 }
@@ -241,20 +310,79 @@ function attributeValue(struct, attributeName) {
     return null;
 }
 
+
 /**
  * Accepts the full response data and the request's promise resolve/reject and determines
  * which to invoke. This will also JSON-unmarshal the response data if need be.
  */
-async function handleResponse(response) {
-    const contentType = response.headers.get('content-type');
-    const responseValue = !contentType || contentType.startsWith('application/json')
+async function handleResponseJSON(response) {
+    if (response.status >= 400) {
+        throw await newError(response);
+    }
+    return await response.json();
+}
+
+/**
+ * Accepts the full response data and the request's promise resolve/reject and determines
+ * which to invoke. This assumes that you want the raw bytes as a blob from the HTTP response
+ * rather than treating it like JSON. This will also capture the Content-Type value as well as
+ * the "filename" from the Content-Disposition if it's set to "attachment".
+ *
+ * @returns { {content: Blob, contentType: string, contentFileName: string} }
+ */
+async function handleResponseRaw(response) {
+    if (response.status >= 400) {
+        throw await newError(response);
+    }
+    const content = await response.blob();
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    const contentFileName = dispositionFileName(response.headers.get('content-disposition'));
+    return {
+        Content: content,
+        ContentType: contentType,
+        ContentFileName: contentFileName,
+    }
+}
+
+/**
+ * Creates a new GatewayError with all of the meaningful status/message info extracted
+ * from the HTTP response.
+ *
+ * @returns {Promise<GatewayError>}
+ */
+async function newError(response) {
+    const responseValue = isJSON(response)
         ? await response.json()
         : await response.text();
 
-    if (response.status >= 400) {
-        throw new GatewayError(response.status, parseErrorMessage(responseValue));
+    throw new GatewayError(response.status, parseErrorMessage(responseValue));
+}
+
+/**
+ * Parses a value from the Content-Disposition header to extract just the filename attribute.
+ *
+ * @param {string} contentDisposition
+ * @returns {string}
+ */
+function dispositionFileName(contentDisposition = '') {
+    const fileNameAttrPos = contentDisposition.indexOf('filename=');
+    if (fileNameAttrPos < 0) {
+        return '';
     }
-    return responseValue;
+
+    let fileName = contentDisposition.substring(fileNameAttrPos + 9);
+    fileName = fileName.startsWith('"') ? fileName.substring(1) : fileName;
+    fileName = fileName.endsWith('"') ? fileName.substring(0, fileName.length - 1) : fileName;
+    fileName = fileName.replace(/\\"/g, '"');
+    return fileName;
+}
+
+/**
+ * Determines whether or not the response has a content type of JSON.
+ */
+function isJSON(response) {
+    const contentType = response.headers.get('content-type');
+    return contentType && contentType.toLowerCase().startsWith('application/json');
 }
 
 /**
@@ -358,15 +486,34 @@ class GatewayError {
  * @property { string } [SortName]
 */
 /**
- * @typedef { object } FirstNameResponse
- * @property { string } [FirstName]
+ * @typedef { object } LastNameResponse
+ * @property { string } [LastName]
 */
 /**
  * @typedef { object } NameRequest
  * @property { string } [Name]
 */
 /**
- * @typedef { object } SplitRequest
+ * @typedef { object } DownloadRequest
+ * @property { string } [Name]
+*/
+/**
+ * @typedef { object } LastNameRequest
+ * @property { string } [Name]
+*/
+/**
+ * @typedef { object } DownloadExtResponse
+*/
+/**
+ * @typedef { object } FirstNameRequest
+ * @property { string } [Name]
+*/
+/**
+ * @typedef { object } FirstNameResponse
+ * @property { string } [FirstName]
+*/
+/**
+ * @typedef { object } SortNameRequest
  * @property { string } [Name]
 */
 /**
@@ -375,20 +522,16 @@ class GatewayError {
  * @property { string } [LastName]
 */
 /**
- * @typedef { object } FirstNameRequest
+ * @typedef { object } DownloadResponse
+*/
+/**
+ * @typedef { object } SplitRequest
  * @property { string } [Name]
 */
 /**
- * @typedef { object } LastNameRequest
+ * @typedef { object } DownloadExtRequest
  * @property { string } [Name]
-*/
-/**
- * @typedef { object } SortNameRequest
- * @property { string } [Name]
-*/
-/**
- * @typedef { object } LastNameResponse
- * @property { string } [LastName]
+ * @property { string } [Ext]
 */
 
 module.exports = {

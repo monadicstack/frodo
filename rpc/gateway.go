@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 
@@ -309,4 +310,34 @@ func Compose(gateways ...Gateway) CompositeGateway {
 type route struct {
 	method string
 	path   string
+}
+
+// ContentReader defines a response type that should be treated as raw bytes, not JSON.
+type ContentReader respond.ContentReader
+
+// ContentWriter defines a response type that should be treated as raw bytes, not JSON. This is
+// utilized by clients to automatically populate readers received from the gateway.
+type ContentWriter interface {
+	// SetContent applies the raw byte data to the response.
+	SetContent(reader io.ReadCloser)
+}
+
+// ContentTypeReader allows raw responses to specify what type of data the bytes represent.
+type ContentTypeReader respond.ContentTypeReader
+
+// ContentTypeWriter allows raw responses to specify what type of data the bytes represent. This is
+// utilized by clients to automatically populate content type values received from the gateway.
+type ContentTypeWriter interface {
+	// SetContentType applies the content type value data to the response.
+	SetContentType(contentType string)
+}
+
+// ContentFileNameReader allows raw responses to specify the file name (if any) of the file the bytes represent.
+type ContentFileNameReader respond.ContentFileNameReader
+
+// ContentFileNameWriter allows raw responses to specify the file name (if any) of the file the bytes represent.
+// This is utilized by clients to automatically populate content type values received from the gateway.
+type ContentFileNameWriter interface {
+	// SetContentType applies the file name value data to the response.
+	SetContentFileName(contentFileName string)
 }

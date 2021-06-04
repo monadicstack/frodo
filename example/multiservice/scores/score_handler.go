@@ -24,6 +24,7 @@ type ScoreServiceHandler struct {
 	Repo Repo
 }
 
+// NewHighScore captures a player's high score for the given game.
 func (svc *ScoreServiceHandler) NewHighScore(ctx context.Context, request *NewHighScoreRequest) (*NewHighScoreResponse, error) {
 	if request.GameID == "" {
 		return nil, errors.BadRequest("high scores: game id is required")
@@ -58,6 +59,7 @@ func (svc *ScoreServiceHandler) NewHighScore(ctx context.Context, request *NewHi
 	return &response, nil
 }
 
+// HighScoresForGame fetches the top "N" high scores achieved by any player
 func (svc ScoreServiceHandler) HighScoresForGame(ctx context.Context, request *HighScoresForGameRequest) (*HighScoresForGameResponse, error) {
 	if request.GameID == "" {
 		return nil, errors.BadRequest("high scores: game id is required")

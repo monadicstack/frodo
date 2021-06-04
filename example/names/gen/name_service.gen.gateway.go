@@ -31,6 +31,44 @@ func NewNameServiceGateway(service names.NameService, options ...rpc.GatewayOpti
 
 	gw.Register(rpc.Endpoint{
 		Method:      "POST",
+		Path:        "/NameService.Download",
+		ServiceName: "NameService",
+		Name:        "Download",
+		Handler: func(w http.ResponseWriter, req *http.Request) {
+			response := respond.To(w, req)
+
+			serviceRequest := names.DownloadRequest{}
+			if err := gw.Binder.Bind(req, &serviceRequest); err != nil {
+				response.Fail(err)
+				return
+			}
+
+			serviceResponse, err := service.Download(req.Context(), &serviceRequest)
+			response.Reply(200, serviceResponse, err)
+		},
+	})
+
+	gw.Register(rpc.Endpoint{
+		Method:      "POST",
+		Path:        "/NameService.DownloadExt",
+		ServiceName: "NameService",
+		Name:        "DownloadExt",
+		Handler: func(w http.ResponseWriter, req *http.Request) {
+			response := respond.To(w, req)
+
+			serviceRequest := names.DownloadExtRequest{}
+			if err := gw.Binder.Bind(req, &serviceRequest); err != nil {
+				response.Fail(err)
+				return
+			}
+
+			serviceResponse, err := service.DownloadExt(req.Context(), &serviceRequest)
+			response.Reply(200, serviceResponse, err)
+		},
+	})
+
+	gw.Register(rpc.Endpoint{
+		Method:      "POST",
 		Path:        "/NameService.FirstName",
 		ServiceName: "NameService",
 		Name:        "FirstName",
@@ -111,6 +149,14 @@ func NewNameServiceGateway(service names.NameService, options ...rpc.GatewayOpti
 type NameServiceGateway struct {
 	gateway rpc.Gateway
 	service names.NameService
+}
+
+func (gw NameServiceGateway) Download(ctx context.Context, request *names.DownloadRequest) (*names.DownloadResponse, error) {
+	return gw.service.Download(ctx, request)
+}
+
+func (gw NameServiceGateway) DownloadExt(ctx context.Context, request *names.DownloadExtRequest) (*names.DownloadExtResponse, error) {
+	return gw.service.DownloadExt(ctx, request)
 }
 
 func (gw NameServiceGateway) FirstName(ctx context.Context, request *names.FirstNameRequest) (*names.FirstNameResponse, error) {

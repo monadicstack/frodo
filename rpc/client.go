@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monadicstack/frodo/internal/naming"
 	"github.com/monadicstack/frodo/internal/reflection"
 	"github.com/monadicstack/frodo/rpc/authorization"
 	"github.com/monadicstack/frodo/rpc/errors"
@@ -112,24 +113,58 @@ func (c Client) Invoke(ctx context.Context, method string, path string, serviceR
 	if err != nil {
 		return fmt.Errorf("rpc: round trip error: %w", err)
 	}
-	defer response.Body.Close()
 
 	// Step 5: Based on the status code, either fill in the "out" struct (service response) with the
 	// unmarshaled JSON or respond a properly formed error.
-	if response.StatusCode >= 400 {
-		return c.newStatusError(response)
-	}
-
-	err = json.NewDecoder(response.Body).Decode(serviceResponse)
+	err = c.decodeResponse(response, serviceResponse)
 	if err != nil {
 		return fmt.Errorf("rpc: unable to decode response: %w", err)
 	}
 	return nil
 }
 
+func (c Client) decodeResponse(response *http.Response, serviceResponse interface{}) error {
+	if response.StatusCode >= 400 {
+		return c.decodeStatusError(response)
+	}
+	if contentWriter, ok := serviceResponse.(ContentWriter); ok {
+		return c.decodeResponseRaw(response, contentWriter)
+	}
+	return c.decodeResponseJSON(response, serviceResponse)
+}
+
+func (c Client) decodeResponseJSON(response *http.Response, serviceResponse interface{}) error {
+	defer response.Body.Close()
+
+	err := json.NewDecoder(response.Body).Decode(serviceResponse)
+	if err != nil {
+		return fmt.Errorf("rpc: unable to decode response: %w", err)
+	}
+	return nil
+}
+
+func (c Client) decodeResponseRaw(response *http.Response, serviceResponse ContentWriter) error {
+	// We do NOT auto-close the body because we have no idea what you plan to do with the body.
+	// The stream may be much bigger than we want to keep in memory so we don't want to just
+	// copy it to a bytes.Buffer{}. Thus, we need to force the user to close it when they're done
+	// with the data.
+	serviceResponse.SetContent(response.Body)
+
+	if typeWriter, ok := serviceResponse.(ContentTypeWriter); ok {
+		typeWriter.SetContentType(response.Header.Get("Content-Type"))
+	}
+	if fileNameWriter, ok := serviceResponse.(ContentFileNameWriter); ok {
+		fileName := naming.DispositionFileName(response.Header.Get("Content-Disposition"))
+		fileNameWriter.SetContentFileName(fileName)
+	}
+	return nil
+}
+
 // newStatusError takes the response (assumed to be a 400+ status already) and creates
 // an RPCError with the proper HTTP status as it tries to preserve the original error's message.
-func (c Client) newStatusError(r *http.Response) error {
+func (c Client) decodeStatusError(r *http.Response) error {
+	defer r.Body.Close()
+
 	errData, _ := ioutil.ReadAll(r.Body)
 	contentType := r.Header.Get("Content-Type")
 

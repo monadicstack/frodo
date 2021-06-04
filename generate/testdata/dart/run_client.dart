@@ -18,6 +18,10 @@ runTestCase(String name) async {
       return testNotConnected();
     case "Success":
       return testSuccess();
+    case "SuccessRaw":
+      return testSuccessRaw();
+    case "SuccessRawHeaders":
+      return testSuccessRawHeaders();
     case "ValidationFailure":
       return testValidationFailure();
     case "AuthFailureClient":
@@ -35,6 +39,7 @@ runTestCase(String name) async {
 testNotConnected() async {
   var client = new NameServiceClient("http://localhost:9999");
   await output(client.FirstName(new FirstNameRequest(Name: "Jeff Lebowski")));
+  await output(client.Download(new DownloadRequest(Name: "Jeff Lebowski")));
 }
 
 testSuccess() async {
@@ -44,6 +49,18 @@ testSuccess() async {
   await output(client.LastName(LastNameRequest(Name: 'Jeff Lebowski')));
   await output(client.SortName(SortNameRequest(Name: 'Jeff Lebowski')));
   await output(client.SortName(SortNameRequest(Name: 'Dude')));
+}
+
+testSuccessRaw() async {
+  var client = new NameServiceClient("http://localhost:9100");
+  await outputRaw(client.Download(DownloadRequest(Name: 'Jeff Lebowski')));
+}
+
+testSuccessRawHeaders() async {
+  var client = new NameServiceClient("http://localhost:9100");
+  await outputRaw(client.DownloadExt(DownloadExtRequest(Name: 'Jeff Lebowski', Ext: 'csv')));
+  await outputRaw(client.DownloadExt(DownloadExtRequest(Name: 'Jeff Lebowski', Ext: 'txt')));
+  await outputRaw(client.DownloadExt(DownloadExtRequest(Name: 'Jeff Lebowski', Ext: 't"x"t')));
 }
 
 testValidationFailure() async {
@@ -86,6 +103,21 @@ output(Future<NameServiceModelJSON> model) async {
   try {
     var jsonString = jsonEncode(await model);
     print('OK ${jsonString}');
+  }
+  on NameServiceException catch (err) {
+    var message = err.message.replaceAll('"', '\'');
+    print('FAIL {"status":${err.status}, "message": "${message}"}');
+  }
+  catch (err) {
+    print('FAIL {"message": "$err"}');
+  }
+}
+
+outputRaw(Future<NameServiceModelJSON> model) async {
+  try {
+    var modelJson = (await model).toJson();
+    modelJson['Content'] = await modelJson['Content'];
+    print('OK ${jsonEncode(modelJson)}');
   }
   on NameServiceException catch (err) {
     var message = err.message.replaceAll('"', '\'');

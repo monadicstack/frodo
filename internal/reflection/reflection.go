@@ -44,6 +44,7 @@ func ToAttributes(item interface{}) StructAttributes {
 	return attrs
 }
 
+// IsNil returns true if the given value's type is both nil-able and nil.
 func IsNil(value reflect.Value) bool {
 	switch value.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:

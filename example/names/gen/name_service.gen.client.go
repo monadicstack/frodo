@@ -15,6 +15,9 @@ import (
 // NewNameServiceClient creates an RPC client that conforms to the NameService interface, but delegates
 // work to remote instances. You must supply the base address of the remote service gateway instance or
 // the load balancer for that service.
+//
+// NameService performs parsing/processing on a person's name. This is primarily just
+// used as a reference service for integration testing our generated clients.
 func NewNameServiceClient(address string, options ...rpc.ClientOption) *NameServiceClient {
 	rpcClient := rpc.NewClient("NameService", address, options...)
 	rpcClient.PathPrefix = ""
@@ -28,7 +31,37 @@ type NameServiceClient struct {
 	rpc.Client
 }
 
-//
+// Download returns a raw CSV file containing the parsed name.
+func (client *NameServiceClient) Download(ctx context.Context, request *names.DownloadRequest) (*names.DownloadResponse, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("precondition failed: nil context")
+	}
+	if request == nil {
+		return nil, fmt.Errorf("precondition failed: nil request")
+	}
+
+	response := &names.DownloadResponse{}
+	err := client.Invoke(ctx, "POST", "/NameService.Download", request, response)
+	return response, err
+}
+
+// DownloadExt returns a raw CSV file containing the parsed name. This differs from Download
+// by giving you the "Ext" knob which will let you exercise the content type and disposition
+// interfaces that Frodo supports for raw responses.
+func (client *NameServiceClient) DownloadExt(ctx context.Context, request *names.DownloadExtRequest) (*names.DownloadExtResponse, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("precondition failed: nil context")
+	}
+	if request == nil {
+		return nil, fmt.Errorf("precondition failed: nil request")
+	}
+
+	response := &names.DownloadExtResponse{}
+	err := client.Invoke(ctx, "POST", "/NameService.DownloadExt", request, response)
+	return response, err
+}
+
+// FirstName extracts just the first name from a full name string.
 func (client *NameServiceClient) FirstName(ctx context.Context, request *names.FirstNameRequest) (*names.FirstNameResponse, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
@@ -42,7 +75,7 @@ func (client *NameServiceClient) FirstName(ctx context.Context, request *names.F
 	return response, err
 }
 
-//
+// LastName extracts just the last name from a full name string.
 func (client *NameServiceClient) LastName(ctx context.Context, request *names.LastNameRequest) (*names.LastNameResponse, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
@@ -56,7 +89,7 @@ func (client *NameServiceClient) LastName(ctx context.Context, request *names.La
 	return response, err
 }
 
-//
+// SortName establishes the "phone book" name for the given full name.
 func (client *NameServiceClient) SortName(ctx context.Context, request *names.SortNameRequest) (*names.SortNameResponse, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
@@ -70,7 +103,7 @@ func (client *NameServiceClient) SortName(ctx context.Context, request *names.So
 	return response, err
 }
 
-//
+// Split separates a first and last name.
 func (client *NameServiceClient) Split(ctx context.Context, request *names.SplitRequest) (*names.SplitResponse, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("precondition failed: nil context")
@@ -93,6 +126,14 @@ func (client *NameServiceClient) Split(ctx context.Context, request *names.Split
 // call the "real" implementation, so this can be used as special middleware that applies to only certain operations.
 type NameServiceProxy struct {
 	Service names.NameService
+}
+
+func (proxy *NameServiceProxy) Download(ctx context.Context, request *names.DownloadRequest) (*names.DownloadResponse, error) {
+	return proxy.Service.Download(ctx, request)
+}
+
+func (proxy *NameServiceProxy) DownloadExt(ctx context.Context, request *names.DownloadExtRequest) (*names.DownloadExtResponse, error) {
+	return proxy.Service.DownloadExt(ctx, request)
 }
 
 func (proxy *NameServiceProxy) FirstName(ctx context.Context, request *names.FirstNameRequest) (*names.FirstNameResponse, error) {
