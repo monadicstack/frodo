@@ -489,13 +489,20 @@ type TypeDeclaration struct {
 	Fields FieldDeclarations
 	// Documentation are all of the comments documenting this operation.
 	Documentation DocumentationLines
-
+	// Implements contains some quick checks for whether or not this type implements the various
+	// single function interfaces used to handle raw data responses.
 	Implements struct {
-		ContentReader         bool
-		ContentWriter         bool
-		ContentTypeReader     bool
-		ContentTypeWriter     bool
+		// ContentReader is true when it implements that interface.
+		ContentReader bool
+		// ContentWriter is true when it implements that interface.
+		ContentWriter bool
+		// ContentTypeReader is true when it implements that interface.
+		ContentTypeReader bool
+		// ContentTypeWriter is true when it implements that interface.
+		ContentTypeWriter bool
+		// ContentFileNameReader is true when it implements that interface.
 		ContentFileNameReader bool
+		// ContentFileNameWriter is true when it implements that interface.
 		ContentFileNameWriter bool
 	}
 }
