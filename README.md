@@ -32,7 +32,7 @@ with as little fuss as possible.
 * [Customize HTTP Route, Status, etc](https://github.com/monadicstack/frodo#doc-options-custom-urls-status-etc)
 * [Error Handling](https://github.com/monadicstack/frodo#error-handling)
 * [Middleware](https://github.com/monadicstack/frodo#middleware)
-
+* [Returning Raw File Data](https://github.com/monadicstack/frodo#returning-raw-file-data)
 * [HTTP Redirects](https://github.com/monadicstack/frodo#http-redirects)
 * [Request Scoped Metadata](https://github.com/monadicstack/frodo#request-scoped-metadata)
 * [Create a JavaScript Client](https://github.com/monadicstack/frodo#creating-a-javascript-client)
@@ -64,7 +64,7 @@ communicate with each other.
 
 Your first step is to write a .go file that just defines
 the contract for your service; the interface as well as the
-inputs/outputs.
+inputs/outputs. 
 
 ```go
 // calculator_service.go
@@ -97,8 +97,12 @@ type SubResponse struct {
     Result int
 }
 ```
+One important detail is that the interface name ends with
+the suffix "Service". This tells Frodo that this is an
+actual service interface and not just some random abstraction
+in your code.
 
-You haven't actually defined *how* this service gets
+At this point you haven't actually defined *how* this service gets
 this work done; just which operations are available.
 
 We actually have enough for `frodo` to
@@ -285,12 +289,6 @@ curl -d '{"A":5, "B":2}' http://localhost:9000/v1/CalculatorService.Sub
 # {"Result":3}
 ```
 
-#### Service: VERSION
-
-Annotate your service to track its current version. This doesn't affect
-the behavior of your service in any way. It's currently only used if you
-generate documentation using `frodo docs`
-
 #### Function: GET/POST/PUT/PATCH/DELETE
 
 You can replace the default `POST ServiceName.FunctionName` route for any
@@ -354,6 +352,55 @@ documentation for [github.com/monadicstack/respond](https://github.com/monadicst
 to see how you can roll your own custom errors, but still
 drive which 4XX/5XX status your service generates.
 
+## Middleware
+
+Your RPC gateway is just an `http.Handler`, so you can plug
+and play your favorite off-the-shelf middleware. Here's an
+example using [github.com/urfave/negroni](https://github.com/urfave/negroni)
+
+```go
+func main() {
+    service := calc.CalculatorServiceHandler{}
+    gateway := calcrpc.NewCalculatorServiceGateway(service,
+        rpc.WithMiddleware(
+            negroni.NewLogger().ServeHTTP,
+            NotOnMonday,
+        ))
+
+    http.ListenAndServe(":9000", gateway)
+}
+
+func NotOnMonday(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+    if time.Now().Weekday() == time.Monday {
+        http.Error(w, "garfield says no math on mondays", 403)
+        return
+    }
+    next(w, req)
+}
+```
+
+You might think to yourself... wait a minute; I thought the gateway
+*was* an HTTP handler, so couldn't I just wrap the gateway in middleware
+like this?
+
+```go
+gateway := calcrpc.NewCalculatorServiceGateway(service)
+handler := negroni.New(
+    negroni.NewLogger(),
+    negroni.WrapFunc(NotOnMonday),
+)
+handler.UseHandler(gateway)
+http.ListenAndServe(":9000", handler)
+```
+
+You absolutely can, and it will work great... mostly. Frodo's gateway
+performs a few book-keeping tasks before it executes your
+middleware and the eventual service function. One of these tasks is
+restoring request-scoped metadata headers passed from the caller (next section).
+If you don't actually need that information, then this works. If you want
+the full arsenal of Frodo functionality in your middleware functions,
+be sure to use `.WithMiddleware()` like in the first example.
+
 ## Returning Raw File Data
 
 Let's say that you're writing `ProfilePictureService`. One of the
@@ -367,14 +414,14 @@ type ServeResponse struct {
     file *io.File
 }
 
-// By implementing io.Reader, that tells Frodo to respond w/ raw
-// data rather than JSON. Whatever it reads from here, that's what
-// the caller will receive.
-func (res ServeResponse) Read(b []byte) (int, error) {
-    return res.file.Read(b)
+// By implementing ContentReader, the response tells Frodo to respond
+// w/ raw data rather than JSON. Instead of turning the struct into
+// JSON, grab bytes from your reader and deliver them in the response.
+func (res ServeResponse) Content() io.ReadCloser {
+    return res.file
 }
 
-// By implementing ContentTypeSpecifier, this lets you dictate the
+// By implementing ContentTypeReader, this lets you dictate the
 // underlying HTTP Content-Type header. Without this Frodo will have
 // nothing to go on and assume "application/octet-stream".
 func (res ServeResponse) ContentType() string {
@@ -435,55 +482,6 @@ func (svc VideoServiceHandler) Download(ctx context.Context, req *DownloadReques
     }, nil
 }
 ```
-
-## Middleware
-
-Your RPC gateway is just an `http.Handler`, so you can plug
-and play your favorite off-the-shelf middleware. Here's an
-example using [github.com/urfave/negroni](https://github.com/urfave/negroni)
-
-```go
-func main() {
-    service := calc.CalculatorServiceHandler{}
-    gateway := calcrpc.NewCalculatorServiceGateway(service,
-        rpc.WithMiddleware(
-            negroni.NewLogger().ServeHTTP,
-            NotOnMonday,
-        ))
-
-    http.ListenAndServe(":9000", gateway)
-}
-
-func NotOnMonday(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
-    if time.Now().Weekday() == time.Monday {
-        http.Error(w, "garfield says no math on mondays", 403)
-        return
-    }
-    next(w, req)
-}
-```
-
-You might think to yourself... wait a minute; I thought the gateway
-*was* an HTTP handler, so couldn't I just wrap the gateway in middleware
-like this?
-
-```go
-gateway := calcrpc.NewCalculatorServiceGateway(service)
-handler := negroni.New(
-    negroni.NewLogger(),
-    negroni.WrapFunc(NotOnMonday),
-)
-handler.UseHandler(gateway)
-http.ListenAndServe(":9000", handler)
-```
-
-You absolutely can, and it will work great... mostly. Frodo's gateway
-performs a few book-keeping tasks before it executes your
-middleware and the eventual service function. One of these tasks is
-restoring request-scoped metadata headers passed from the caller (next section).
-If you don't actually need that information, then this works. If you want
-the full arsenal of Frodo functionality in your middleware functions,
-be sure to use `.WithMiddleware()` like in the first example.
 
 ## Request Scoped Metadata
 
@@ -839,7 +837,21 @@ Now you can feed the file `gen/calculator_service.gen.swagger.yaml`
 to your favorite Swagger tools. You can try it out by just pasting
 the output on https://editor.swagger.io.
 
-Not gonna lie... this is still a work in progress. I've still
+OpenAPI docs let you specify the current version of your
+service. You can specify that value by including the VERSION
+doc option on your service interface.
+
+```go
+// FooService is a magical service that does awesome things.
+//
+// VERSION 1.2.1
+type FooService interface {
+    // ...
+}
+```
+Now, when you generate your docs the version badge will display "1.2.1".
+
+Not gonna lie... this whole feature is still a work in progress. I've still
 got some issues to work out with nested request/response structs.
 It spits out enough good stuff that it should describe your services
 better than no documentation at all, though.
@@ -871,6 +883,13 @@ single command (assuming you're already in the 'calc' directory):
 
 ```shell
 $ go generate .
+```
+
+You can also generate artifacts for all of
+your services at once by using the recursive version from the root of your project:
+
+```shell
+$ go generate ./...
 ```
 
 ## Bring Your Own Templates
