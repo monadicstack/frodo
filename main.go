@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/monadicstack/frodo/cli"
@@ -19,6 +20,7 @@ func main() {
 	rootCmd.AddCommand(cli.GenerateDocs{}.Command())
 	rootCmd.AddCommand(cli.CreateService{}.Command())
 
+	log.SetFlags(0)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

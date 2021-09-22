@@ -268,70 +268,21 @@ class NameServiceException implements Exception {
 }
 
 
-/// SortNameRequest is the input for the SortName function.
-class SortNameRequest implements NameServiceModelJSON { 
-  String? Name;
+/// FirstNameResponse is the output for the FirstName function.
+class FirstNameResponse implements NameServiceModelJSON { 
+  String? FirstName;
 
-  SortNameRequest({ 
-    this.Name,
+  FirstNameResponse({ 
+    this.FirstName,
   });
 
-  SortNameRequest.fromJson(Map<String, dynamic> json) { 
-    Name = json['Name'];
+  FirstNameResponse.fromJson(Map<String, dynamic> json) { 
+    FirstName = json['FirstName'];
   }
 
   Map<String, dynamic> toJson() {
     return { 
-      'Name': Name,
-    };
-  }
-}
-
-/// SortNameResponse is the output for the SortName function.
-class SortNameResponse implements NameServiceModelJSON { 
-  String? SortName;
-
-  SortNameResponse({ 
-    this.SortName,
-  });
-
-  SortNameResponse.fromJson(Map<String, dynamic> json) { 
-    SortName = json['SortName'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'SortName': SortName,
-    };
-  }
-}
-
-/// DownloadResponse is the output for the Download function.
-class DownloadResponse implements NameServiceModelJSON { 
-  Stream<List<int>>? Content;
-  String? ContentType;
-  String? ContentFileName;
-
-  DownloadResponse({ 
-    this.Content,
-    this.ContentType,
-    this.ContentFileName,
-    
-  });
-
-  DownloadResponse.fromJson(Map<String, dynamic> json) { 
-    Content = json['Content'] as Stream<List<int>>?;
-    ContentType = json['ContentType'] ?? 'application/octet-stream';
-    ContentFileName = json['ContentFileName'] ?? '';
-    
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'Content': _streamToString(Content),
-      'ContentType': ContentType ?? 'application/octet-stream',
-      'ContentFileName': ContentFileName ?? '',
-      
+      'FirstName': FirstName,
     };
   }
 }
@@ -355,86 +306,6 @@ class SplitResponse implements NameServiceModelJSON {
     return { 
       'FirstName': FirstName,
       'LastName': LastName,
-    };
-  }
-}
-
-/// DownloadRequest is the input for the Download function.
-class DownloadRequest implements NameServiceModelJSON { 
-  String? Name;
-
-  DownloadRequest({ 
-    this.Name,
-  });
-
-  DownloadRequest.fromJson(Map<String, dynamic> json) { 
-    Name = json['Name'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'Name': Name,
-    };
-  }
-}
-
-/// FirstNameRequest is the input for the FirstName function.
-class FirstNameRequest implements NameServiceModelJSON { 
-  String? Name;
-
-  FirstNameRequest({ 
-    this.Name,
-  });
-
-  FirstNameRequest.fromJson(Map<String, dynamic> json) { 
-    Name = json['Name'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'Name': Name,
-    };
-  }
-}
-
-/// DownloadExtRequest is the input for the DownloadExt function.
-class DownloadExtRequest implements NameServiceModelJSON { 
-  String? Name;
-  String? Ext;
-
-  DownloadExtRequest({ 
-    this.Name,
-    this.Ext,
-  });
-
-  DownloadExtRequest.fromJson(Map<String, dynamic> json) { 
-    Name = json['Name'];
-    Ext = json['Ext'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'Name': Name,
-      'Ext': Ext,
-    };
-  }
-}
-
-/// LastNameRequest is the output for the LastName function.
-class LastNameRequest implements NameServiceModelJSON { 
-  String? Name;
-
-  LastNameRequest({ 
-    this.Name,
-  });
-
-  LastNameRequest.fromJson(Map<String, dynamic> json) { 
-    Name = json['Name'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'Name': Name,
     };
   }
 }
@@ -477,6 +348,111 @@ class NameRequest implements NameServiceModelJSON {
   }
 }
 
+/// LastNameRequest is the output for the LastName function.
+class LastNameRequest implements NameServiceModelJSON { 
+  String? Name;
+
+  LastNameRequest({ 
+    this.Name,
+  });
+
+  LastNameRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+    };
+  }
+}
+
+/// SortNameRequest is the input for the SortName function.
+class SortNameRequest implements NameServiceModelJSON { 
+  String? Name;
+
+  SortNameRequest({ 
+    this.Name,
+  });
+
+  SortNameRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+    };
+  }
+}
+
+class SplitRequest implements NameServiceModelJSON { 
+  String? Name;
+
+  SplitRequest({ 
+    this.Name,
+  });
+
+  SplitRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+    };
+  }
+}
+
+/// DownloadResponse is the output for the Download function.
+class DownloadResponse implements NameServiceModelJSON { 
+  Stream<List<int>>? Content;
+  String? ContentType;
+  String? ContentFileName;
+
+  DownloadResponse({ 
+    this.Content,
+    this.ContentType,
+    this.ContentFileName,
+    
+  });
+
+  DownloadResponse.fromJson(Map<String, dynamic> json) { 
+    Content = json['Content'] as Stream<List<int>>?;
+    ContentType = json['ContentType'] ?? 'application/octet-stream';
+    ContentFileName = json['ContentFileName'] ?? '';
+    
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Content': _streamToString(Content),
+      'ContentType': ContentType ?? 'application/octet-stream',
+      'ContentFileName': ContentFileName ?? '',
+      
+    };
+  }
+}
+
+/// FirstNameRequest is the input for the FirstName function.
+class FirstNameRequest implements NameServiceModelJSON { 
+  String? Name;
+
+  FirstNameRequest({ 
+    this.Name,
+  });
+
+  FirstNameRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+    };
+  }
+}
+
 /// DownloadExtResponse is the output for the DownloadExt function.
 class DownloadExtResponse implements NameServiceModelJSON { 
   Stream<List<int>>? Content;
@@ -507,39 +483,63 @@ class DownloadExtResponse implements NameServiceModelJSON {
   }
 }
 
-/// FirstNameResponse is the output for the FirstName function.
-class FirstNameResponse implements NameServiceModelJSON { 
-  String? FirstName;
-
-  FirstNameResponse({ 
-    this.FirstName,
-  });
-
-  FirstNameResponse.fromJson(Map<String, dynamic> json) { 
-    FirstName = json['FirstName'];
-  }
-
-  Map<String, dynamic> toJson() {
-    return { 
-      'FirstName': FirstName,
-    };
-  }
-}
-
-class SplitRequest implements NameServiceModelJSON { 
+/// DownloadRequest is the input for the Download function.
+class DownloadRequest implements NameServiceModelJSON { 
   String? Name;
 
-  SplitRequest({ 
+  DownloadRequest({ 
     this.Name,
   });
 
-  SplitRequest.fromJson(Map<String, dynamic> json) { 
+  DownloadRequest.fromJson(Map<String, dynamic> json) { 
     Name = json['Name'];
   }
 
   Map<String, dynamic> toJson() {
     return { 
       'Name': Name,
+    };
+  }
+}
+
+/// DownloadExtRequest is the input for the DownloadExt function.
+class DownloadExtRequest implements NameServiceModelJSON { 
+  String? Name;
+  String? Ext;
+
+  DownloadExtRequest({ 
+    this.Name,
+    this.Ext,
+  });
+
+  DownloadExtRequest.fromJson(Map<String, dynamic> json) { 
+    Name = json['Name'];
+    Ext = json['Ext'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'Name': Name,
+      'Ext': Ext,
+    };
+  }
+}
+
+/// SortNameResponse is the output for the SortName function.
+class SortNameResponse implements NameServiceModelJSON { 
+  String? SortName;
+
+  SortNameResponse({ 
+    this.SortName,
+  });
+
+  SortNameResponse.fromJson(Map<String, dynamic> json) { 
+    SortName = json['SortName'];
+  }
+
+  Map<String, dynamic> toJson() {
+    return { 
+      'SortName': SortName,
     };
   }
 }

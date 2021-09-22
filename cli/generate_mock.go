@@ -25,9 +25,9 @@ func (c GenerateMock) Command() *cobra.Command {
 		Use:   "mock [flags] FILENAME",
 		Short: "Creates a mock instance of your service for unit testing.",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			request.InputFileName = args[0]
-			return c.Exec(request)
+			crapPants(c.Exec(request))
 		},
 	}
 	cmd.Flags().StringVar(&request.Template, "template", "", "Path to a custom Go template file used to generate this artifact.")
@@ -36,7 +36,7 @@ func (c GenerateMock) Command() *cobra.Command {
 
 // Exec takes all of the parsed CLI flags and generates the target mock service artifact.
 func (c GenerateMock) Exec(request *GenerateMockRequest) error {
-	log.Printf("[frodo] Parsing service definitions: %s", request.InputFileName)
+	log.Printf("Parsing service definitions: %s", request.InputFileName)
 	ctx, err := parser.ParseFile(request.InputFileName)
 	if err != nil {
 		return err

@@ -25,9 +25,9 @@ func (c GenerateDocs) Command() *cobra.Command {
 		Use:   "docs [flags] FILENAME",
 		Short: "Generates the API documentation for your service that can be distributed to users.",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			request.InputFileName = args[0]
-			return c.Exec(request)
+			crapPants(c.Exec(request))
 		},
 	}
 	cmd.Flags().StringVar(&request.Template, "template", "", "Path to a custom Go template file used to generate this artifact.")
