@@ -29,9 +29,9 @@ func (c GenerateClient) Command() *cobra.Command {
 		Use:   "client [flags] FILENAME",
 		Short: "Process a Go source file with your service interface to generate an RPC client proxy for your service(s).",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			request.InputFileName = args[0]
-			return c.Exec(request)
+			crapPants(c.Exec(request))
 		},
 	}
 	cmd.Flags().StringVar(&request.Language, "language", "go", "The file extension of the target language (e.g. 'go' or 'js')")

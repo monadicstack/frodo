@@ -231,7 +231,7 @@ func (suite *ParserSuite) TestErrorNoServices() {
 func (suite *ParserSuite) TestErrorFunctionParams() {
 	_, err := parser.ParseFile("testdata/errors/paramcount/service.go")
 	suite.Require().Error(err, "Should fail when a function does not have 2 params")
-	suite.Require().Contains(err.Error(), "2", "Error should include the required parameter count")
+	suite.Require().Contains(err.Error(), "two", "Error should include the required parameter count")
 
 	_, err = parser.ParseFile("testdata/errors/contextparam/service.go")
 	suite.Require().Error(err, "Should fail when a function's first arg is not a Context")
@@ -249,7 +249,7 @@ func (suite *ParserSuite) TestErrorFunctionParams() {
 func (suite *ParserSuite) TestErrorResponseNotStruct() {
 	_, err := parser.ParseFile("testdata/errors/resultcount/service.go")
 	suite.Require().Error(err, "Should fail when a function does not have 2 return values")
-	suite.Require().Contains(err.Error(), "2", "Error should include the required return value count")
+	suite.Require().Contains(err.Error(), "two", "Error should include the required return value count")
 
 	_, err = parser.ParseFile("testdata/errors/resnotpointer/service.go")
 	suite.Require().Error(err, "Should fail when a function's first return value is not a pointer")

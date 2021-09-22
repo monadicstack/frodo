@@ -25,10 +25,12 @@ func (c GenerateGateway) Command() *cobra.Command {
 		Use:   "gateway [flags] FILENAME",
 		Short: "Process a Go source file with your service interface to generate an RPC/API gateway.",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			request.InputFileName = args[0]
-			return c.Exec(request)
+			crapPants(c.Exec(request))
 		},
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 	cmd.Flags().StringVar(&request.Template, "template", "", "Path to a custom Go template file used to generate this artifact.")
 	return cmd
@@ -36,13 +38,13 @@ func (c GenerateGateway) Command() *cobra.Command {
 
 // Exec actually executes the parsing/generating logic creating the gateway for the given declaration.
 func (c GenerateGateway) Exec(request *GenerateGatewayRequest) error {
-	log.Printf("[frodo] Parsing service definitions: %s", request.InputFileName)
+	log.Printf("Parsing service definitions: %s", request.InputFileName)
 	ctx, err := parser.ParseFile(request.InputFileName)
 	if err != nil {
 		return err
 	}
 
 	artifact := request.ToFileTemplate("gateway.go")
-	log.Printf("[frodo] Generating artifact '%s'", artifact.Name)
+	log.Printf("Generating artifact '%s'", artifact.Name)
 	return generate.File(ctx, artifact)
 }

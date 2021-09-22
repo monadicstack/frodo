@@ -24,6 +24,33 @@ import (
 // not have the VERSION doc option.
 const DefaultServiceVersion = "0.0.1"
 
+// ErrNoServices is the error returned when your input file does not contain any "XyzService" interfaces.
+var ErrNoServices = fmt.Errorf("file does not contain any service interfaces")
+
+// ErrMultipleServices is the error returned when you define multiple "XyzService" interfaces in one file.
+var ErrMultipleServices = fmt.Errorf("do not define multiple services in a single file")
+
+// ErrMultiplePackages is the error returned when you try to parse multiple packages for types at once.
+var ErrMultiplePackages = fmt.Errorf("multiple packages defined in input path; should be one")
+
+// ErrMissingGoMod is the error returned when the project we're parsing does not have a 'go.mod' file in it.
+var ErrMissingGoMod = fmt.Errorf("unable to find 'go.mod' for project")
+
+// ErrTypeNotStructPointer is the error returned when the request/response value is not a struct pointer.
+var ErrTypeNotStructPointer = fmt.Errorf("not a pointer to a struct type")
+
+// ErrTypeNotError is the error returned when the second return value of an operation is not an error.
+var ErrTypeNotError = fmt.Errorf("not the type 'error'")
+
+// ErrTypeNotContext is the error returned when the first param of an operation is not a context.Context.
+var ErrTypeNotContext = fmt.Errorf("not the type 'context.Context'")
+
+// ErrTypeNotTwoParams is the error for when your function signature doesn't accept two parameters.
+var ErrTypeNotTwoParams = fmt.Errorf("must have two params")
+
+// ErrTypeNotTwoReturns is the error for when your function signature doesn't return two values.
+var ErrTypeNotTwoReturns = fmt.Errorf("must have two return values")
+
 // ParseFile parses a source code file containing a service interface declaration as well as the
 // structs for the request/response inputs and outputs. It will aggregate all of the services/ops/models
 // described in the source code in a much more simple/direct Context.
@@ -36,12 +63,12 @@ func ParseFile(inputPath string) (*Context, error) {
 
 	file, err := parser.ParseFile(fileSet, inputPath, nil, parser.ParseComments)
 	if err != nil {
-		return nil, fmt.Errorf("[%s] unable to parse go file: %w", inputPath, err)
+		return nil, fmt.Errorf("unable to parse go file: %s: %w", inputPath, err)
 	}
 
 	absolutePath, err := filepath.Abs(inputPath)
 	if err != nil {
-		return nil, fmt.Errorf("[%s] unable to parse go file: %w", inputPath, err)
+		return nil, fmt.Errorf("unable to parse go file: %s: %w", inputPath, err)
 	}
 
 	ctx := &Context{
@@ -52,19 +79,19 @@ func ParseFile(inputPath string) (*Context, error) {
 	}
 
 	if ctx.Module, err = ParseModuleInfo(ctx); err != nil {
-		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
+		return nil, fmt.Errorf("error parsing %s: %w", inputPath, err)
 	}
 	if ctx.InputPackage, ctx.OutputPackage, err = ParsePackageInfo(ctx); err != nil {
-		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
+		return nil, fmt.Errorf("error parsing %s: %w", inputPath, err)
 	}
 	if ctx.Documentation, ctx.Tags, err = ParseDocumentation(ctx); err != nil {
-		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
+		return nil, fmt.Errorf("error parsing %s: %w", inputPath, err)
 	}
 	if ctx.RawTypes, ctx.Types, err = ParseTypes(ctx); err != nil {
-		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
+		return nil, fmt.Errorf("error parsing %s: %w", inputPath, err)
 	}
 	if ctx.Service, err = ParseService(ctx); err != nil {
-		return nil, fmt.Errorf("[%s] parse error: %w", inputPath, err)
+		return nil, fmt.Errorf("error parsing %s: %w", inputPath, err)
 	}
 	return ctx, nil
 }
@@ -83,7 +110,7 @@ func ParseTypes(ctx *Context) (*packages.Package, TypeRegistry, error) {
 		return nil, nil, err
 	}
 	if len(loadedPackages) != 1 {
-		return nil, nil, fmt.Errorf("multiple packages defined in input path; should be one")
+		return nil, nil, ErrMultiplePackages
 	}
 
 	targetPackage := loadedPackages[0]
@@ -127,7 +154,7 @@ func registerTypeEntry(ctx *Context, registry TypeRegistry, entry *TypeDeclarati
 		registerTypeEntry(ctx, registry, entry, tt.Elem())
 
 	case *types.Struct:
-		// Recursively parse the type information for all of the field members of the struct.
+		// Recursively parse the type information for all the field members of the struct.
 		entry.Kind = reflect.Struct
 		parseStructFields(ctx, registry, entry, tt)
 
@@ -260,7 +287,7 @@ func ParseModuleInfo(ctx *Context) (*ModuleDeclaration, error) {
 // file or the input is not a valid directory.
 func FindGoDotMod(dirName string) (string, error) {
 	if dirName == "" || dirName == "/" {
-		return "", fmt.Errorf("unable to find 'go.mod' for project")
+		return "", ErrMissingGoMod
 	}
 
 	files, err := ioutil.ReadDir(dirName)
@@ -388,14 +415,14 @@ func findServiceInterface(ctx *Context) (string, *types.Interface, error) {
 			continue
 		}
 		if serviceInterface != nil {
-			return "", nil, fmt.Errorf("do not define multiple services in a single file")
+			return "", nil, ErrMultipleServices
 		}
 		serviceInterface = nextService
 		serviceName = name
 	}
 
 	if serviceInterface == nil {
-		return "", nil, fmt.Errorf("file does not contain any service interfaces")
+		return "", nil, ErrNoServices
 	}
 	return serviceName, serviceInterface, nil
 }
@@ -455,7 +482,7 @@ func ParseService(ctx *Context) (*ServiceDeclaration, error) {
 
 	service.Functions, err = ParseServiceFunctions(ctx, service, serviceInterface)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", service.Name, err)
+		return nil, err
 	}
 	return service, nil
 }
@@ -490,15 +517,15 @@ func ParseServiceFunction(ctx *Context, service *ServiceDeclaration, funcType *t
 
 	signature, ok := funcType.Type().(*types.Signature)
 	if !ok {
-		return nil, fmt.Errorf("%s(): not a function signature type", function.Name)
+		return nil, fmt.Errorf("%s.%s(): not a function signature type", service.Name, function.Name)
 	}
 
 	// Check to make sure that we have 2 parameters and 2 return values.
 	if signature.Params().Len() != 2 {
-		return nil, fmt.Errorf("%s(): does not have 2 parameters", function.Name)
+		return nil, fmt.Errorf("%s.%s(): %w", service.Name, function.Name, ErrTypeNotTwoParams)
 	}
 	if signature.Results().Len() != 2 {
-		return nil, fmt.Errorf("%s(): does not return 2 values", function.Name)
+		return nil, fmt.Errorf("%s.%s(): %w", service.Name, function.Name, ErrTypeNotTwoReturns)
 	}
 
 	param1 := signature.Params().At(0)
@@ -508,18 +535,18 @@ func ParseServiceFunction(ctx *Context, service *ServiceDeclaration, funcType *t
 
 	// Make sure that the two inputs are a context.Context and a request struct.
 	if !validMethodParam1(ctx, param1) {
-		return nil, fmt.Errorf("%s(): param 1 is not a context.Context", function.Name)
+		return nil, fmt.Errorf("%s.%s(): param 1: %w", service.Name, function.Name, ErrTypeNotContext)
 	}
 	if !validMethodParam2(ctx, param2) {
-		return nil, fmt.Errorf("%s(): param 2 is not a pointer to a request struct", function.Name)
+		return nil, fmt.Errorf("%s.%s(): param 2: %w", service.Name, function.Name, ErrTypeNotStructPointer)
 	}
 
 	// Make sure that the two return values are a response struct and an error
 	if !validMethodReturnValue1(ctx, result1) {
-		return nil, fmt.Errorf("%s(): return value 1 is not a pointer to a struct", function.Name)
+		return nil, fmt.Errorf("%s.%s(): return value 1: %w", service.Name, function.Name, ErrTypeNotStructPointer)
 	}
 	if !validMethodReturnValue2(ctx, result2) {
-		return nil, fmt.Errorf("%s(): return value 2 is not an error", function.Name)
+		return nil, fmt.Errorf("%s.%s(): return value 2: %w", service.Name, function.Name, ErrTypeNotError)
 	}
 
 	// We're enforcing a convention that you define your request/response structs in the same file as the
@@ -603,7 +630,7 @@ func ParseBindingOptions(ctx *Context, field *FieldDeclaration, fieldVar *types.
 }
 
 // The first param to all service functions should be a standard "context.Context"
-func validMethodParam1(ctx *Context, param *types.Var) bool {
+func validMethodParam1(_ *Context, param *types.Var) bool {
 	// Look up the real type from the Go parser rather than reading the type info directly
 	// off of the 'param'. This ensures that if you aliased the "context" package, we can
 	// still properly identify it. If you aliased it to "foo" your function might look like this:

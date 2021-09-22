@@ -37,9 +37,9 @@ func (c CreateService) Command() *cobra.Command {
 		Short: "Creates a new service in your project with all of the code required to run.",
 		Long:  "This creates a new package in your project for the service. It creates 4 different Go files: your service declaration (interface/structs), your service handler/implementation, the frodo RPC client, and the frodo RPC/API gateway. This also creates a makefile with convenience targets that regenerate your frodo RPC artifacts, build, test, and run your new service.",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Run: func(cmd *cobra.Command, args []string) {
 			request.ServiceName = args[0]
-			return c.Exec(request)
+			crapPants(c.Exec(request))
 		},
 	}
 	cmd.Flags().StringVar(&request.Directory, "dir", "", "Path to the directory where we'll write the Go file (defaults to new directory named after the service)")
