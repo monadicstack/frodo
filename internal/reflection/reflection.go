@@ -82,7 +82,7 @@ func (attrs StructAttributes) Remove(name string) StructAttributes {
 // StructAttribute represents a single key/value pair for a field on a struct.
 type StructAttribute struct {
 	// Name is the binding name of the struct value. If there was a JSON tag on the
-	// struct field, it should be that value. Otherwise it's just the struct field's name.
+	// struct field, it should be that value. Otherwise, it's just the struct field's name.
 	Name string
 	// Value is the runtime value of this field on the struct you ran through "ToAttributes()"
 	Value interface{}
@@ -104,6 +104,12 @@ func FindField(structType reflect.Type, name string) (reflect.StructField, bool)
 		field := structType.Field(i)
 		if strings.EqualFold(name, BindingName(field)) {
 			return field, true
+		}
+		if !field.Anonymous {
+			continue
+		}
+		if embeddedField, ok := FindField(field.Type, name); ok {
+			return embeddedField, ok
 		}
 	}
 	return noField, false
@@ -138,7 +144,7 @@ func BindingName(field reflect.StructField) string {
 	}
 }
 
-// Assign simply performs a reflective replace of the value, making sure to try to properly handle pointers.
+// Assign simply performs a reflective replacement of the value, making sure to try to properly handle pointers.
 func Assign(value interface{}, out interface{}) bool {
 	// Depending on whether you wrote "SomeStruct{}" or "&SomeStruct{}" (a pointer) to the
 	// scope, we want to make sure that we're de-referencing the scope value properly.
