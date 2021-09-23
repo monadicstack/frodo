@@ -303,6 +303,15 @@ func (suite *BindingSuite) TestBind_embeddedStruct() {
 	suite.NoError(err)
 	suite.Equal("abcdef", result.EmbeddedID.ID, "Body should be able to set embedded struct attributes.")
 	suite.Equal(99, result.EmbeddedID.Total, "Path params should be able to set embedded struct attributes.")
+
+	// Doubly embedded structs should totally flatten as well.
+	req = suite.newRequest("PATCH", noBody, noQuery, bindingValues{"MoreID": "abcdef", "MoreTotal": "99"})
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("", result.EmbeddedID.ID, "Path params should be able to set embedded struct attributes.")
+	suite.Equal(0, result.EmbeddedID.Total, "Path params should be able to set embedded struct attributes.")
+	suite.Equal("abcdef", result.EmbeddedID.MoreEmbedded.MoreID, "Path params should be able to set embedded struct attributes.")
+	suite.Equal(99, result.EmbeddedID.MoreEmbedded.MoreTotal, "Path params should be able to set embedded struct attributes.")
 }
 
 // This ensures that the binder adheres to standard JSON decoding rules. If you have an embedded struct, you
@@ -324,6 +333,17 @@ func (suite *BindingSuite) TestBind_embeddedStructNoLongForm() {
 	result, err = suite.bind(req)
 	suite.NoError(err)
 	suite.Equal("", result.EmbeddedID.ID, "Embedded struct attributes should be flattened (e.g. Embedded.Name -> Name)")
+
+	// Doubly embedded structs need to be flattened all the way
+	req = suite.newRequest("PATCH", noBody, noQuery, bindingValues{"EmbeddedID.MoreEmbedded.MoreID": "abcdef"})
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("", result.EmbeddedID.MoreEmbedded.MoreID, "Embedded struct attributes should be flattened (e.g. Embedded.Name -> Name)")
+
+	req = suite.newRequest("PATCH", noBody, noQuery, bindingValues{"MoreEmbedded.MoreID": "abcdef"})
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("", result.EmbeddedID.MoreEmbedded.MoreID, "Embedded struct attributes should be flattened (e.g. Embedded.Name -> Name)")
 }
 
 // Ensures that we can use functional options to set the binder when setting up a gateway.
@@ -412,8 +432,14 @@ type serviceRequest struct {
 
 // EmbeddedID contains... an ID... that can be embedded in a struct.
 type EmbeddedID struct {
+	MoreEmbedded
 	ID    string
 	Total int
+}
+
+type MoreEmbedded struct {
+	MoreID    string
+	MoreTotal int
 }
 
 type searchCriteria struct {
