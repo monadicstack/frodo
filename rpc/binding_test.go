@@ -282,6 +282,70 @@ func (suite *BindingSuite) TestBind_errors() {
 	suite.Error(err, "Should return an error when URL is nil")
 }
 
+// This ensures that our binder accepts the short-form JSON for embedded structs/attributes. In this case, if you
+// are trying to set "serviceRequest.EmbeddedID.ID" you need to have the param "ID" and not "EmbeddedID.ID" so that
+// we match the semantics of the standard library.
+func (suite *BindingSuite) TestBind_embeddedStruct() {
+	req := suite.newRequest("PATCH", noBody, noQuery, bindingValues{"ID": "abcdef", "Total": "99"})
+	result, err := suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("abcdef", result.EmbeddedID.ID, "Path params should be able to set embedded struct attributes.")
+	suite.Equal(99, result.EmbeddedID.Total, "Path params should be able to set embedded struct attributes.")
+
+	req = suite.newRequest("PATCH", noBody, bindingValues{"ID": "abcdef", "Total": "99"}, noPathParams)
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("abcdef", result.EmbeddedID.ID, "Query params should be able to set embedded struct attributes.")
+	suite.Equal(99, result.EmbeddedID.Total, "Path params should be able to set embedded struct attributes.")
+
+	req = suite.newRequest("PATCH", `{"ID": "abcdef", "Total": 99}`, noQuery, noPathParams)
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("abcdef", result.EmbeddedID.ID, "Body should be able to set embedded struct attributes.")
+	suite.Equal(99, result.EmbeddedID.Total, "Path params should be able to set embedded struct attributes.")
+
+	// Doubly embedded structs should totally flatten as well.
+	req = suite.newRequest("PATCH", noBody, noQuery, bindingValues{"MoreID": "abcdef", "MoreTotal": "99"})
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("", result.EmbeddedID.ID, "Path params should be able to set embedded struct attributes.")
+	suite.Equal(0, result.EmbeddedID.Total, "Path params should be able to set embedded struct attributes.")
+	suite.Equal("abcdef", result.EmbeddedID.MoreEmbedded.MoreID, "Path params should be able to set embedded struct attributes.")
+	suite.Equal(99, result.EmbeddedID.MoreEmbedded.MoreTotal, "Path params should be able to set embedded struct attributes.")
+}
+
+// This ensures that the binder adheres to standard JSON decoding rules. If you have an embedded struct, you
+// need to use the sugar-coated form of the attribute rather than the full one. In this case, if you're trying to
+// set "serviceRequest.EmbeddedID.ID", your params should include "ID=123" and not "EmbeddedID.ID=123". I think
+// its silly that both are not supported, but that's how the standard library handles JSON, so that's how we do it.
+func (suite *BindingSuite) TestBind_embeddedStructNoLongForm() {
+	req := suite.newRequest("PATCH", noBody, noQuery, bindingValues{"EmbeddedID.ID": "abcdef"})
+	result, err := suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("", result.EmbeddedID.ID, "Embedded struct attributes should be flattened (e.g. Embedded.Name -> Name)")
+
+	req = suite.newRequest("PATCH", noBody, bindingValues{"EmbeddedID.ID": "abcdef"}, noPathParams)
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("", result.EmbeddedID.ID, "Embedded struct attributes should be flattened (e.g. Embedded.Name -> Name)")
+
+	req = suite.newRequest("PATCH", `{"EmbeddedID.ID": "abcdef"}`, noQuery, noPathParams)
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("", result.EmbeddedID.ID, "Embedded struct attributes should be flattened (e.g. Embedded.Name -> Name)")
+
+	// Doubly embedded structs need to be flattened all the way
+	req = suite.newRequest("PATCH", noBody, noQuery, bindingValues{"EmbeddedID.MoreEmbedded.MoreID": "abcdef"})
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("", result.EmbeddedID.MoreEmbedded.MoreID, "Embedded struct attributes should be flattened (e.g. Embedded.Name -> Name)")
+
+	req = suite.newRequest("PATCH", noBody, noQuery, bindingValues{"MoreEmbedded.MoreID": "abcdef"})
+	result, err = suite.bind(req)
+	suite.NoError(err)
+	suite.Equal("", result.EmbeddedID.MoreEmbedded.MoreID, "Embedded struct attributes should be flattened (e.g. Embedded.Name -> Name)")
+}
+
 // Ensures that we can use functional options to set the binder when setting up a gateway.
 func (suite *BindingSuite) TestWithBinder() {
 	gateway := rpc.NewGateway(rpc.WithBinder(nil))
@@ -333,8 +397,10 @@ func parseTime(value string) time.Time {
 	return t
 }
 
-// serviceRequest contains all of the different types of fields we want to try binding.
+// serviceRequest contains all the different types of fields we want to try binding.
 type serviceRequest struct {
+	EmbeddedID
+
 	String    string
 	StringPtr *string
 	Int       int
@@ -362,6 +428,18 @@ type serviceRequest struct {
 	StringSlice []string
 	StringMap   map[string]string
 	ChanInt     chan int
+}
+
+// EmbeddedID contains... an ID... that can be embedded in a struct.
+type EmbeddedID struct {
+	MoreEmbedded
+	ID    string
+	Total int
+}
+
+type MoreEmbedded struct {
+	MoreID    string
+	MoreTotal int
 }
 
 type searchCriteria struct {

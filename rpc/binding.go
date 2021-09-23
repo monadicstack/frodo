@@ -54,8 +54,8 @@ func WithBinder(binder Binder) GatewayOption {
 // JSON marshaling rules will overlay each one onto your 'out' value.
 type jsonBinder struct{}
 
-// jsonBindingContext carries our buffer/decoder context through all of the binding operations so
-// that all values can share resources (e.g. binding the path params can piggy back off of the
+// jsonBindingContext carries our buffer/decoder context through all the binding operations so
+// that all values can share resources (e.g. binding the path params can piggy-back off of the
 // work of binding the query string).
 type jsonBindingContext struct {
 	buf     *bytes.Buffer
@@ -102,7 +102,7 @@ func (b jsonBinder) BindBody(_ jsonBindingContext, req *http.Request, out interf
 	return json.NewDecoder(req.Body).Decode(out)
 }
 
-// BindQueryString decodes all of the query string parameters onto the 'out' value. Each parameter will
+// BindQueryString decodes the query string parameters onto the 'out' value. Each parameter will
 // be converted to an equivalent JSON object and unmarshaled separately.
 func (b jsonBinder) BindQueryString(ctx jsonBindingContext, req *http.Request, out interface{}) error {
 	if req.URL == nil {
@@ -111,7 +111,7 @@ func (b jsonBinder) BindQueryString(ctx jsonBindingContext, req *http.Request, o
 	return b.bindValues(ctx, req.URL.Query(), out)
 }
 
-// BindQueryString decodes all of the URL path parameters onto the 'out' value. Each parameter will
+// BindPathParams decodes the URL path parameters onto the 'out' value. Each parameter will
 // be converted to an equivalent JSON object and unmarshaled separately.
 func (b jsonBinder) BindPathParams(ctx jsonBindingContext, req *http.Request, out interface{}) error {
 	params := httptreemux.ContextParams(req.Context())
@@ -140,7 +140,7 @@ func (b jsonBinder) bindValues(ctx jsonBindingContext, requestValues url.Values,
 		if valueType == jsonTypeNil {
 			continue
 		}
-		// Maybe you provided "foo.bar.baz=4" and there was is a field at "out.foo.bar.baz", but it's
+		// Maybe you provided "foo.bar.baz=4" and there is a field at "out.foo.bar.baz", but it's
 		// a struct of some kind, so "4" is not enough to properly bind it. Arrays/slices we'll handle
 		// in a future version... maybe.
 		if valueType == jsonTypeObject || valueType == jsonTypeArray {
@@ -189,13 +189,13 @@ func (b jsonBinder) writeBindingValueJSON(buf *bytes.Buffer, value string, value
 	case jsonTypeNumber, jsonTypeBool:
 		buf.WriteString(value)
 	default:
-		// Whether its a nil (unknown) or object type, the binder doesn't support that type
+		// Whether it's a nil (unknown) or object type, the binder doesn't support that type
 		// of value, so just write null to avoid binding anything if we can help it.
 		buf.WriteString("null")
 	}
 }
 
-// jsonType describes all of the possible JSON data types.
+// jsonType describes all possible JSON data types.
 type jsonType int
 
 const (
@@ -222,7 +222,7 @@ func (b jsonBinder) keyToJSONType(outValue reflect.Value, key []string, value st
 
 	// Follow the path of attributes described by the key, so if the key was "foo.bar.baz" then look up
 	// "foo" on the out value, then the "bar" attribute on that type, then the "baz" attribute on that type.
-	// Once we exit the loop, 'actualType' should be the type of that nested "baz" field and we can
+	// Once we exit the loop, 'actualType' should be the type of that nested "baz" field, and we can
 	// determine the correct JSON type from there.
 	actualType := reflection.FlattenPointerType(outValue.Type())
 	for i := 0; i < keyLength; i++ {
@@ -234,7 +234,7 @@ func (b jsonBinder) keyToJSONType(outValue reflect.Value, key []string, value st
 	}
 
 	// Now that we have the Go type for the field that will ultimately be populated by this parameter/value,
-	// we need to do a quick double check. The field's Go type might be some type alias for an int64 so the
+	// we need to do a quick double check. The field's Go type might be a type alias for an int64 so the
 	// natural choice for a JSON binding would be to use a number (which is what 't' will resolve to).
 	//
 	// But... what if the user provided the value "5m2s" for that field? If we blindly treat the value like
@@ -250,7 +250,7 @@ func (b jsonBinder) keyToJSONType(outValue reflect.Value, key []string, value st
 	// such as "PT3M49S". By looking at the Go type you'd think that the incoming param value should be a
 	// JSON number (since the duration is an int64), but the value doesn't "look" like a number; it looks
 	// like a freeform string. As a result, we need to build the binding JSON {"foo":"PT3M49S"} since we will
-	// treat the right hand side as a string rather than {"foo":PT3M48S} which is not valid.
+	// treat the right-hand side as a string rather than {"foo":PT3M48S} which is not valid.
 	t := b.typeToJSONType(actualType)
 	if t == jsonTypeBool && !b.looksLikeBoolJSON(value) {
 		return jsonTypeString
@@ -291,7 +291,7 @@ func (b jsonBinder) looksLikeBoolJSON(value string) bool {
 }
 
 // looksLikeNumberJSON determines if the raw parameter value looks like it can be formatted as a JSON
-// number. Basically, does it only contain digits and a decimal point. Currently this only supports using
+// number. Basically, does it only contain digits and a decimal point. Currently, this only supports using
 // periods as decimal points. A future iteration might support using /x/text/language to support commas
 // as decimals points.
 func (b jsonBinder) looksLikeNumberJSON(value string) bool {

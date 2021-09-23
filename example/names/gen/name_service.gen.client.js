@@ -482,28 +482,23 @@ class GatewayError {
 
 
 /**
- * @typedef { object } DownloadExtResponse
+ * @typedef { object } FirstNameRequest
+ * @property { string } [Name]
 */
 /**
- * @typedef { object } DownloadExtRequest
- * @property { string } [Name]
- * @property { string } [Ext]
+ * @typedef { object } DownloadResponse
+*/
+/**
+ * @typedef { object } FirstNameResponse
+ * @property { string } [FirstName]
 */
 /**
  * @typedef { object } LastNameRequest
  * @property { string } [Name]
 */
 /**
- * @typedef { object } LastNameResponse
- * @property { string } [LastName]
-*/
-/**
  * @typedef { object } SortNameResponse
  * @property { string } [SortName]
-*/
-/**
- * @typedef { object } FirstNameResponse
- * @property { string } [FirstName]
 */
 /**
  * @typedef { object } SplitResponse
@@ -511,27 +506,32 @@ class GatewayError {
  * @property { string } [LastName]
 */
 /**
- * @typedef { object } FirstNameRequest
+ * @typedef { object } DownloadRequest
  * @property { string } [Name]
+*/
+/**
+ * @typedef { object } DownloadExtRequest
+ * @property { string } [Name]
+ * @property { string } [Ext]
 */
 /**
  * @typedef { object } NameRequest
  * @property { string } [Name]
 */
 /**
- * @typedef { object } SplitRequest
- * @property { string } [Name]
+ * @typedef { object } LastNameResponse
+ * @property { string } [LastName]
 */
 /**
- * @typedef { object } DownloadRequest
- * @property { string } [Name]
+ * @typedef { object } DownloadExtResponse
 */
 /**
  * @typedef { object } SortNameRequest
  * @property { string } [Name]
 */
 /**
- * @typedef { object } DownloadResponse
+ * @typedef { object } SplitRequest
+ * @property { string } [Name]
 */
 
 module.exports = {
