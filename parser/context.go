@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/monadicstack/frodo/internal/naming"
 	"golang.org/x/tools/go/packages"
@@ -29,6 +30,8 @@ type Context struct {
 	Path string
 	// AbsolutePath is the absolute path to the service definition file we're parsing.
 	AbsolutePath string
+	// Timestamp is when we performed the parsing.
+	Timestamp time.Time
 
 	// --- Fields related to orienting ourselves to the user's module/package.
 
@@ -61,6 +64,11 @@ type Context struct {
 // Scope returns the root of the parsed type tree for the source file we parsed.
 func (ctx Context) Scope() *types.Scope {
 	return ctx.RawTypes.Types.Scope()
+}
+
+// TimestampString returns the timestamp formatted in a standard fashion that we include in artifact headers.
+func (ctx Context) TimestampString() string {
+	return ctx.Timestamp.Format(time.RFC1123)
 }
 
 // ServiceDeclaration wrangles all of the information we could grab about the service from the

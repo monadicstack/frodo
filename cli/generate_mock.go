@@ -43,6 +43,6 @@ func (c GenerateMock) Exec(request *GenerateMockRequest) error {
 	}
 
 	artifact := request.ToFileTemplate("mock.go")
-	log.Printf("[frodo] Generating artifact '%s'", artifact.Name)
+	log.Printf("Generating artifact '%s'", artifact.Name)
 	return generate.File(ctx, artifact)
 }

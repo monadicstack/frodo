@@ -58,12 +58,12 @@ func (c GenerateClient) Exec(request *GenerateClientRequest) error {
 // generate parses the input service definition file and creates an output client/gateway
 // code, writing it to the output gen/ directory.
 func (c GenerateClient) generate(request *GenerateClientRequest, artifact generate.FileTemplate) error {
-	log.Printf("[frodo] Parsing service definition: %s", request.InputFileName)
+	log.Printf("Parsing service definition: %s", request.InputFileName)
 	ctx, err := parser.ParseFile(request.InputFileName)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("[frodo] Generating '%s'", artifact.Name)
+	log.Printf("Generating '%s'", artifact.Name)
 	return generate.File(ctx, artifact)
 }
