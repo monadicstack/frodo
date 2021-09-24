@@ -36,13 +36,13 @@ func (c GenerateDocs) Command() *cobra.Command {
 
 // Exec takes all of the parsed CLI flags and generates the service's documentation artifact(s).
 func (c GenerateDocs) Exec(request *GenerateDocsRequest) error {
-	log.Printf("[frodo] Parsing service definitions: %s", request.InputFileName)
+	log.Printf("Parsing service definitions: %s", request.InputFileName)
 	ctx, err := parser.ParseFile(request.InputFileName)
 	if err != nil {
 		return err
 	}
 
 	artifact := request.ToFileTemplate("openapi.yml")
-	log.Printf("[frodo] Generating artifact '%s'", artifact.Name)
+	log.Printf("Generating artifact '%s'", artifact.Name)
 	return generate.File(ctx, artifact)
 }

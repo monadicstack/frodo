@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/monadicstack/frodo/parser"
 	"github.com/stretchr/testify/suite"
@@ -552,6 +553,20 @@ func (suite *ContextSuite) TestGatewayParameters_ByName() {
 	check(params, "foo", true)
 	check(params, "Food", false)
 	check(params, "Bar", true)
+}
+
+func (suite *ContextSuite) TestContext_timestampString() {
+	ctx := parser.Context{}
+	suite.Equal("Mon, 01 Jan 0001 00:00:00 UTC", ctx.TimestampString())
+
+	// We only worry about second-level granularity.
+	ctx.Timestamp = time.Date(2021, time.September, 24, 14, 44, 42, 12345, time.UTC)
+	suite.Equal("Fri, 24 Sep 2021 14:44:42 UTC", ctx.TimestampString())
+
+	// We abide the location / time zone
+	loc, _ := time.LoadLocation("America/New_York")
+	ctx.Timestamp = time.Date(2021, time.September, 24, 14, 44, 42, 12345, loc)
+	suite.Equal("Fri, 24 Sep 2021 14:44:42 EDT", ctx.TimestampString())
 }
 
 func TestContextSuite(t *testing.T) {

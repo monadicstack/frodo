@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/monadicstack/frodo/internal/implements"
 	"github.com/monadicstack/frodo/internal/naming"
@@ -76,6 +77,7 @@ func ParseFile(inputPath string) (*Context, error) {
 		File:         file,
 		Path:         inputPath,
 		AbsolutePath: absolutePath,
+		Timestamp:    time.Now(),
 	}
 
 	if ctx.Module, err = ParseModuleInfo(ctx); err != nil {
