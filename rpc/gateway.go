@@ -338,6 +338,38 @@ type ContentFileNameReader respond.ContentFileNameReader
 // ContentFileNameWriter allows raw responses to specify the file name (if any) of the file the bytes represent.
 // This is utilized by clients to automatically populate content type values received from the gateway.
 type ContentFileNameWriter interface {
-	// SetContentType applies the file name value data to the response.
+	// SetContentFileName applies the file name value data to the response.
 	SetContentFileName(contentFileName string)
+}
+
+// WithNotFoundHandler registers a custom handler with the internal RPC/HTTP router that lets you assign
+// custom behaviors/handling for requests that do not map to any of your service functions. This will perform
+// handling for both 404-style Not Found errors AND 405-style Method Not Allowed errors.
+//
+// You'll notice that this accepts a MiddlewareFunc rather than a standard HTTP handler func. The reason
+// is that 99% of the time you don't want to change the behavior of 404/405 handling - you just want
+// to inject some logging, metrics, etc. Since you likely have middleware for those things already, you can just
+// re-use them as needed and then delegate to "next()" to finish the standard response handling (status code,
+// Allow headers, etc.).
+//
+// If you really do want to provide custom handling such as returning an HTTP 200 if the path is "/health" or
+// something like that, you can short circuit the standard handler by simply not calling "next()", just as
+// you would with standard middleware.
+func WithNotFoundHandler(handler MiddlewareFunc) GatewayOption {
+	return func(gateway *Gateway) {
+		// Even if you provide custom handling, no need for you to have to re-invent the wheel to do basic 40X status
+		// handling and setting "Allow" handlers and so forth. We will use the router's default handlers to
+		// cap off the middleware chain for these types of requests.
+		defaultNotFound := gateway.Router.NotFoundHandler
+		defaultMethodNotAllowed := gateway.Router.MethodNotAllowedHandler
+
+		gateway.Router.NotFoundHandler = func(w http.ResponseWriter, req *http.Request) {
+			handler(w, req, defaultNotFound)
+		}
+		gateway.Router.MethodNotAllowedHandler = func(w http.ResponseWriter, req *http.Request, methods map[string]httptreemux.HandlerFunc) {
+			handler(w, req, func(w http.ResponseWriter, req *http.Request) {
+				defaultMethodNotAllowed(w, req, methods)
+			})
+		}
+	}
 }
