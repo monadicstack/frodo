@@ -38,6 +38,7 @@ with as little fuss as possible.
 * [Create a JavaScript Client](https://github.com/monadicstack/frodo#creating-a-javascript-client)
 * [Create a Dart/Flutter Client](https://github.com/monadicstack/frodo#creating-a-dartflutter-client)
 * [Authorization](https://github.com/monadicstack/frodo#authorization)
+* [Handling Not Found](https://github.com/monadicstack/frodo#handling-not-found)
 * [Composing Gateways](https://github.com/monadicstack/frodo#composing-gateways)
 * [Mocking Services](https://github.com/monadicstack/frodo#mocking-services)
 * [Generating OpenAPI Documentation](https://github.com/monadicstack/frodo#generate-openapiswagger-documentation-experimental)
@@ -720,6 +721,85 @@ var client = ServiceAClient('...');
 var req = HelloRequest(Name: 'Bob');
 client.Hello(req, authorization: 'Token 12345');
 ```
+
+## Handling Not Found
+
+At the end of the day your service is just a series of HTTP
+routes/endpoints. Even though Frodo will make sure your clients
+always hit real endpoints, it's still possible for requests
+for things that don't exist to hit your server. By default,
+Frodo will respond with a basic 404 for routes that do not
+exist in your service and a 405 for routes that do exist
+but have the wrong method (e.g. "GET /login" instead of "POST /login").
+For simplicity Frodo's not found handler takes care of both
+cases.
+
+Frodo provides a functional option for your gateway to let you
+append to or completely change this behavior. Just like you
+can provide middleware functions for "hits" to valid service
+endpoints, you can provide a different set of middleware handlers
+for requests that don't match your routing table.
+
+```go
+// Create some middleware functions... remember, these
+// all match the function signature:
+//
+//   func(http.ResponseWriter, *http.Request, next http.HandlerFunc)
+//
+logger := NewLoggerMiddleware()
+metrics := NewMetricsMiddleware()
+authenticate := NewAuthenticateMiddleware()
+adminOnly := NewAuthorizeMiddleware("admin")
+
+service := UserServiceHandler{}
+gateway := usersrpc.NewUserServiceGateway(service,
+    rpc.WithMiddleware(
+        logger,
+        metrics,
+        authenticate,
+        adminOnly,
+    ),
+    rpc.WithNotFoundMiddleware(
+        logger,
+        metrics,
+    ),
+)
+```
+
+In this case, we'll log and track metrics for your valid
+service calls as well as make sure to provide some basic
+security around them. For calls to non-existent routes, we
+will only log/track them and rely on the default response
+handling for those failures (returning 404 or 405 as needed).
+
+If, however, you want to insert your own handling and respond
+how you want, you can treat it just like any other middleware
+function and just not call `next()`.
+
+```go
+func crashOverride(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+    // Don't consider this "not found"
+    if req.RequestURI == "/hack/the/planet" {
+		respond.To(w, req).Ok(`{"Cool":0}`)
+        return
+    }
+
+    // Everything else, give a normal 404/405
+    next(w, req)
+}
+
+// ...
+
+rpc.WithNotFoundMiddleware(
+    logger,
+    metrics,
+    crashOverride,
+),
+```
+
+In case you're curious, the response handling is done using
+the https://github.com/monadicstack/respond library. Frodo
+uses it under the hood and can make your life easier, too.
 
 ## Composing Gateways
 
