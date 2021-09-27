@@ -10,6 +10,7 @@ import (
 	"github.com/monadicstack/frodo/rpc/authorization"
 	"github.com/monadicstack/frodo/rpc/metadata"
 	"github.com/monadicstack/respond"
+	"github.com/urfave/negroni"
 )
 
 // NewGateway creates a wrapper around your raw service to expose it via HTTP for RPC calls.
@@ -124,8 +125,26 @@ func (gw Gateway) registerOptions(path string) {
 
 // ServeHTTP is the central HTTP handler that includes all http routing, middleware, service forwarding, etc.
 func (gw Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// Why the negroni response writer?
+	//
+	//     https://github.com/monadicstack/frodo/issues/50
+	//
+	// Since negroni is basically the de facto HTTP middleware for go, I want to support their
+	// out-of-the-box functions as much as possible. Unfortunately their logger middleware will
+	// panic if it does not receive their own ResponseWriter interface:
+	//
+	//     https://github.com/urfave/negroni/blob/master/logger.go#L63
+	//
+	// It's not a huge issue to them because they expect you to take all of their middleware functions
+	// and use 'negroni.New()' to construct a single http.Handler. When that handler is invoked, they'll
+	// gladly wrap the writer w/ their custom one, and it works. Frodo does its own middleware function
+	// combining so their implicit wrapping never happens. Since we'd like you to be able to
+	// use as much off the shelf as possible w/o weird glue code, we'll do the same wrapping to satisfy
+	// the overly-tight coupling of the most common middleware library in the Go ecosystem.
+	//
+	// tldr; Frodo doesn't use the wrapped writer for anything special. It's just to keep negroni from barfing.
 	ctx := context.WithValue(req.Context(), contextKeyGateway{}, &gw)
-	gw.Router.ServeHTTP(w, req.WithContext(ctx))
+	gw.Router.ServeHTTP(negroni.NewResponseWriter(w), req.WithContext(ctx))
 }
 
 // Endpoint describes an operation that we expose through an RPC gateway.
