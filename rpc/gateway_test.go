@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dimfeld/httptreemux/v5"
+	"github.com/monadicstack/frodo/internal/testext"
 	"github.com/monadicstack/frodo/rpc"
 	"github.com/monadicstack/frodo/rpc/authorization"
 	"github.com/monadicstack/frodo/rpc/metadata"
@@ -518,6 +519,163 @@ func (suite *GatewaySuite) TestCompose_conflict() {
 	})
 
 	suite.Panics(func() { rpc.Compose(serviceA, serviceB) }, "Compose should panic if multiple routes conflict")
+}
+
+// Ensures that we handle missing routes by writing a 404 status and method not allowed
+// with a 405 if you don't supply a custom handler.
+func (suite *GatewaySuite) TestWithNotFoundHandler_default() {
+	assert := suite.Require()
+	gateway := rpc.NewGateway()
+	gateway.Register(rpc.Endpoint{
+		Method:      "GET",
+		Path:        "/foo",
+		ServiceName: "FooService",
+		Name:        "Hello",
+		Handler:     func(writer http.ResponseWriter, request *http.Request) {},
+	})
+
+	server := httptest.NewServer(gateway)
+	defer server.Close()
+
+	status, _, err := suite.request(server, "GET", "/bar", "")
+	assert.NoError(err)
+	assert.Equal(404, status, "Not found handler should have 404 status")
+
+	status, _, err = suite.request(server, "POST", "/foo", "")
+	assert.NoError(err)
+	assert.Equal(405, status, "Not found handler should have 405 status when method not allowed")
+}
+
+// Ensures that you can supply a custom middleware function for not found and method not allowed requests
+// while still letting the default status handling happen.
+func (suite *GatewaySuite) TestWithNotFoundHandler_basic() {
+	sequence := testext.Sequence{}
+	expectedSequence := []string{"A1", "A2"}
+
+	notFound := func(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+		sequence.Append("A1")
+		next(w, req)
+		sequence.Append("A2")
+	}
+
+	gateway := rpc.NewGateway(rpc.WithNotFoundMiddleware(notFound))
+	gateway.Register(rpc.Endpoint{
+		Method:      "GET",
+		Path:        "/foo",
+		ServiceName: "FooService",
+		Name:        "Hello",
+		Handler:     func(writer http.ResponseWriter, request *http.Request) {},
+	})
+
+	server := httptest.NewServer(gateway)
+	defer server.Close()
+
+	sequence.Reset()
+	status, _, err := suite.request(server, "GET", "/bar", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(404, status, "Not found handler should have 404 status")
+	suite.Require().Equal(expectedSequence, sequence.Values(), "Not found handlers not firing in proper sequence")
+
+	sequence.Reset()
+	status, _, err = suite.request(server, "POST", "/foo", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(405, status, "Not found handler should have 405 status when method not allowed")
+	suite.Require().Equal(expectedSequence, sequence.Values(), "Not found handlers not firing in proper sequence")
+}
+
+// Ensures that you can chain together multiple middleware functions to fire with default
+// not found and method not allowed handling.
+func (suite *GatewaySuite) TestWithNotFoundHandler_chainedMiddleware() {
+	sequence := testext.Sequence{}
+	expectedSequence := []string{"A1", "B1", "C1", "C2", "B2", "A2"}
+
+	middlewareA := func(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+		sequence.Append("A1")
+		next(w, req)
+		sequence.Append("A2")
+	}
+	middlewareB := func(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+		sequence.Append("B1")
+		next(w, req)
+		sequence.Append("B2")
+	}
+	middlewareC := func(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+		sequence.Append("C1")
+		next(w, req)
+		sequence.Append("C2")
+	}
+
+	gateway := rpc.NewGateway(rpc.WithNotFoundMiddleware(
+		middlewareA,
+		middlewareB,
+		middlewareC,
+	))
+	gateway.Register(rpc.Endpoint{
+		Method:      "GET",
+		Path:        "/foo",
+		ServiceName: "FooService",
+		Name:        "Hello",
+		Handler:     func(writer http.ResponseWriter, request *http.Request) {},
+	})
+
+	server := httptest.NewServer(gateway)
+	defer server.Close()
+
+	sequence.Reset()
+	status, _, err := suite.request(server, "GET", "/bar", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(404, status, "Not found handler should have 404 status")
+	suite.Require().Equal(expectedSequence, sequence.Values(), "Not found handlers not firing in proper sequence")
+
+	sequence.Reset()
+	status, _, err = suite.request(server, "POST", "/foo", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(405, status, "Not found handler should have 405 status when method not allowed")
+	suite.Require().Equal(expectedSequence, sequence.Values(), "Not found handlers not firing in proper sequence")
+}
+
+// Ensures that a not found handler can avoid the default handlers and return with whatever stats/values you want.
+func (suite *GatewaySuite) TestWithNotFoundHandler_shortCircuit() {
+	sequence := testext.Sequence{}
+	expectedSequence := []string{"A1", "B1", "A2"}
+
+	middlewareA := func(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+		sequence.Append("A1")
+		next(w, req)
+		sequence.Append("A2")
+	}
+	middlewareB := func(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
+		sequence.Append("B1")
+		w.WriteHeader(202)
+		w.Write([]byte(`{"Foo":"Bar"}`))
+	}
+
+	gateway := rpc.NewGateway(rpc.WithNotFoundMiddleware(
+		middlewareA,
+		middlewareB,
+	))
+	gateway.Register(rpc.Endpoint{
+		Method:      "GET",
+		Path:        "/foo",
+		ServiceName: "FooService",
+		Name:        "Hello",
+		Handler:     func(writer http.ResponseWriter, request *http.Request) {},
+	})
+
+	server := httptest.NewServer(gateway)
+	defer server.Close()
+
+	sequence.Reset()
+	status, _, err := suite.request(server, "GET", "/bar", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(202, status, "Short circuit not found handler should have a 202 status")
+	suite.Require().Equal(expectedSequence, sequence.Values(), "Not found handlers not firing in proper sequence")
+
+	sequence.Reset()
+	status, _, err = suite.request(server, "POST", "/foo", "")
+	suite.Require().NoError(err)
+	suite.Require().Equal(202, status, "Short circuit not found handler should have a 202 status")
+	suite.Require().Equal(expectedSequence, sequence.Values(), "Not found handlers not firing in proper sequence")
 }
 
 func (suite *GatewaySuite) request(server *httptest.Server, method string, path string, body string, opts ...func(*http.Request)) (int, string, error) {
