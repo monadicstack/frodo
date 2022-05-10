@@ -61,9 +61,9 @@ func startGateways() {
 
 	// Combine the gateways for all of our services into a single gateway that routes requests to all of them.
 	gateway := rpc.Compose(
-		calcrpc.NewCalculatorServiceGateway(&calcService),
-		scoresrpc.NewScoreServiceGateway(&scoreService),
-		gamesrpc.NewGameServiceGateway(&gameService),
+		calcrpc.NewCalculatorServiceGateway(&calcService).Gateway,
+		scoresrpc.NewScoreServiceGateway(&scoreService).Gateway,
+		gamesrpc.NewGameServiceGateway(&gameService).Gateway,
 	)
 	http.ListenAndServe(":9004", gateway)
 }
