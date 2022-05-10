@@ -823,9 +823,9 @@ projectGateway := projects.NewProjectServiceGateway(projectService)
 
 // Wrap them in a composed gateway that routes requests to all three.
 gateway := rpc.Compose(
-    userGateway,
-    groupGateway,
-    projectGateway,
+    userGateway.Gateway,
+    groupGateway.Gateway,
+    projectGateway.Gateway,
 )
 http.listenAndService(":8080", gateway)
 ```

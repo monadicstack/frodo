@@ -56,11 +56,11 @@ func New{{ $gatewayName }}(service {{ $ctx.InputPackage.Name }}.{{ $serviceName 
 	})
 	{{ end }}
 
-	return {{ $gatewayName }}{gateway: gw, service: service}
+	return {{ $gatewayName }}{Gateway: gw, service: service}
 }
 
 type {{ $gatewayName }} struct {
-	gateway rpc.Gateway
+	rpc.Gateway
 	service {{ $ctx.InputPackage.Name}}.{{ $serviceName }}
 }
 
@@ -73,5 +73,5 @@ func (gw {{ $gatewayName }}) {{ .Name }}(ctx context.Context, request *{{ $reque
 {{ end }}
 
 func (gw {{ $gatewayName }}) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	gw.gateway.ServeHTTP(w, req)
+	gw.Gateway.ServeHTTP(w, req)
 }
