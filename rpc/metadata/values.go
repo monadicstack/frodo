@@ -151,7 +151,9 @@ func WithValue(ctx context.Context, key string, value interface{}) context.Conte
 	// At some point I would love for this to be not rely on side-effects and mutating a map. I'd
 	// rather that adding new values create copies of the metadata structure so it's more thread
 	// safe like normal context values. But this will work for now...
-	meta[key] = valuesEntry{Value: value}
+	if meta != nil {
+		meta[key] = valuesEntry{Value: value}
+	}
 	return ctx
 }
 
