@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/monadicstack/frodo/internal/naming"
-	"github.com/monadicstack/frodo/internal/reflection"
-	"github.com/monadicstack/frodo/rpc/authorization"
-	"github.com/monadicstack/frodo/rpc/errors"
-	"github.com/monadicstack/frodo/rpc/metadata"
+	"github.com/davidrenne/frodo/internal/naming"
+	"github.com/davidrenne/frodo/internal/reflection"
+	"github.com/davidrenne/frodo/rpc/authorization"
+	"github.com/davidrenne/frodo/rpc/errors"
+	"github.com/davidrenne/frodo/rpc/metadata"
 )
 
 // NewClient constructs the RPC client that does the "heavy lifting" when communicating

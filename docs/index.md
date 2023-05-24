@@ -7,24 +7,24 @@ generate all of your client/server communication code.
 
 ## Features
 
-* No .proto files. Your services are just idiomatic Go code.
-* Write Go code that solves a problem and immediately start
+- No .proto files. Your services are just idiomatic Go code.
+- Write Go code that solves a problem and immediately start
   communicating over HTTP/JSON to your frontend and other backend services.
-* Generate robust HTTP APIs/gateways to expose your services. 
-* Ggenerate clients in multiple languages to consume your services
+- Generate robust HTTP APIs/gateways to expose your services.
+- Ggenerate clients in multiple languages to consume your services
   without the need for communication/transport code.
-* Generate complete OpenAPI documentation to describe your
+- Generate complete OpenAPI documentation to describe your
   APIs, operations, schemas, and such.
-* They're just HTTP-based APIs, so deploying to your cloud
-  infrastructure or Kubernetes doesn't require additional complexity. 
-* Insert off-the-shelf middleware functions into your service's flow.
-* Customize RESTful URLS for your API or stick with
+- They're just HTTP-based APIs, so deploying to your cloud
+  infrastructure or Kubernetes doesn't require additional complexity.
+- Insert off-the-shelf middleware functions into your service's flow.
+- Customize RESTful URLS for your API or stick with
   RPC-style URLs; your choice.
-* Easily control HTTP status codes for successes and failures.
-* Automatic data binding so that raw request data is converted
+- Easily control HTTP status codes for successes and failures.
+- Automatic data binding so that raw request data is converted
   into Go structs consumed by your services.
-* Seamlessly pass request-scoped metadata between your services.
-* Embeddable decorators for all of your services so that you can
+- Seamlessly pass request-scoped metadata between your services.
+- Embeddable decorators for all of your services so that you can
   separate service concerns like security and business logic more easily.
 
 ## Motivations (Problems Solved)
@@ -45,8 +45,8 @@ address this problem.
 
 The issue? It adds too much complexity.
 
-There's the 
+There's the
 
 ## Source
 
-[GitHub Repo](https://github.com/monadicstack/frodo)
+[GitHub Repo](https://github.com/davidrenne/frodo)

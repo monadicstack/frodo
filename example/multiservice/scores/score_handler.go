@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/monadicstack/frodo/example/multiservice/games"
-	"github.com/monadicstack/frodo/rpc/errors"
+	"github.com/davidrenne/frodo/example/multiservice/games"
+	"github.com/davidrenne/frodo/rpc/errors"
 )
 
 // ScoreServiceHandler implements all of the "real" functionality for the ScoreService.

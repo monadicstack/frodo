@@ -1,3 +1,4 @@
+//go:build client
 // +build client
 
 package generate_test
@@ -5,10 +6,10 @@ package generate_test
 import (
 	"testing"
 
-	"github.com/monadicstack/frodo/example/names"
-	namesrpc "github.com/monadicstack/frodo/example/names/gen"
-	"github.com/monadicstack/frodo/internal/testext"
-	"github.com/monadicstack/frodo/rpc/errors"
+	"github.com/davidrenne/frodo/example/names"
+	namesrpc "github.com/davidrenne/frodo/example/names/gen"
+	"github.com/davidrenne/frodo/internal/testext"
+	"github.com/davidrenne/frodo/rpc/errors"
 	"github.com/stretchr/testify/suite"
 )
 

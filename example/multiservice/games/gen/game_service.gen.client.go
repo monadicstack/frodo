@@ -2,7 +2,7 @@
 //
 //   Timestamp: Tue, 10 May 2022 16:25:34 EDT
 //   Source:    games/game_service.go
-//   Generator: https://github.com/monadicstack/frodo
+//   Generator: https://github.com/davidrenne/frodo
 //
 package games
 
@@ -10,8 +10,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/monadicstack/frodo/example/multiservice/games"
-	"github.com/monadicstack/frodo/rpc"
+	"github.com/davidrenne/frodo/example/multiservice/games"
+	"github.com/davidrenne/frodo/rpc"
 )
 
 // NewGameServiceClient creates an RPC client that conforms to the GameService interface, but delegates

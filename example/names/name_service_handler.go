@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/monadicstack/frodo/rpc/authorization"
-	"github.com/monadicstack/frodo/rpc/errors"
+	"github.com/davidrenne/frodo/rpc/authorization"
+	"github.com/davidrenne/frodo/rpc/errors"
 )
 
 // NameServiceHandler provides the reference implementation of the NameService.

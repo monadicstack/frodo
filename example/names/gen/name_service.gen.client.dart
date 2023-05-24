@@ -2,7 +2,7 @@
 //
 //   Timestamp: Tue, 10 May 2022 16:18:42 EDT
 //   Source:    example/names/name_service.go
-//   Generator: https://github.com/monadicstack/frodo
+//   Generator: https://github.com/davidrenne/frodo
 //
 import 'dart:async';
 import 'dart:convert';

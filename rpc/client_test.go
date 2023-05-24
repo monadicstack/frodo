@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package rpc_test
@@ -13,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/monadicstack/frodo/rpc"
-	"github.com/monadicstack/frodo/rpc/authorization"
-	"github.com/monadicstack/frodo/rpc/metadata"
+	"github.com/davidrenne/frodo/rpc"
+	"github.com/davidrenne/frodo/rpc/authorization"
+	"github.com/davidrenne/frodo/rpc/metadata"
 	"github.com/stretchr/testify/suite"
 )
 

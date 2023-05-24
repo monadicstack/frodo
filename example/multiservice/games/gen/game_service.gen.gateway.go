@@ -2,7 +2,7 @@
 //
 //   Timestamp: Tue, 10 May 2022 16:25:33 EDT
 //   Source:    games/game_service.go
-//   Generator: https://github.com/monadicstack/frodo
+//   Generator: https://github.com/davidrenne/frodo
 //
 package games
 
@@ -10,8 +10,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/monadicstack/frodo/example/multiservice/games"
-	"github.com/monadicstack/frodo/rpc"
+	"github.com/davidrenne/frodo/example/multiservice/games"
+	"github.com/davidrenne/frodo/rpc"
 	"github.com/monadicstack/respond"
 )
 

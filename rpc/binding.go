@@ -9,9 +9,9 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/davidrenne/frodo/internal/reflection"
+	"github.com/davidrenne/frodo/rpc/errors"
 	"github.com/dimfeld/httptreemux/v5"
-	"github.com/monadicstack/frodo/internal/reflection"
-	"github.com/monadicstack/frodo/rpc/errors"
 )
 
 // Binder performs the work of taking all meaningful values from an incoming request (body,
@@ -40,15 +40,15 @@ func WithBinder(binder Binder) GatewayOption {
 // JSON so that we can use the standard library's JSON package to unmarshal that data onto your out value.
 // For example, let's assume that we have the following query string:
 //
-//     ?first=Bob&last=Smith&age=39&address.city=Seattle&enabled=true
+//	?first=Bob&last=Smith&age=39&address.city=Seattle&enabled=true
 //
 // The jsonBinder will first create 5 separate JSON objects:
 //
-//     { "first": "Bob" }
-//     { "last": "Smith" }
-//     { "age": 39 }
-//     { "address": { "city": "Seattle" } }     <-- notice how we handle nested values separated by "."
-//     { "enabled": true }
+//	{ "first": "Bob" }
+//	{ "last": "Smith" }
+//	{ "age": 39 }
+//	{ "address": { "city": "Seattle" } }     <-- notice how we handle nested values separated by "."
+//	{ "enabled": true }
 //
 // After generating each value, the jsonBinder will feed the massaged JSON to a 'json.Decoder' and standard
 // JSON marshaling rules will overlay each one onto your 'out' value.

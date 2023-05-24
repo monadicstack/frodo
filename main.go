@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/monadicstack/frodo/cli"
+	"github.com/davidrenne/frodo/cli"
 	"github.com/spf13/cobra"
 )
 

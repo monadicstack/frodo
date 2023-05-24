@@ -2,7 +2,7 @@
 //
 //   Timestamp: Tue, 10 May 2022 16:25:34 EDT
 //   Source:    scores/score_service.go
-//   Generator: https://github.com/monadicstack/frodo
+//   Generator: https://github.com/davidrenne/frodo
 //
 package scores
 
@@ -10,8 +10,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/monadicstack/frodo/example/multiservice/scores"
-	"github.com/monadicstack/frodo/rpc"
+	"github.com/davidrenne/frodo/example/multiservice/scores"
+	"github.com/davidrenne/frodo/rpc"
 	"github.com/monadicstack/respond"
 )
 

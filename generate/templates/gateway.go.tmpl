@@ -2,7 +2,7 @@
 //
 //   Timestamp: {{ .TimestampString }}
 //   Source:    {{ .Path }}
-//   Generator: https://github.com/monadicstack/frodo
+//   Generator: https://github.com/davidrenne/frodo
 //
 package {{ .OutputPackage.Name }}
 
@@ -11,7 +11,7 @@ import (
 	"net/http"
 
 	"github.com/monadicstack/respond"
-	"github.com/monadicstack/frodo/rpc"
+	"github.com/davidrenne/frodo/rpc"
 	"{{.InputPackage.Import }}"
 )
 

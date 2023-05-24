@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/monadicstack/frodo/internal/naming"
+	"github.com/davidrenne/frodo/internal/naming"
 	"golang.org/x/tools/go/packages"
 )
 

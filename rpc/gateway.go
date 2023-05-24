@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/davidrenne/frodo/rpc/authorization"
+	"github.com/davidrenne/frodo/rpc/metadata"
 	"github.com/dimfeld/httptreemux/v5"
-	"github.com/monadicstack/frodo/rpc/authorization"
-	"github.com/monadicstack/frodo/rpc/metadata"
 	"github.com/monadicstack/respond"
 	"github.com/urfave/negroni"
 )
@@ -127,7 +127,7 @@ func (gw Gateway) registerOptions(path string) {
 func (gw Gateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Why the negroni response writer?
 	//
-	//     https://github.com/monadicstack/frodo/issues/50
+	//     https://github.com/davidrenne/frodo/issues/50
 	//
 	// Since negroni is basically the de facto HTTP middleware for go, I want to support their
 	// out-of-the-box functions as much as possible. Unfortunately their logger middleware will
@@ -293,16 +293,16 @@ func (gw CompositeGateway) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // development. Rather than starting/stopping 20 different processes, you can run all of your services in a single
 // server process:
 //
-//     userGateway := users.NewUserServiceGateway(userService)
-//     groupGateway := groups.NewGroupServiceGateway(groupService)
-//     projectGateway := projects.NewProjectServiceGateway(projectService)
+//	userGateway := users.NewUserServiceGateway(userService)
+//	groupGateway := groups.NewGroupServiceGateway(groupService)
+//	projectGateway := projects.NewProjectServiceGateway(projectService)
 //
-//     gateway := rpc.Compose(
-//         userGateway,
-//         groupGateway,
-//         projectGateway,
-//     )
-//     http.listenAndService(":8080", gateway)
+//	gateway := rpc.Compose(
+//	    userGateway,
+//	    groupGateway,
+//	    projectGateway,
+//	)
+//	http.listenAndService(":8080", gateway)
 //
 // This will preserve all of the original gateways as well. Now you'll just have a "master" gateway that contains
 // all of the routes/endpoints from all of the services.

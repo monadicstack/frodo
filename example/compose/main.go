@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/monadicstack/frodo/example/basic/calc"
-	calcrpc "github.com/monadicstack/frodo/example/basic/calc/gen"
-	"github.com/monadicstack/frodo/example/multiservice/games"
-	gamesrpc "github.com/monadicstack/frodo/example/multiservice/games/gen"
-	"github.com/monadicstack/frodo/example/multiservice/scores"
-	scoresrpc "github.com/monadicstack/frodo/example/multiservice/scores/gen"
-	"github.com/monadicstack/frodo/rpc"
+	"github.com/davidrenne/frodo/example/basic/calc"
+	calcrpc "github.com/davidrenne/frodo/example/basic/calc/gen"
+	"github.com/davidrenne/frodo/example/multiservice/games"
+	gamesrpc "github.com/davidrenne/frodo/example/multiservice/games/gen"
+	"github.com/davidrenne/frodo/example/multiservice/scores"
+	scoresrpc "github.com/davidrenne/frodo/example/multiservice/scores/gen"
+	"github.com/davidrenne/frodo/rpc"
 )
 
 func main() {

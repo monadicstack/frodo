@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package rpc_test
@@ -11,8 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidrenne/frodo/rpc"
 	"github.com/dimfeld/httptreemux/v5"
-	"github.com/monadicstack/frodo/rpc"
 	"github.com/stretchr/testify/suite"
 )
 

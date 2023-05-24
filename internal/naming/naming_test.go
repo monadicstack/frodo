@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package naming_test
@@ -5,7 +6,7 @@ package naming_test
 import (
 	"testing"
 
-	"github.com/monadicstack/frodo/internal/naming"
+	"github.com/davidrenne/frodo/internal/naming"
 	"github.com/stretchr/testify/suite"
 )
 

@@ -2,7 +2,7 @@
 //
 //   Timestamp: Tue, 10 May 2022 16:18:41 EDT
 //   Source:    example/names/name_service.go
-//   Generator: https://github.com/monadicstack/frodo
+//   Generator: https://github.com/davidrenne/frodo
 //
 package names
 
@@ -10,8 +10,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/monadicstack/frodo/example/names"
-	"github.com/monadicstack/frodo/rpc"
+	"github.com/davidrenne/frodo/example/names"
+	"github.com/davidrenne/frodo/rpc"
 )
 
 // NewNameServiceClient creates an RPC client that conforms to the NameService interface, but delegates

@@ -3,8 +3,8 @@ package main
 import (
 	"net/http"
 
-	"github.com/monadicstack/frodo/example/names"
-	namesrpc "github.com/monadicstack/frodo/example/names/gen"
+	"github.com/davidrenne/frodo/example/names"
+	namesrpc "github.com/davidrenne/frodo/example/names/gen"
 )
 
 func main() {

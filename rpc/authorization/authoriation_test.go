@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package authorization_test
@@ -6,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/monadicstack/frodo/rpc/authorization"
+	"github.com/davidrenne/frodo/rpc/authorization"
 	"github.com/stretchr/testify/suite"
 )
 

@@ -1,17 +1,17 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/monadicstack/frodo)](https://goreportcard.com/report/github.com/monadicstack/frodo)
+[![Go Report Card](https://goreportcard.com/badge/github.com/davidrenne/frodo)](https://goreportcard.com/report/github.com/davidrenne/frodo)
 
 # Frodo
 
 Frodo is a code generator and runtime library that helps
 you write RPC-enabled (micro) services and APIs. It parses
-the interfaces/structs/comments in your service code to 
+the interfaces/structs/comments in your service code to
 generate all of your client/server communication code.
 
-* No .proto files. Your services are just idiomatic Go code.
-* Auto-generate APIs that play nicely with `net/http`, middleware, and other standard library compatible API solutions.  
-* Auto-generate RPC-style clients in multiple languages like Go, JavaScript, Dart, etc.
-* Auto-generate strongly-typed mock implementations of your service for unit testing.
-* Create OpenAPI documentation so others know how to interact with your API (if they can't use the client).
+- No .proto files. Your services are just idiomatic Go code.
+- Auto-generate APIs that play nicely with `net/http`, middleware, and other standard library compatible API solutions.
+- Auto-generate RPC-style clients in multiple languages like Go, JavaScript, Dart, etc.
+- Auto-generate strongly-typed mock implementations of your service for unit testing.
+- Create OpenAPI documentation so others know how to interact with your API (if they can't use the client).
 
 Frodo automates all the boilerplate associated with service
 communication, data marshaling, routing, error handling, etc. You
@@ -27,37 +27,37 @@ with as little fuss as possible.
 
 ## Table of Contents
 
-* [Getting Started](https://github.com/monadicstack/frodo#getting-started)
-* [Example](https://github.com/monadicstack/frodo#example)
-* [Customize HTTP Route, Status, etc](https://github.com/monadicstack/frodo#doc-options-custom-urls-status-etc)
-* [Error Handling](https://github.com/monadicstack/frodo#error-handling)
-* [Middleware](https://github.com/monadicstack/frodo#middleware)
-* [Returning Raw File Data](https://github.com/monadicstack/frodo#returning-raw-file-data)
-* [HTTP Redirects](https://github.com/monadicstack/frodo#http-redirects)
-* [Request Scoped Metadata](https://github.com/monadicstack/frodo#request-scoped-metadata)
-* [Create a JavaScript Client](https://github.com/monadicstack/frodo#creating-a-javascript-client)
-* [Create a Dart/Flutter Client](https://github.com/monadicstack/frodo#creating-a-dartflutter-client)
-* [Authorization](https://github.com/monadicstack/frodo#authorization)
-* [Handling Not Found](https://github.com/monadicstack/frodo#handling-not-found)
-* [Composing Gateways](https://github.com/monadicstack/frodo#composing-gateways)
-* [Mocking Services](https://github.com/monadicstack/frodo#mocking-services)
-* [Generating OpenAPI Documentation](https://github.com/monadicstack/frodo#generate-openapiswagger-documentation-experimental)
-* [Go Generate Support](https://github.com/monadicstack/frodo#go-generate-support)
-* [Bring Your Own Templates](https://github.com/monadicstack/frodo#bring-your-own-templates)
-* [New Service Scaffolding](https://github.com/monadicstack/frodo#create-a-new-service-w-frodo-create)
-* [Why Not gRPC?](https://github.com/monadicstack/frodo#why-not-just-use-grpc) (motivation for this project)
+- [Getting Started](https://github.com/davidrenne/frodo#getting-started)
+- [Example](https://github.com/davidrenne/frodo#example)
+- [Customize HTTP Route, Status, etc](https://github.com/davidrenne/frodo#doc-options-custom-urls-status-etc)
+- [Error Handling](https://github.com/davidrenne/frodo#error-handling)
+- [Middleware](https://github.com/davidrenne/frodo#middleware)
+- [Returning Raw File Data](https://github.com/davidrenne/frodo#returning-raw-file-data)
+- [HTTP Redirects](https://github.com/davidrenne/frodo#http-redirects)
+- [Request Scoped Metadata](https://github.com/davidrenne/frodo#request-scoped-metadata)
+- [Create a JavaScript Client](https://github.com/davidrenne/frodo#creating-a-javascript-client)
+- [Create a Dart/Flutter Client](https://github.com/davidrenne/frodo#creating-a-dartflutter-client)
+- [Authorization](https://github.com/davidrenne/frodo#authorization)
+- [Handling Not Found](https://github.com/davidrenne/frodo#handling-not-found)
+- [Composing Gateways](https://github.com/davidrenne/frodo#composing-gateways)
+- [Mocking Services](https://github.com/davidrenne/frodo#mocking-services)
+- [Generating OpenAPI Documentation](https://github.com/davidrenne/frodo#generate-openapiswagger-documentation-experimental)
+- [Go Generate Support](https://github.com/davidrenne/frodo#go-generate-support)
+- [Bring Your Own Templates](https://github.com/davidrenne/frodo#bring-your-own-templates)
+- [New Service Scaffolding](https://github.com/davidrenne/frodo#create-a-new-service-w-frodo-create)
+- [Why Not gRPC?](https://github.com/davidrenne/frodo#why-not-just-use-grpc) (motivation for this project)
 
 ## Getting Started
 
-*Frodo requires Go 1.16+ as it uses `fs.FS` and `//go:embed` to load templates.*
+_Frodo requires Go 1.16+ as it uses `fs.FS` and `//go:embed` to load templates._
 
 ```shell
-go install github.com/monadicstack/frodo
+go install github.com/davidrenne/frodo
 ```
+
 This will fetch the `frodo` code generation executable as well
 as the runtime libraries that allow your services to
 communicate with each other.
-
 
 ## Example
 
@@ -65,7 +65,7 @@ communicate with each other.
 
 Your first step is to write a .go file that just defines
 the contract for your service; the interface as well as the
-inputs/outputs. 
+inputs/outputs.
 
 ```go
 // calculator_service.go
@@ -98,12 +98,13 @@ type SubResponse struct {
     Result int
 }
 ```
+
 One important detail is that the interface name ends with
 the suffix "Service". This tells Frodo that this is an
 actual service interface and not just some random abstraction
 in your code.
 
-At this point you haven't actually defined *how* this service gets
+At this point you haven't actually defined _how_ this service gets
 this work done; just which operations are available.
 
 We actually have enough for `frodo` to
@@ -140,9 +141,9 @@ At this point, you've just written the same code that you (hopefully)
 would have written even if you weren't using Frodo. Next,
 we want to auto-generate two things:
 
-* A "gateway" that allows an instance of your CalculatorService
+- A "gateway" that allows an instance of your CalculatorService
   to listen for incoming requests (via an HTTP API).
-* A "client" struct that communicates with that API to get work done.
+- A "client" struct that communicates with that API to get work done.
 
 Just run these two commands in a terminal:
 
@@ -155,7 +156,7 @@ frodo client  calculator_service.go
 #### Step 3: Run Your Calculator API Server
 
 Let's fire up an HTTP server on port 9000 that makes your service
-available for consumption (you can choose any port you want, obviously).  
+available for consumption (you can choose any port you want, obviously).
 
 ```go
 package main
@@ -173,6 +174,7 @@ func main() {
     http.ListenAndServe(":9000", gateway)
 }
 ```
+
 Seriously. That's the whole program.
 
 Compile and run it, and your service/API is now ready
@@ -236,10 +238,11 @@ Compile/run this program, and you should see the following output:
 5 + 2 = 7
 5 - 2 = 3
 ```
+
 That's it!
 
 For more examples of how to write services that let Frodo take
-care of the RPC/API boilerplate, take a look in the [example/](https://github.com/monadicstack/frodo/tree/main/example)
+care of the RPC/API boilerplate, take a look in the [example/](https://github.com/davidrenne/frodo/tree/main/example)
 directory of this repo.
 
 ## Doc Options: Custom URLs, Status, etc
@@ -276,7 +279,7 @@ type CalculatorService interface {
 
 This prepends your custom value on every route in the API. It applies
 to the standard `ServiceName.FunctionName` routes as well as custom routes
-as we'll cover in a moment. 
+as we'll cover in a moment.
 
 Your generated API and RPC clients will be auto-wired to use the prefix "v1" under the
 hood, so you don't need to change your code any further. If you want
@@ -325,7 +328,7 @@ package when you encounter a failure case:
 
 ```go
 import (
-    "github.com/monadicstack/frodo/rpc/errors"
+    "github.com/davidrenne/frodo/rpc/errors"
 )
 
 func (svc UserService) Get(ctx context.Context, req *GetRequest) (*GetResponse, error) {
@@ -381,7 +384,7 @@ func NotOnMonday(w http.ResponseWriter, req *http.Request, next http.HandlerFunc
 ```
 
 You might think to yourself... wait a minute; I thought the gateway
-*was* an HTTP handler, so couldn't I just wrap the gateway in middleware
+_was_ an HTTP handler, so couldn't I just wrap the gateway in middleware
 like this?
 
 ```go
@@ -406,7 +409,7 @@ be sure to use `.WithMiddleware()` like in the first example.
 
 Let's say that you're writing `ProfilePictureService`. One of the
 operations you might want is the ability to return the raw JPG data
-for a user's profile picture. You do this the same way that you 
+for a user's profile picture. You do this the same way that you
 handle JSON-based responses; just implement some interfaces so that
 Frodo knows to treat it a little different:
 
@@ -463,7 +466,7 @@ to the URL of your choice:
 // In video_service.go, this implements the Redirector interface.
 type DownloadResponse struct {
     Bucket string
-    Key    string	
+    Key    string
 }
 
 func (res DownloadResponse) Redirect() string {
@@ -479,7 +482,7 @@ func (svc VideoServiceHandler) Download(ctx context.Context, req *DownloadReques
     file := svc.Repo.Get(req.FileID)
     return &DownloadResponse{
         Bucket: file.Bucket,
-        Key:    file.Key, 
+        Key:    file.Key,
     }, nil
 }
 ```
@@ -512,7 +515,7 @@ func (b ServiceB) Bar(ctx context.Context, r *BarRequest) (*BarResponse, error) 
 
     b := 0
     okB = metadata.Value(ctx, "DontPanic", &b)
-    
+
     // At this point:
     // a == ""   okA == false
     // b == 42   okB == true
@@ -545,20 +548,20 @@ which you can include with your frontend codebase. Using it
 should look similar to the Go client we saw earlier:
 
 ```js
-import {CalculatorService} from 'lib/calculator_service.gen.client';
+import { CalculatorService } from "lib/calculator_service.gen.client";
 
 // The service client is a class that exposes all of the
 // operations as 'async' functions that resolve with the
 // result of the service call.
-const service = new CalculatorService('http://localhost:9000');
-const add = await service.Add({A:5, B:2});
-const sub = await service.Sub({A:5, B:2});
+const service = new CalculatorService("http://localhost:9000");
+const add = await service.Add({ A: 5, B: 2 });
+const sub = await service.Sub({ A: 5, B: 2 });
 
 // Should print:
 // Add(5, 2) = 7
 // Sub(5, 2) = 3
-console.info('Add(5, 2) = ' + add.Result)
-console.info('Sub(5, 2) = ' + sub.Result)
+console.info("Add(5, 2) = " + add.Result);
+console.info("Sub(5, 2) = " + sub.Result);
 ```
 
 Another subtle benefit of using Frodo's client is that all of your
@@ -576,13 +579,13 @@ it will just use the window-scoped 'fetch' instance, but you can supply
 your own to the constructor of your service client:
 
 ```js
-const fetch = require('node-fetch');
+const fetch = require("node-fetch");
 
 // Just inject your 'fetch' implementation to the construtor and everything
 // should work exactly the same.
-const service = new CalculatorService('http://localhost:9000', {fetch});
-const add = await service.Add({A:5, B:2});
-const sub = await service.Sub({A:5, B:2});
+const service = new CalculatorService("http://localhost:9000", { fetch });
+const add = await service.Add({ A: 5, B: 2 });
+const sub = await service.Sub({ A: 5, B: 2 });
 ```
 
 ## Creating a Dart/Flutter Client
@@ -623,8 +626,8 @@ to utilize that info.
 
 ```go
 import (
-    "github.com/monadicstack/frodo/rpc/authorization"
-    "github.com/monadicstack/frodo/rpc/errors"
+    "github.com/davidrenne/frodo/rpc/authorization"
+    "github.com/davidrenne/frodo/rpc/errors"
 )
 
 func (a *ServiceA) Hello(ctx contex.Context, req *HelloRequest) (*HelloResponse, error) {
@@ -633,11 +636,12 @@ func (a *ServiceA) Hello(ctx contex.Context, req *HelloRequest) (*HelloResponse,
         return nil, errors.BadCredentials("missing authorization header")
     }
     if auth.String() == "Donny" {
-        return nil, errors.PermissionDenied("you're out of your element")	
+        return nil, errors.PermissionDenied("you're out of your element")
     }
     return &HelloResponse{Text: "Hello"+req.Name}, nil
 }
 ```
+
 Ignore the awful security of hardcoding valid/invalid credentials;
 the value for `auth` should be the value
 of the `Authorization` header on the incoming HTTP request. The whole
@@ -645,10 +649,9 @@ idea is that your business logic exists independent of HTTP-related stuff,
 so Frodo takes that HTTP-provided data and puts it on the context. This
 allows your handler to deal with credentials in a transport-independent fashion.
 
-
 Frodo, however, just makes sure that you have the value that was given. With that
 value in hand, you can feed that to your favorite OAuth2, JWT, or whatever
-library/middleware to do something meaningful with it. 
+library/middleware to do something meaningful with it.
 
 ### Supplying Authorization Credentials
 
@@ -658,7 +661,7 @@ on the context, you can supply them fairly easily:
 
 ```go
 // Supply "Authorization: Token 12345" when calling the Hello endpoint
-auth := authorization.New("Token 12345") 
+auth := authorization.New("Token 12345")
 ctx = authorization.WithHeader(ctx, auth)
 clientA.Hello(ctx, &servicea.HelloRequest{Name: "Bob"})
 ```
@@ -666,7 +669,6 @@ clientA.Hello(ctx, &servicea.HelloRequest{Name: "Bob"})
 This works when you are making the initial call, but to make life easier,
 Frodo will also include that authorization on every other RPC-driven service call you make in that
 request scope:
-
 
 ```go
 func (a *ServiceA) Hello(ctx contex.Context, req *HelloRequest) (*HelloResponse, error) {
@@ -706,9 +708,9 @@ you supply it via an options argument when making your
 service call:
 
 ```js
-const client = new ServiceAClient('...');
-const req = { Name: 'Bob' };
-client.Hello(req, { authorization: 'Token 12345' });
+const client = new ServiceAClient("...");
+const req = { Name: "Bob" };
+client.Hello(req, { authorization: "Token 12345" });
 ```
 
 ### Authorization Using the Dart/Flutter Client
@@ -829,6 +831,7 @@ gateway := rpc.Compose(
 )
 http.listenAndService(":8080", gateway)
 ```
+
 All 3 services will be listening on port 8080, so
 you can access them via their Frodo clients; just give them all the
 same address:
@@ -875,7 +878,7 @@ func TestSomethingThatDependsOnAddFailure(t *testing.T) {
     svc := mocks.MockCalculatorService{
         AddFunc: func(ctx context.Context, req *calc.AddRequest) (*calc.AddResponse, error) {
             return nil, fmt.Errorf("barf...")
-        },	
+        },
     }
 
     // Feed your mock service to the thing you're testing
@@ -929,6 +932,7 @@ type FooService interface {
     // ...
 }
 ```
+
 Now, when you generate your docs the version badge will display "1.2.1".
 
 Not gonna lie... this whole feature is still a work in progress. I've still
@@ -941,7 +945,7 @@ better than no documentation at all, though.
 If you prefer to stick to the standard Go toolchain for generating
 code, you can use `//go:generate` comments to hook Frodo code
 generation into your build process. Here's how you can set up your
-service to generate the gateway, mock service, Go client, and JS client. 
+service to generate the gateway, mock service, Go client, and JS client.
 
 ```go
 import (
@@ -1004,7 +1008,7 @@ lot of that boilerplate for you so that you can get straight
 to solving your customers' problems.
 
 Let's assume that you want to make a new service called
-`UserService`, you can execute any  of the following commands:
+`UserService`, you can execute any of the following commands:
 
 ```shell
 frodo create user
@@ -1031,7 +1035,7 @@ following assets created:
 ```
 
 The service will have a dummy `Create()` function
-just so that there's *something* defined. You should replace
+just so that there's _something_ defined. You should replace
 that with your own functions and implement them to make the service
 do something useful.
 
@@ -1086,40 +1090,40 @@ more time solving your users' problems.
 
 Here are a few conscious deviations from how gRPC does things:
 
-* No proto files or other quirky DSLs to learn. Just write a Go interfaces/structs
+- No proto files or other quirky DSLs to learn. Just write a Go interfaces/structs
   and Frodo will figure out automatically.
-* Setup is as easy as one `go install` to get every feature. gRPC requires you to manually install protoc
+- Setup is as easy as one `go install` to get every feature. gRPC requires you to manually install protoc
   then fetch 3 or 4 grpc-related/Go dependencies, and not all have properly
   adopted Go modules yet.
-* The CLI is much less complex. Even a simple gRPC service
+- The CLI is much less complex. Even a simple gRPC service
   with an API gateway requires around 9 or 10 arguments to `protoc` in order
   to function. Contrast that with `frodo gateway foo/service.go`.
-* If you don't like the CLI, you can hook into `go:generate` instead.
-* In gRPC, the client it generates does not implement the service interface. It's
+- If you don't like the CLI, you can hook into `go:generate` instead.
+- In gRPC, the client it generates does not implement the service interface. It's
   really close but not enough for a strongly typed language like Go. Frodo
   makes it so that clients/gateways both implement your service interface. This
   gives you more flexibility to swap interacting with a local vs remote
   instance of the service w/ no code changes.
-* The RPC layer is just JSON over HTTP. Your frontend can consume
+- The RPC layer is just JSON over HTTP. Your frontend can consume
   your services the exact same way that other backend services do.
-* You've got an entire ecosystem of off-the-shelf solutions for middleware
+- You've got an entire ecosystem of off-the-shelf solutions for middleware
   for logging, security, etc regardless of
   where the request comes from. With gRPC, the rules are
   different if the request came from another service vs
   through your API gateway (e.g. from your frontend).
-* In gRPC, you have to jump through some [crazy hoops](https://grpc-ecosystem.github.io/grpc-gateway/docs/mapping/customizing_your_gateway/) if you 
+- In gRPC, you have to jump through some [crazy hoops](https://grpc-ecosystem.github.io/grpc-gateway/docs/mapping/customizing_your_gateway/) if you
   want anything other than a status of 200 for success 500 for failure.
   With Frodo, you can use idiomatic errors and one-line changes
   to customize this behavior.
-* Since Frodo uses standard-library HTTP, traditional load balancing
+- Since Frodo uses standard-library HTTP, traditional load balancing
   solutions like nginx or your cloud provider's load balancer
   gets the job done. No need to introduce etcd, Consul, Linkerd, Envoy,
   or any other technology into your architecture.
-* Better metadata. Request-scoped metadata in gRPC is basically a map
+- Better metadata. Request-scoped metadata in gRPC is basically a map
   of string values. This forces you to marshal/unmarshal other types yourself.
   Frodo's metadata lets you pass around any type of data you want as
   you hop from service to service and will handle all that noise for you.
-* Frodo has a stronger focus on generated code that is actually
+- Frodo has a stronger focus on generated code that is actually
   readable. If you want to treat Frodo RPC like a black box,
   you can. If you want to peek under the hood, however, you can
   do so with only minimal tears, hopefully.

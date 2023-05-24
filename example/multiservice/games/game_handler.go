@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/monadicstack/frodo/rpc/errors"
+	"github.com/davidrenne/frodo/rpc/errors"
 )
 
 // GameServiceHandler implements all of the "real" functionality for the GameService.

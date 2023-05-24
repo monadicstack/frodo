@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package rpc_test
@@ -6,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/monadicstack/frodo/rpc"
+	"github.com/davidrenne/frodo/rpc"
 	"github.com/stretchr/testify/suite"
 )
 

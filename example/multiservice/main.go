@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/monadicstack/frodo/example/multiservice/games"
-	gamesrpc "github.com/monadicstack/frodo/example/multiservice/games/gen"
-	"github.com/monadicstack/frodo/example/multiservice/scores"
-	scoresrpc "github.com/monadicstack/frodo/example/multiservice/scores/gen"
+	"github.com/davidrenne/frodo/example/multiservice/games"
+	gamesrpc "github.com/davidrenne/frodo/example/multiservice/games/gen"
+	"github.com/davidrenne/frodo/example/multiservice/scores"
+	scoresrpc "github.com/davidrenne/frodo/example/multiservice/scores/gen"
 )
 
 func main() {

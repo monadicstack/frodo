@@ -2,240 +2,244 @@
 //
 //   Timestamp: Tue, 10 May 2022 16:18:41 EDT
 //   Source:    example/names/name_service.go
-//   Generator: https://github.com/monadicstack/frodo
+//   Generator: https://github.com/davidrenne/frodo
 //
 /* global fetch,module,window */
-'use strict';
+"use strict";
 
 /**
  * Exposes all of the standard operations for the remote NameService service. These RPC calls
- * will be sent over http(s) to the backend service instances. 
+ * will be sent over http(s) to the backend service instances.
  * NameService performs parsing/processing on a person's name. This is primarily just
  * used as a reference service for integration testing our generated clients.
  */
 class NameServiceClient {
-    _baseURL;
-    _fetch;
-    _authorization;
+  _baseURL;
+  _fetch;
+  _authorization;
 
-    /**
-     * @param {string} baseURL The protocol/host/port used by all API/service
-     *     calls (e.g. "https://some-server:9000")
-     * @param {object} [options]
-     * @param {fetch|*} [options.fetch] Provide a custom implementation for the 'fetch' API. Not
-     *     necessary if running in browser.
-     * @param {string} [options.authorization] Use these credentials in the HTTP Authorization header
-     *      for every request. Only use the client-level authorization when all requests to the
-     *      service should have the same credentials. If you allow multiple users in your system,
-     *      leave this blank and use the authorization option on each request.
-     */
-    constructor(baseURL, {fetch, authorization} = {}) {
-        this._baseURL = trimSlashes(trimSlashes(baseURL) + '/' + trimSlashes(''));
-        this._fetch = fetch || defaultFetch();
-        this._authorization = authorization || '';
+  /**
+   * @param {string} baseURL The protocol/host/port used by all API/service
+   *     calls (e.g. "https://some-server:9000")
+   * @param {object} [options]
+   * @param {fetch|*} [options.fetch] Provide a custom implementation for the 'fetch' API. Not
+   *     necessary if running in browser.
+   * @param {string} [options.authorization] Use these credentials in the HTTP Authorization header
+   *      for every request. Only use the client-level authorization when all requests to the
+   *      service should have the same credentials. If you allow multiple users in your system,
+   *      leave this blank and use the authorization option on each request.
+   */
+  constructor(baseURL, { fetch, authorization } = {}) {
+    this._baseURL = trimSlashes(trimSlashes(baseURL) + "/" + trimSlashes(""));
+    this._fetch = fetch || defaultFetch();
+    this._authorization = authorization || "";
+  }
+
+  /**
+   * Download returns a raw CSV file containing the parsed name.
+   *
+   * @param { DownloadRequest } serviceRequest The input parameters
+   * @param {object} [options]
+   * @param { string } [options.authorization] The HTTP Authorization header value to include
+   *     in the request. This will override any authorization you might have applied when
+   *     constructing this client. Use this in multi-tenant situations where multiple users
+   *     might utilize this service.
+   * @returns {Promise<DownloadResponse>} The JSON-encoded return value of the operation.
+   */
+  async Download(serviceRequest, { authorization } = {}) {
+    if (!serviceRequest) {
+      throw new Error("precondition failed: empty request");
     }
 
-    
-    /**
-     * Download returns a raw CSV file containing the parsed name. 
-     *
-     * @param { DownloadRequest } serviceRequest The input parameters
-     * @param {object} [options]
-     * @param { string } [options.authorization] The HTTP Authorization header value to include
-     *     in the request. This will override any authorization you might have applied when
-     *     constructing this client. Use this in multi-tenant situations where multiple users
-     *     might utilize this service.
-     * @returns {Promise<DownloadResponse>} The JSON-encoded return value of the operation.
-     */
-    async Download(serviceRequest, {authorization} = {}) {
-        if (!serviceRequest) {
-            throw new Error('precondition failed: empty request');
-        }
+    const method = "POST";
+    const route = "/NameService.Download";
+    const url =
+      this._baseURL + "/" + buildRequestPath(method, route, serviceRequest);
+    const fetchOptions = {
+      method: "POST",
+      headers: {
+        Authorization: authorization || this._authorization,
+        Accept: "application/json,*/*",
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(serviceRequest),
+    };
 
-        const method = 'POST';
-        const route = '/NameService.Download';
-        const url = this._baseURL + '/' + buildRequestPath(method, route, serviceRequest);
-        const fetchOptions = {
-            method: 'POST',
-            headers: {
-                'Authorization': authorization || this._authorization,
-                'Accept': 'application/json,*/*',
-                'Content-Type': 'application/json; charset=utf-8',
-            },
-            body: JSON.stringify(serviceRequest),
-        };
+    const response = await this._fetch(url, fetchOptions);
+    return handleResponseRaw(response);
+  }
 
-        const response = await this._fetch(url, fetchOptions);
-        return handleResponseRaw(response);
+  /**
+   * DownloadExt returns a raw CSV file containing the parsed name. This differs from Download
+   * by giving you the "Ext" knob which will let you exercise the content type and disposition
+   * interfaces that Frodo supports for raw responses.
+   *
+   * @param { DownloadExtRequest } serviceRequest The input parameters
+   * @param {object} [options]
+   * @param { string } [options.authorization] The HTTP Authorization header value to include
+   *     in the request. This will override any authorization you might have applied when
+   *     constructing this client. Use this in multi-tenant situations where multiple users
+   *     might utilize this service.
+   * @returns {Promise<DownloadExtResponse>} The JSON-encoded return value of the operation.
+   */
+  async DownloadExt(serviceRequest, { authorization } = {}) {
+    if (!serviceRequest) {
+      throw new Error("precondition failed: empty request");
     }
-    
-    /**
-     * DownloadExt returns a raw CSV file containing the parsed name. This differs from Download 
-     * by giving you the "Ext" knob which will let you exercise the content type and disposition 
-     * interfaces that Frodo supports for raw responses. 
-     *
-     * @param { DownloadExtRequest } serviceRequest The input parameters
-     * @param {object} [options]
-     * @param { string } [options.authorization] The HTTP Authorization header value to include
-     *     in the request. This will override any authorization you might have applied when
-     *     constructing this client. Use this in multi-tenant situations where multiple users
-     *     might utilize this service.
-     * @returns {Promise<DownloadExtResponse>} The JSON-encoded return value of the operation.
-     */
-    async DownloadExt(serviceRequest, {authorization} = {}) {
-        if (!serviceRequest) {
-            throw new Error('precondition failed: empty request');
-        }
 
-        const method = 'POST';
-        const route = '/NameService.DownloadExt';
-        const url = this._baseURL + '/' + buildRequestPath(method, route, serviceRequest);
-        const fetchOptions = {
-            method: 'POST',
-            headers: {
-                'Authorization': authorization || this._authorization,
-                'Accept': 'application/json,*/*',
-                'Content-Type': 'application/json; charset=utf-8',
-            },
-            body: JSON.stringify(serviceRequest),
-        };
+    const method = "POST";
+    const route = "/NameService.DownloadExt";
+    const url =
+      this._baseURL + "/" + buildRequestPath(method, route, serviceRequest);
+    const fetchOptions = {
+      method: "POST",
+      headers: {
+        Authorization: authorization || this._authorization,
+        Accept: "application/json,*/*",
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(serviceRequest),
+    };
 
-        const response = await this._fetch(url, fetchOptions);
-        return handleResponseRaw(response);
+    const response = await this._fetch(url, fetchOptions);
+    return handleResponseRaw(response);
+  }
+
+  /**
+   * FirstName extracts just the first name from a full name string.
+   *
+   * @param { FirstNameRequest } serviceRequest The input parameters
+   * @param {object} [options]
+   * @param { string } [options.authorization] The HTTP Authorization header value to include
+   *     in the request. This will override any authorization you might have applied when
+   *     constructing this client. Use this in multi-tenant situations where multiple users
+   *     might utilize this service.
+   * @returns {Promise<FirstNameResponse>} The JSON-encoded return value of the operation.
+   */
+  async FirstName(serviceRequest, { authorization } = {}) {
+    if (!serviceRequest) {
+      throw new Error("precondition failed: empty request");
     }
-    
-    /**
-     * FirstName extracts just the first name from a full name string. 
-     *
-     * @param { FirstNameRequest } serviceRequest The input parameters
-     * @param {object} [options]
-     * @param { string } [options.authorization] The HTTP Authorization header value to include
-     *     in the request. This will override any authorization you might have applied when
-     *     constructing this client. Use this in multi-tenant situations where multiple users
-     *     might utilize this service.
-     * @returns {Promise<FirstNameResponse>} The JSON-encoded return value of the operation.
-     */
-    async FirstName(serviceRequest, {authorization} = {}) {
-        if (!serviceRequest) {
-            throw new Error('precondition failed: empty request');
-        }
 
-        const method = 'POST';
-        const route = '/NameService.FirstName';
-        const url = this._baseURL + '/' + buildRequestPath(method, route, serviceRequest);
-        const fetchOptions = {
-            method: 'POST',
-            headers: {
-                'Authorization': authorization || this._authorization,
-                'Accept': 'application/json,*/*',
-                'Content-Type': 'application/json; charset=utf-8',
-            },
-            body: JSON.stringify(serviceRequest),
-        };
+    const method = "POST";
+    const route = "/NameService.FirstName";
+    const url =
+      this._baseURL + "/" + buildRequestPath(method, route, serviceRequest);
+    const fetchOptions = {
+      method: "POST",
+      headers: {
+        Authorization: authorization || this._authorization,
+        Accept: "application/json,*/*",
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(serviceRequest),
+    };
 
-        const response = await this._fetch(url, fetchOptions);
-        return handleResponseJSON(response);
+    const response = await this._fetch(url, fetchOptions);
+    return handleResponseJSON(response);
+  }
+
+  /**
+   * LastName extracts just the last name from a full name string.
+   *
+   * @param { LastNameRequest } serviceRequest The input parameters
+   * @param {object} [options]
+   * @param { string } [options.authorization] The HTTP Authorization header value to include
+   *     in the request. This will override any authorization you might have applied when
+   *     constructing this client. Use this in multi-tenant situations where multiple users
+   *     might utilize this service.
+   * @returns {Promise<LastNameResponse>} The JSON-encoded return value of the operation.
+   */
+  async LastName(serviceRequest, { authorization } = {}) {
+    if (!serviceRequest) {
+      throw new Error("precondition failed: empty request");
     }
-    
-    /**
-     * LastName extracts just the last name from a full name string. 
-     *
-     * @param { LastNameRequest } serviceRequest The input parameters
-     * @param {object} [options]
-     * @param { string } [options.authorization] The HTTP Authorization header value to include
-     *     in the request. This will override any authorization you might have applied when
-     *     constructing this client. Use this in multi-tenant situations where multiple users
-     *     might utilize this service.
-     * @returns {Promise<LastNameResponse>} The JSON-encoded return value of the operation.
-     */
-    async LastName(serviceRequest, {authorization} = {}) {
-        if (!serviceRequest) {
-            throw new Error('precondition failed: empty request');
-        }
 
-        const method = 'POST';
-        const route = '/NameService.LastName';
-        const url = this._baseURL + '/' + buildRequestPath(method, route, serviceRequest);
-        const fetchOptions = {
-            method: 'POST',
-            headers: {
-                'Authorization': authorization || this._authorization,
-                'Accept': 'application/json,*/*',
-                'Content-Type': 'application/json; charset=utf-8',
-            },
-            body: JSON.stringify(serviceRequest),
-        };
+    const method = "POST";
+    const route = "/NameService.LastName";
+    const url =
+      this._baseURL + "/" + buildRequestPath(method, route, serviceRequest);
+    const fetchOptions = {
+      method: "POST",
+      headers: {
+        Authorization: authorization || this._authorization,
+        Accept: "application/json,*/*",
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(serviceRequest),
+    };
 
-        const response = await this._fetch(url, fetchOptions);
-        return handleResponseJSON(response);
+    const response = await this._fetch(url, fetchOptions);
+    return handleResponseJSON(response);
+  }
+
+  /**
+   * SortName establishes the "phone book" name for the given full name.
+   *
+   * @param { SortNameRequest } serviceRequest The input parameters
+   * @param {object} [options]
+   * @param { string } [options.authorization] The HTTP Authorization header value to include
+   *     in the request. This will override any authorization you might have applied when
+   *     constructing this client. Use this in multi-tenant situations where multiple users
+   *     might utilize this service.
+   * @returns {Promise<SortNameResponse>} The JSON-encoded return value of the operation.
+   */
+  async SortName(serviceRequest, { authorization } = {}) {
+    if (!serviceRequest) {
+      throw new Error("precondition failed: empty request");
     }
-    
-    /**
-     * SortName establishes the "phone book" name for the given full name. 
-     *
-     * @param { SortNameRequest } serviceRequest The input parameters
-     * @param {object} [options]
-     * @param { string } [options.authorization] The HTTP Authorization header value to include
-     *     in the request. This will override any authorization you might have applied when
-     *     constructing this client. Use this in multi-tenant situations where multiple users
-     *     might utilize this service.
-     * @returns {Promise<SortNameResponse>} The JSON-encoded return value of the operation.
-     */
-    async SortName(serviceRequest, {authorization} = {}) {
-        if (!serviceRequest) {
-            throw new Error('precondition failed: empty request');
-        }
 
-        const method = 'POST';
-        const route = '/NameService.SortName';
-        const url = this._baseURL + '/' + buildRequestPath(method, route, serviceRequest);
-        const fetchOptions = {
-            method: 'POST',
-            headers: {
-                'Authorization': authorization || this._authorization,
-                'Accept': 'application/json,*/*',
-                'Content-Type': 'application/json; charset=utf-8',
-            },
-            body: JSON.stringify(serviceRequest),
-        };
+    const method = "POST";
+    const route = "/NameService.SortName";
+    const url =
+      this._baseURL + "/" + buildRequestPath(method, route, serviceRequest);
+    const fetchOptions = {
+      method: "POST",
+      headers: {
+        Authorization: authorization || this._authorization,
+        Accept: "application/json,*/*",
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(serviceRequest),
+    };
 
-        const response = await this._fetch(url, fetchOptions);
-        return handleResponseJSON(response);
+    const response = await this._fetch(url, fetchOptions);
+    return handleResponseJSON(response);
+  }
+
+  /**
+   * Split separates a first and last name.
+   *
+   * @param { SplitRequest } serviceRequest The input parameters
+   * @param {object} [options]
+   * @param { string } [options.authorization] The HTTP Authorization header value to include
+   *     in the request. This will override any authorization you might have applied when
+   *     constructing this client. Use this in multi-tenant situations where multiple users
+   *     might utilize this service.
+   * @returns {Promise<SplitResponse>} The JSON-encoded return value of the operation.
+   */
+  async Split(serviceRequest, { authorization } = {}) {
+    if (!serviceRequest) {
+      throw new Error("precondition failed: empty request");
     }
-    
-    /**
-     * Split separates a first and last name. 
-     *
-     * @param { SplitRequest } serviceRequest The input parameters
-     * @param {object} [options]
-     * @param { string } [options.authorization] The HTTP Authorization header value to include
-     *     in the request. This will override any authorization you might have applied when
-     *     constructing this client. Use this in multi-tenant situations where multiple users
-     *     might utilize this service.
-     * @returns {Promise<SplitResponse>} The JSON-encoded return value of the operation.
-     */
-    async Split(serviceRequest, {authorization} = {}) {
-        if (!serviceRequest) {
-            throw new Error('precondition failed: empty request');
-        }
 
-        const method = 'POST';
-        const route = '/NameService.Split';
-        const url = this._baseURL + '/' + buildRequestPath(method, route, serviceRequest);
-        const fetchOptions = {
-            method: 'POST',
-            headers: {
-                'Authorization': authorization || this._authorization,
-                'Accept': 'application/json,*/*',
-                'Content-Type': 'application/json; charset=utf-8',
-            },
-            body: JSON.stringify(serviceRequest),
-        };
+    const method = "POST";
+    const route = "/NameService.Split";
+    const url =
+      this._baseURL + "/" + buildRequestPath(method, route, serviceRequest);
+    const fetchOptions = {
+      method: "POST",
+      headers: {
+        Authorization: authorization || this._authorization,
+        Accept: "application/json,*/*",
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(serviceRequest),
+    };
 
-        const response = await this._fetch(url, fetchOptions);
-        return handleResponseJSON(response);
-    }
-    
+    const response = await this._fetch(url, fetchOptions);
+    return handleResponseJSON(response);
+  }
 }
 
 /**
@@ -248,24 +252,24 @@ class NameServiceClient {
  * @returns {string} The fully-populate URL path (e.g. "/user/aCx31s")
  */
 function buildRequestPath(method, path, serviceRequest) {
-    const pathSegments = path.split("/").map(segment => {
-        return segment.startsWith(":")
-            ? attributeValue(serviceRequest, segment.substring(1))
-            : segment;
-    });
-    const resolvedPath = trimSlashes(pathSegments.join("/"));
+  const pathSegments = path.split("/").map((segment) => {
+    return segment.startsWith(":")
+      ? attributeValue(serviceRequest, segment.substring(1))
+      : segment;
+  });
+  const resolvedPath = trimSlashes(pathSegments.join("/"));
 
-    // PUT/POST/PATCH encode the data in the body, so no need to shove it in the query string.
-    if (supportsBody(method)) {
-        return resolvedPath;
-    }
+  // PUT/POST/PATCH encode the data in the body, so no need to shove it in the query string.
+  if (supportsBody(method)) {
+    return resolvedPath;
+  }
 
-    // GET/DELETE/etc will pass all values through the query string.
-    const queryValues = Object.getOwnPropertyNames(serviceRequest)
-        .map(attr => attr + '=' + encodeURLParam(serviceRequest[attr]))
-        .join('&');
+  // GET/DELETE/etc will pass all values through the query string.
+  const queryValues = Object.getOwnPropertyNames(serviceRequest)
+    .map((attr) => attr + "=" + encodeURLParam(serviceRequest[attr]))
+    .join("&");
 
-    return resolvedPath + '?' + queryValues;
+  return resolvedPath + "?" + queryValues;
 }
 
 /**
@@ -275,22 +279,22 @@ function buildRequestPath(method, path, serviceRequest) {
  * @returns {string}
  */
 function encodeURLParam(value) {
-    if (value === null) {
-        return '';
-    }
-    switch (typeof value) {
-    case 'undefined':
-        return '';
-    case 'string':
-    case 'number':
-    case 'boolean':
-        return encodeURIComponent(value);
-    case 'function':
-        return encodeURLParam(value());
+  if (value === null) {
+    return "";
+  }
+  switch (typeof value) {
+    case "undefined":
+      return "";
+    case "string":
+    case "number":
+    case "boolean":
+      return encodeURIComponent(value);
+    case "function":
+      return encodeURLParam(value());
     default:
-        const valueJSON = JSON.stringify(value);
-        return encodeURIComponent(valueJSON);
-    }
+      const valueJSON = JSON.stringify(value);
+      return encodeURIComponent(valueJSON);
+  }
 }
 
 /**
@@ -303,25 +307,24 @@ function encodeURLParam(value) {
  * @returns {*}
  */
 function attributeValue(struct, attributeName) {
-    const normalized = attributeName.toLowerCase();
-    for (const key in struct) {
-        if (key.toLowerCase() === normalized) {
-            return encodeURLParam(struct[key]);
-        }
+  const normalized = attributeName.toLowerCase();
+  for (const key in struct) {
+    if (key.toLowerCase() === normalized) {
+      return encodeURLParam(struct[key]);
     }
-    return null;
+  }
+  return null;
 }
-
 
 /**
  * Accepts the full response data and the request's promise resolve/reject and determines
  * which to invoke. This will also JSON-unmarshal the response data if need be.
  */
 async function handleResponseJSON(response) {
-    if (response.status >= 400) {
-        throw await newError(response);
-    }
-    return await response.json();
+  if (response.status >= 400) {
+    throw await newError(response);
+  }
+  return await response.json();
 }
 
 /**
@@ -333,17 +336,20 @@ async function handleResponseJSON(response) {
  * @returns { {content: Blob, contentType: string, contentFileName: string} }
  */
 async function handleResponseRaw(response) {
-    if (response.status >= 400) {
-        throw await newError(response);
-    }
-    const content = await response.blob();
-    const contentType = response.headers.get('content-type') || 'application/octet-stream';
-    const contentFileName = dispositionFileName(response.headers.get('content-disposition'));
-    return {
-        Content: content,
-        ContentType: contentType,
-        ContentFileName: contentFileName,
-    }
+  if (response.status >= 400) {
+    throw await newError(response);
+  }
+  const content = await response.blob();
+  const contentType =
+    response.headers.get("content-type") || "application/octet-stream";
+  const contentFileName = dispositionFileName(
+    response.headers.get("content-disposition")
+  );
+  return {
+    Content: content,
+    ContentType: contentType,
+    ContentFileName: contentFileName,
+  };
 }
 
 /**
@@ -353,11 +359,11 @@ async function handleResponseRaw(response) {
  * @returns {Promise<GatewayError>}
  */
 async function newError(response) {
-    const responseValue = isJSON(response)
-        ? await response.json()
-        : await response.text();
+  const responseValue = isJSON(response)
+    ? await response.json()
+    : await response.text();
 
-    throw new GatewayError(response.status, parseErrorMessage(responseValue));
+  throw new GatewayError(response.status, parseErrorMessage(responseValue));
 }
 
 /**
@@ -366,45 +372,49 @@ async function newError(response) {
  * @param {string} contentDisposition
  * @returns {string}
  */
-function dispositionFileName(contentDisposition = '') {
-    const fileNameAttrPos = contentDisposition.indexOf('filename=');
-    if (fileNameAttrPos < 0) {
-        return '';
-    }
+function dispositionFileName(contentDisposition = "") {
+  const fileNameAttrPos = contentDisposition.indexOf("filename=");
+  if (fileNameAttrPos < 0) {
+    return "";
+  }
 
-    let fileName = contentDisposition.substring(fileNameAttrPos + 9);
-    fileName = fileName.startsWith('"') ? fileName.substring(1) : fileName;
-    fileName = fileName.endsWith('"') ? fileName.substring(0, fileName.length - 1) : fileName;
-    fileName = fileName.replace(/\\"/g, '"');
-    return fileName;
+  let fileName = contentDisposition.substring(fileNameAttrPos + 9);
+  fileName = fileName.startsWith('"') ? fileName.substring(1) : fileName;
+  fileName = fileName.endsWith('"')
+    ? fileName.substring(0, fileName.length - 1)
+    : fileName;
+  fileName = fileName.replace(/\\"/g, '"');
+  return fileName;
 }
 
 /**
  * Determines whether or not the response has a content type of JSON.
  */
 function isJSON(response) {
-    const contentType = response.headers.get('content-type');
-    return contentType && contentType.toLowerCase().startsWith('application/json');
+  const contentType = response.headers.get("content-type");
+  return (
+    contentType && contentType.toLowerCase().startsWith("application/json")
+  );
 }
 
 /**
-* Looks at the response value and attempts to peel off an error message from it using the standard
-* error JSON structures used by frodo gateways.
-*
-* @param {*} err The error whose raw message you're trying to extract.
-* @returns {string}
-*/
+ * Looks at the response value and attempts to peel off an error message from it using the standard
+ * error JSON structures used by frodo gateways.
+ *
+ * @param {*} err The error whose raw message you're trying to extract.
+ * @returns {string}
+ */
 function parseErrorMessage(err) {
-    if (typeof err === 'string') {
-        return err;
-    }
-    if (typeof err.message !== 'undefined') {
-        return err.message;
-    }
-    if (typeof err.error !== 'undefined') {
-        return err.error;
-    }
-    return JSON.stringify(err);
+  if (typeof err === "string") {
+    return err;
+  }
+  if (typeof err.message !== "undefined") {
+    return err.message;
+  }
+  if (typeof err.error !== "undefined") {
+    return err.error;
+  }
+  return JSON.stringify(err);
 }
 
 /**
@@ -415,7 +425,7 @@ function parseErrorMessage(err) {
  * @returns {boolean}
  */
 function supportsBody(method) {
-    return method === 'POST' || method === 'PUT' || method === 'PATCH';
+  return method === "POST" || method === "PUT" || method === "PATCH";
 }
 
 /**
@@ -425,117 +435,118 @@ function supportsBody(method) {
  * @returns {string}
  */
 function trimSlashes(value) {
-    if (!value) {
-        return "";
-    }
-    while (value.startsWith("/")) {
-        value = value.substring(1);
-    }
-    while (value.endsWith("/")) {
-        value = value.substring(0, value.length - 1);
-    }
-    return value;
+  if (!value) {
+    return "";
+  }
+  while (value.startsWith("/")) {
+    value = value.substring(1);
+  }
+  while (value.endsWith("/")) {
+    value = value.substring(0, value.length - 1);
+  }
+  return value;
 }
 
 /**
-* When you don't supply your own Fetch implementation, this will attempt to use
-* any globally defined ones (typically for use in the browser).
-*
-* @returns {fetch}
-*/
+ * When you don't supply your own Fetch implementation, this will attempt to use
+ * any globally defined ones (typically for use in the browser).
+ *
+ * @returns {fetch}
+ */
 function defaultFetch() {
-    if (typeof fetch === 'undefined') {
-        throw new Error('no global fetch found - if using node, install/import node-fetch');
-    }
+  if (typeof fetch === "undefined") {
+    throw new Error(
+      "no global fetch found - if using node, install/import node-fetch"
+    );
+  }
 
-    const runningInBrowser = typeof window !== 'undefined';
-    return runningInBrowser ? fetch.bind(window) : fetch;
+  const runningInBrowser = typeof window !== "undefined";
+  return runningInBrowser ? fetch.bind(window) : fetch;
 }
 
 /**
-* GatewayError is a rich error type that encapsulates a failure generated by the remote gateway.
-* It captures the server's error message as well as HTTP status so you can properly handle the
-* result in your consumer code.
-*/
+ * GatewayError is a rich error type that encapsulates a failure generated by the remote gateway.
+ * It captures the server's error message as well as HTTP status so you can properly handle the
+ * result in your consumer code.
+ */
 class GatewayError {
-    /**
-    * The HTTP 4XX/5XX status code of the failure.
-    *
-    * @type {number}
-    */
-    status;
+  /**
+   * The HTTP 4XX/5XX status code of the failure.
+   *
+   * @type {number}
+   */
+  status;
 
-    /**
-    * The user-facing message that the server generated for the error.
-    *
-    * @type {string}
-    */
-    message;
+  /**
+   * The user-facing message that the server generated for the error.
+   *
+   * @type {string}
+   */
+  message;
 
-    constructor(status, message) {
-        this.status = status;
-        this.message = message;
-    }
+  constructor(status, message) {
+    this.status = status;
+    this.message = message;
+  }
 
-    toString() {
-        return this.status + ": " + this.message;
-    }
+  toString() {
+    return this.status + ": " + this.message;
+  }
 }
-
 
 /**
  * @typedef { object } SortNameResponse
  * @property { string } [SortName]
-*/
+ */
 /**
  * @typedef { object } FirstNameRequest
  * @property { string } [Name]
-*/
+ */
 /**
  * @typedef { object } LastNameResponse
  * @property { string } [LastName]
-*/
+ */
 /**
  * @typedef { object } SortNameRequest
  * @property { string } [Name]
-*/
+ */
 /**
  * @typedef { object } DownloadExtResponse
-*/
+ */
 /**
  * @typedef { object } SplitResponse
  * @property { string } [FirstName]
  * @property { string } [LastName]
-*/
+ */
 /**
  * @typedef { object } DownloadResponse
-*/
+ */
 /**
  * @typedef { object } LastNameRequest
  * @property { string } [Name]
-*/
+ */
 /**
  * @typedef { object } NameRequest
  * @property { string } [Name]
-*/
+ */
 /**
  * @typedef { object } DownloadExtRequest
  * @property { string } [Name]
  * @property { string } [Ext]
-*/
+ */
 /**
  * @typedef { object } FirstNameResponse
  * @property { string } [FirstName]
-*/
+ */
 /**
  * @typedef { object } SplitRequest
  * @property { string } [Name]
-*/
+ */
 /**
  * @typedef { object } DownloadRequest
  * @property { string } [Name]
-*/
+ */
 
 module.exports = {
-    NameServiceClient,
+  NameServiceClient,
 };

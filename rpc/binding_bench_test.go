@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package rpc_test
@@ -8,8 +9,8 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/davidrenne/frodo/rpc"
 	"github.com/dimfeld/httptreemux/v5"
-	"github.com/monadicstack/frodo/rpc"
 )
 
 func BenchmarkJsonBinder_Bind(b *testing.B) {

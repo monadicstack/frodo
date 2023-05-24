@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/monadicstack/frodo/rpc/errors"
+	"github.com/davidrenne/frodo/rpc/errors"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -49,10 +49,10 @@ func (suite *ExternalClientSuite) StopService() {
 // 'out' parameter so that you can also run custom checks to fire after the decoding is complete to ensure that
 // the actual output value is what you expect.
 //
-//     response := calc.AddResponse{}
-//     suite.ExpectPass(output, 0, &response, func() {
-//         suite.Equal(12, response.Result)
-//     })
+//	response := calc.AddResponse{}
+//	suite.ExpectPass(output, 0, &response, func() {
+//	    suite.Equal(12, response.Result)
+//	})
 func (suite *ExternalClientSuite) ExpectPass(results ClientTestResults, lineIndex int, out interface{}, additionalChecks ...func()) {
 	result := results[lineIndex]
 	suite.Require().Equal(true, result.Pass, "Client Line %d: Call failed when it should have passed", lineIndex)
@@ -67,10 +67,10 @@ func (suite *ExternalClientSuite) ExpectPass(results ClientTestResults, lineInde
 // 'out' parameter so that you can also run custom checks to fire after the decoding is complete to ensure that
 // the actual output error is what you expect.
 //
-//     err := errors.RPCError{}
-//     suite.ExpectFail(output, 0, &response, func() {
-//         suite.Contains(err.Message, "divide by zero")
-//     })
+//	err := errors.RPCError{}
+//	suite.ExpectFail(output, 0, &response, func() {
+//	    suite.Contains(err.Message, "divide by zero")
+//	})
 func (suite *ExternalClientSuite) ExpectFail(results ClientTestResults, lineIndex int, out interface{}, additionChecks ...func()) {
 	result := results[lineIndex]
 	suite.Require().Equal(false, result.Pass, "Client Line %d: Call passed when it should have failed", lineIndex)
@@ -85,10 +85,10 @@ func (suite *ExternalClientSuite) ExpectFail(results ClientTestResults, lineInde
 // RPCError such that there's a 'status' and 'message' field and that the status is equivalent to the one you supply.
 // This is a convenience on top of ExpectFail to reduce verbosity.
 //
-//     // Assumes the first case failed w/ a 403 status, the second w/ a 502, and the last with a 500.
-//     suite.ExpectFailStatus(output, 0, 403)
-//     suite.ExpectFailStatus(output, 1, 502)
-//     suite.ExpectFailStatus(output, 2, 500)
+//	// Assumes the first case failed w/ a 403 status, the second w/ a 502, and the last with a 500.
+//	suite.ExpectFailStatus(output, 0, 403)
+//	suite.ExpectFailStatus(output, 1, 502)
+//	suite.ExpectFailStatus(output, 2, 500)
 func (suite *ExternalClientSuite) ExpectFailStatus(results ClientTestResults, lineIndex int, status int) {
 	err := errors.RPCError{}
 	suite.ExpectFail(results, lineIndex, &err, func() {
@@ -111,11 +111,11 @@ func RunClientTest(executable string, args ...string) (ClientTestResults, error)
 // interaction in the test case behaved. Here is a sample output of a runner that performed 5 client calls to
 // the backend service; 3 that passed and 2 that failed.
 //
-//     OK {"result": 5}
-//     FAIL {"message": "divide by zero", "status": 400}
-//     OK {"result": 3.14}
-//     OK {"result": 10, "remainder": 2}
-//     FAIL {"message": "overflow", "status": 400}
+//	OK {"result": 5}
+//	FAIL {"message": "divide by zero", "status": 400}
+//	OK {"result": 3.14}
+//	OK {"result": 10, "remainder": 2}
+//	FAIL {"message": "overflow", "status": 400}
 //
 // All language runners should output in this format for this to work. It's a convention that allows us to build
 // assertions in Go regardless of how the target language does its work.

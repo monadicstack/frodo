@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/monadicstack/frodo/parser/testdata"
+	"github.com/davidrenne/frodo/parser/testdata"
 	"github.com/monadicstack/respond"
 )
 

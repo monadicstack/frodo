@@ -3,7 +3,7 @@ package calc
 import (
 	"context"
 
-	"github.com/monadicstack/frodo/rpc/errors"
+	"github.com/davidrenne/frodo/rpc/errors"
 )
 
 // CalculatorServiceHandler implements all of the "real" functionality for the CalculatorService. The

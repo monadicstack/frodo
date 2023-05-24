@@ -3,8 +3,8 @@ package main
 import (
 	"net/http"
 
-	"github.com/monadicstack/frodo/example/basic/calc"
-	calcrpc "github.com/monadicstack/frodo/example/basic/calc/gen"
+	"github.com/davidrenne/frodo/example/basic/calc"
+	calcrpc "github.com/davidrenne/frodo/example/basic/calc/gen"
 )
 
 func main() {

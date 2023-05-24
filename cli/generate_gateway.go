@@ -3,8 +3,8 @@ package cli
 import (
 	"log"
 
-	"github.com/monadicstack/frodo/generate"
-	"github.com/monadicstack/frodo/parser"
+	"github.com/davidrenne/frodo/generate"
+	"github.com/davidrenne/frodo/parser"
 	"github.com/spf13/cobra"
 )
 

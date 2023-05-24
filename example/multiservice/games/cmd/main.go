@@ -3,8 +3,8 @@ package main
 import (
 	"net/http"
 
-	"github.com/monadicstack/frodo/example/multiservice/games"
-	gamesrpc "github.com/monadicstack/frodo/example/multiservice/games/gen"
+	"github.com/davidrenne/frodo/example/multiservice/games"
+	gamesrpc "github.com/davidrenne/frodo/example/multiservice/games/gen"
 )
 
 func main() {

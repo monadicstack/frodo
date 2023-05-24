@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package errors_test
@@ -6,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/monadicstack/frodo/rpc/errors"
+	"github.com/davidrenne/frodo/rpc/errors"
 	"github.com/stretchr/testify/suite"
 )
 

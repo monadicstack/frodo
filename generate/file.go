@@ -12,12 +12,13 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/monadicstack/frodo/internal/naming"
-	"github.com/monadicstack/frodo/parser"
+	"github.com/davidrenne/frodo/internal/naming"
+	"github.com/davidrenne/frodo/parser"
 )
 
-//go:embed templates/*
 // StandardTemplates provides access to all of the code generation templates that Frodo ships with out of the box.
+//
+//go:embed templates/*
 var StandardTemplates embed.FS
 
 // File runs the parsed service context through the given file template, generating the appropriate

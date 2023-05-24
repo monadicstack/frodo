@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package parser_test
@@ -5,7 +6,7 @@ package parser_test
 import (
 	"testing"
 
-	"github.com/monadicstack/frodo/parser"
+	"github.com/davidrenne/frodo/parser"
 	"github.com/stretchr/testify/suite"
 )
 

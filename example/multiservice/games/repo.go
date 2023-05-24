@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/monadicstack/frodo/rpc/errors"
+	"github.com/davidrenne/frodo/rpc/errors"
 )
 
 // Repo manages access to the data store where we keep game catalog data.

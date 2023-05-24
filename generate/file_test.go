@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package generate_test
@@ -6,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/monadicstack/frodo/generate"
+	"github.com/davidrenne/frodo/generate"
 	"github.com/stretchr/testify/suite"
 )
 

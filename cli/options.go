@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/monadicstack/frodo/generate"
-	"github.com/monadicstack/frodo/parser"
+	"github.com/davidrenne/frodo/generate"
+	"github.com/davidrenne/frodo/parser"
 )
 
 // templateOption can be embedded on a command request struct to give it the option to supply your

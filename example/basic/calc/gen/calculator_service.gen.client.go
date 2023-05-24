@@ -2,7 +2,7 @@
 //
 //   Timestamp: Tue, 10 May 2022 16:23:56 EDT
 //   Source:    calc/calculator_service.go
-//   Generator: https://github.com/monadicstack/frodo
+//   Generator: https://github.com/davidrenne/frodo
 //
 package calc
 
@@ -10,8 +10,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/monadicstack/frodo/example/basic/calc"
-	"github.com/monadicstack/frodo/rpc"
+	"github.com/davidrenne/frodo/example/basic/calc"
+	"github.com/davidrenne/frodo/rpc"
 )
 
 // NewCalculatorServiceClient creates an RPC client that conforms to the CalculatorService interface, but delegates

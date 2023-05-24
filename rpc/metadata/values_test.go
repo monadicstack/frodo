@@ -1,3 +1,4 @@
+//go:build unit
 // +build unit
 
 package metadata_test
@@ -6,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/monadicstack/frodo/rpc/metadata"
+	"github.com/davidrenne/frodo/rpc/metadata"
 	"github.com/stretchr/testify/suite"
 )
 
