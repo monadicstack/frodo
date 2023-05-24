@@ -1,4 +1,4 @@
-module github.com/monadicstack/frodo
+module github.com/davidrenne/frodo
 
 go 1.16
 
