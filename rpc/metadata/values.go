@@ -143,7 +143,7 @@ func WithValue(ctx context.Context, key string, value interface{}) context.Conte
 		return ctx
 	}
 	meta, ok := ctx.Value(contextKey{}).(Values)
-	if !ok {
+	if !ok || meta == nil {
 		meta = Values{}
 		ctx = WithValues(ctx, meta)
 	}
